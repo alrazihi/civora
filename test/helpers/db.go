@@ -1,0 +1,119 @@
+package helpers
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/alrazihi/civora/internal/database"
+	"github.com/alrazihi/civora/migrations"
+	"github.com/google/uuid"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
+
+func TestDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	host := getEnv("CIVORA_TEST_DB_HOST", "localhost")
+	port := getEnv("CIVORA_TEST_DB_PORT", "5432")
+	user := getEnv("CIVORA_TEST_DB_USER", "civora_test")
+	password := getEnv("CIVORA_TEST_DB_PASSWORD", "civora_test")
+	dbname := getEnv("CIVORA_TEST_DB_NAME", "civora_test")
+	sslmode := getEnv("CIVORA_TEST_DB_SSLMODE", "disable")
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		host, port, user, password, dbname, sslmode)
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("failed to connect to test database: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+
+	if err := ensureSchema(db); err != nil {
+		t.Fatalf("failed to ensure schema: %v", err)
+	}
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	return db
+}
+
+func ensureSchema(db *sql.DB) error {
+	var exists bool
+	err := db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_name = 'organizations'
+		)
+	`).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check schema: %w", err)
+	}
+
+	if exists {
+		return nil
+	}
+
+	migrator := database.NewMigrator(db, migrations.FS)
+	if err := migrator.LoadMigrations(); err != nil {
+		return fmt.Errorf("failed to load migrations: %w", err)
+	}
+	if err := migrator.Migrate(context.Background()); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return nil
+}
+
+func TruncateTables(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	_, err := db.Exec(`
+		TRUNCATE TABLE audit_events, cases, users, roles, organizations RESTART IDENTITY CASCADE;
+	`)
+	if err != nil {
+		t.Fatalf("failed to truncate tables: %v", err)
+	}
+}
+
+func ResetDB(t *testing.T, db *sql.DB) {
+	t.Helper()
+	TruncateTables(t, db)
+}
+
+func SeedOrg(db *sql.DB) uuid.UUID {
+	orgID := uuid.New()
+	slug := "test-org-" + uuid.NewString()[:8]
+	_, err := db.Exec(
+		"INSERT INTO organizations (id, name, description, slug, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())",
+		orgID, "Test Org", "", slug,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("failed to seed organization: %v", err))
+	}
+	return orgID
+}
+
+func SeedUser(db *sql.DB, orgID uuid.UUID) uuid.UUID {
+	userID := uuid.New()
+	_, err := db.Exec(
+		"INSERT INTO users (id, organization_id, email, name, role_id, password_hash, is_oidc_user, created_at, updated_at) VALUES ($1, $2, $3, $4, NULL, NULL, FALSE, NOW(), NOW())",
+		userID, orgID, "user-"+uuid.NewString()[:8]+"@example.com", "Test User",
+	)
+	if err != nil {
+		panic(fmt.Sprintf("failed to seed user: %v", err))
+	}
+	return userID
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
