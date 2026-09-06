@@ -1,0 +1,124 @@
+package domain
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type AuditEvent struct {
+	ID             uuid.UUID              `json:"id"`
+	OrganizationID uuid.UUID              `json:"organization_id"`
+	ActorID        *uuid.UUID             `json:"actor_id"`
+	Action         string                 `json:"action"`
+	Resource       string                 `json:"resource"`
+	ResourceID     *string                `json:"resource_id"`
+	Outcome        string                 `json:"outcome"`
+	RequestID      *string                `json:"request_id"`
+	Metadata       map[string]interface{} `json:"metadata"`
+	Timestamp      time.Time              `json:"timestamp"`
+	PreviousHash   *string                `json:"previous_hash"`
+	Hash           string                 `json:"hash"`
+}
+
+func NewAuditEvent(
+	orgID uuid.UUID,
+	actorID uuid.UUID,
+	action, resource string,
+	resourceID *string,
+	outcome string,
+	requestID *string,
+	metadata map[string]interface{},
+	previousHash *string,
+) *AuditEvent {
+	ev := &AuditEvent{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		ActorID:        &actorID,
+		Action:         action,
+		Resource:       resource,
+		ResourceID:     resourceID,
+		Outcome:        outcome,
+		RequestID:      requestID,
+		Metadata:       metadata,
+		Timestamp:      time.Now().UTC(),
+		PreviousHash:   previousHash,
+	}
+	ev.Hash = ev.ComputeHash()
+	return ev
+}
+
+func (e *AuditEvent) ComputeHash() string {
+	h := sha256.New()
+
+	h.Write([]byte(e.OrganizationID.String()))
+	h.Write([]byte("|"))
+
+	if e.ActorID != nil {
+		h.Write([]byte(e.ActorID.String()))
+	}
+	h.Write([]byte("|"))
+
+	h.Write([]byte(e.Action))
+	h.Write([]byte("|"))
+	h.Write([]byte(e.Resource))
+	h.Write([]byte("|"))
+
+	if e.ResourceID != nil {
+		h.Write([]byte(*e.ResourceID))
+	}
+	h.Write([]byte("|"))
+
+	h.Write([]byte(e.Outcome))
+	h.Write([]byte("|"))
+
+	if e.RequestID != nil {
+		h.Write([]byte(*e.RequestID))
+	}
+	h.Write([]byte("|"))
+
+	metaBytes, _ := json.Marshal(e.Metadata)
+	h.Write(metaBytes)
+	h.Write([]byte("|"))
+
+	h.Write([]byte(e.Timestamp.UTC().Format("2006-01-02T15:04:05.000000Z07:00")))
+	h.Write([]byte("|"))
+
+	if e.PreviousHash != nil {
+		h.Write([]byte(*e.PreviousHash))
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (e *AuditEvent) VerifyIntegrity() bool {
+	return e.Hash == e.ComputeHash()
+}
+
+func IsValidOutcome(s string) bool {
+	switch s {
+	case "success", "failure":
+		return true
+	default:
+		return false
+	}
+}
+
+type RecordEventParams struct {
+	OrganizationID uuid.UUID
+	ActorID        *uuid.UUID
+	Action         string
+	Resource       string
+	ResourceID     *string
+	Outcome        string
+	RequestID      *string
+	Metadata       map[string]interface{}
+}
+
+type EventRecorder interface {
+	RecordEvent(ctx context.Context, params RecordEventParams) error
+}
