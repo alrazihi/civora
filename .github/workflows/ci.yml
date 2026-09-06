@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CIVORA_TEST_DB_USER: civora_test
+  CIVORA_TEST_DB_PASSWORD: civora_test
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)" || (echo "Run 'gofmt -w .' and commit" && exit 1)
+
+      - name: Run go vet
+        run: GOMEMLIMIT=2GiB go vet ./internal/... ./cmd/...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civora_test
+          POSTGRES_PASSWORD: civora_test
+          POSTGRES_DB: civora_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -p 5432 && break
+            sleep 1
+          done
+
+      - name: Run unit tests
+        run: CGO_ENABLED=0 go test -short -p 1 ./...
+
+      - name: Run integration tests
+        run: CGO_ENABLED=0 go test -p 1 -count=1 ./internal/... ./test/e2e/... ./test/integration/...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build
+        run: CGO_ENABLED=0 go build ./...
+
+  openapi:
+    name: OpenAPI Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate OpenAPI spec
+        run: npx @redocly/cli lint api/openapi/openapi.yaml
