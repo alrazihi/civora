@@ -278,15 +278,34 @@ See `docs/architecture/configuration.md` (to be created).
 
 ---
 
+## Technology decisions
+
+The following technology decisions have been finalized and recorded as ADRs:
+
+| Decision | ADR |
+|----------|-----|
+| Why Go for the backend | [ADR-0002](docs/decisions/0002-why-go.md) |
+| Why PostgreSQL | [ADR-0003](docs/decisions/0003-why-postgresql.md) |
+| Why REST + OpenAPI | [ADR-0004](docs/decisions/0004-why-rest-openapi.md) |
+| Why React/TypeScript (future frontend) | [ADR-0005](docs/decisions/0005-why-react-typescript.md) |
+
+**Backend**: Go 1.23+, compiled to a single static binary.
+**Database**: PostgreSQL 16 (SQLite supported for local development).
+**API**: HTTP REST with JSON, OpenAPI 3.0 specification as the source of truth.
+**Frontend**: Not implemented in Milestone 0.1; React + TypeScript chosen for the future frontend (ADR-0005).
+**Deployment**: Docker container image; Docker Compose for local development.
+
+---
+
 ## Roadmap / Phase 1 scope
 
 Phase 1 (this document and associated foundation files) establishes:
 
-- The modular monolith architecture (ADR-001).
+- The modular monolith architecture (ADR-0001).
+- Technology decisions (ADR-0002 through ADR-0005).
 - Domain model and module boundaries.
 - API-first approach and standards.
 - Data, security, and deployment principles.
 - Threat model.
 
-No application code is written in Phase 1. The first implementation
-begins in milestone 0.1 (Foundation).
+Implementation begins in milestone 0.1 (Foundation).

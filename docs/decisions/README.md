@@ -14,6 +14,10 @@ technical decision must be recorded as an ADR.
 | # | Title | Status | Date |
 |---|-------|--------|------|
 | [0001](0001-initial-architecture.md) | Initial Architecture — Modular Monolith | Accepted | 2026-09-06 |
+| [0002](0002-why-go.md) | Why Go for the Backend | Accepted | 2026-09-06 |
+| [0003](0003-why-postgresql.md) | Why PostgreSQL | Accepted | 2026-09-06 |
+| [0004](0004-why-rest-openapi.md) | Why REST and OpenAPI | Accepted | 2026-09-06 |
+| [0005](0005-why-react-typescript.md) | Why React and TypeScript for the Future Frontend | Proposed | 2026-09-06 |
 
 ## ADR template
 
@@ -35,9 +39,12 @@ details.
 
 ### Accepted
 - [0001](0001-initial-architecture.md) — Initial Architecture — Modular Monolith
+- [0002](0002-why-go.md) — Why Go for the Backend
+- [0003](0003-why-postgresql.md) — Why PostgreSQL
+- [0004](0004-why-rest-openapi.md) — Why REST and OpenAPI
 
 ### Proposed
-- (none)
+- [0005](0005-why-react-typescript.md) — Why React and TypeScript for the Future Frontend
 
 ### Rejected
 - (none)
