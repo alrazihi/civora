@@ -165,7 +165,7 @@ direct writes. Examples:
 - **Authentication**: Bearer tokens (JWT or opaque session tokens)
 - **Versioning**: URL path prefix (`/api/v1/`)
 - **Specification**: OpenAPI 3.0, documented in
-  `docs/architecture/api-spec.md` (to be created)
+  `docs/architecture/api-spec.md`
 - **Rate limiting**: Enforced per-user and per-IP (configurable)
 
 The API exposes endpoints for all module functionality. The first
@@ -217,6 +217,8 @@ model. Key security properties:
   definitions).
 - Secrets are never logged.
 - Rate limiting on all endpoints.
+- JWT tokens are short-lived (24h) and non-revocable (known limitation;
+  token revocation/logout endpoint planned for a future milestone).
 
 ---
 
@@ -239,7 +241,7 @@ model. Key security properties:
 ### Configuration
 
 Configuration is via environment variables and/or a YAML config file.
-See `docs/architecture/configuration.md` (to be created).
+See `docs/architecture/configuration.md`.
 
 ---
 

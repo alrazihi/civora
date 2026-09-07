@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -58,30 +59,34 @@ func TestValidTransitionsFrom(t *testing.T) {
 
 func TestCase_TransitionTo(t *testing.T) {
 	t.Run("valid transition", func(t *testing.T) {
-		c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
-		err := c.TransitionTo(CaseStatusOpen)
+		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		require.NoError(t, err)
+		err = c.TransitionTo(CaseStatusOpen)
 		require.NoError(t, err)
 		assert.Equal(t, CaseStatusOpen, c.Status)
 	})
 
 	t.Run("invalid transition", func(t *testing.T) {
-		c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
-		err := c.TransitionTo(CaseStatusClosed)
+		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		require.NoError(t, err)
+		err = c.TransitionTo(CaseStatusClosed)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidStateTransition)
 	})
 
 	t.Run("closed sets closed_at", func(t *testing.T) {
-		c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		require.NoError(t, err)
 		c.Status = CaseStatusResolved
-		err := c.TransitionTo(CaseStatusClosed)
+		err = c.TransitionTo(CaseStatusClosed)
 		require.NoError(t, err)
 		assert.NotNil(t, c.ClosedAt)
 	})
 }
 
 func TestCase_AssignTo(t *testing.T) {
-	c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	require.NoError(t, err)
 	user := uuid.New()
 	c.AssignTo(user)
 	require.NotNil(t, c.AssignedToID)
@@ -89,7 +94,8 @@ func TestCase_AssignTo(t *testing.T) {
 }
 
 func TestGenerateCaseNumber(t *testing.T) {
-	c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	require.NoError(t, err)
 	assert.NotEmpty(t, c.CaseNumber)
 	assert.Contains(t, c.CaseNumber, "CAS-")
 }
@@ -105,10 +111,31 @@ func TestCaseNumberCollision_Uniqueness(t *testing.T) {
 }
 
 func TestCase_RegenerateCaseNumber(t *testing.T) {
-	c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	require.NoError(t, err)
 	original := c.CaseNumber
 	c.RegenerateCaseNumber()
 	assert.NotEmpty(t, c.CaseNumber)
 	assert.NotEqual(t, original, c.CaseNumber, "regenerated case number should differ from original")
 	assert.Contains(t, c.CaseNumber, "CAS-")
+}
+
+func TestNewCase_InputValidation(t *testing.T) {
+	t.Run("title too long", func(t *testing.T) {
+		longTitle := strings.Repeat("x", maxTitleLength+1)
+		_, err := NewCase(uuid.New(), uuid.New(), longTitle, "description")
+		assert.ErrorIs(t, err, ErrCaseInvalidInput)
+	})
+
+	t.Run("description too long", func(t *testing.T) {
+		longDesc := strings.Repeat("x", maxDescriptionLength+1)
+		_, err := NewCase(uuid.New(), uuid.New(), "title", longDesc)
+		assert.ErrorIs(t, err, ErrCaseInvalidInput)
+	})
+
+	t.Run("valid input", func(t *testing.T) {
+		c, err := NewCase(uuid.New(), uuid.New(), "Valid Title", "Valid description")
+		require.NoError(t, err)
+		assert.NotEmpty(t, c.CaseNumber)
+	})
 }

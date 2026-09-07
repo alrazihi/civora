@@ -1,21 +1,29 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/organizations/application"
+	"github.com/alrazihi/civora/internal/organizations/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type Handler struct {
-	svc *application.OrganizationService
+type OrganizationService interface {
+	CreateOrganization(ctx context.Context, params application.CreateOrganizationParams) (*domain.Organization, error)
+	GetOrganization(ctx context.Context, id uuid.UUID) (*domain.Organization, error)
+	GetBySlug(ctx context.Context, slug string) (*domain.Organization, error)
 }
 
-func NewHandler(svc *application.OrganizationService) *Handler {
+type Handler struct {
+	svc OrganizationService
+}
+
+func NewHandler(svc OrganizationService) *Handler {
 	return &Handler{svc: svc}
 }
 

@@ -56,11 +56,14 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 		return nil, fmt.Errorf("%w: title is required", ErrCaseInvalidInput)
 	}
 
-	c := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description)
+	c, err := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseInvalidInput, err)
+	}
 
 	const maxRetries = 3
 	var result *domain.Case
-	err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		for attempts := 0; ; attempts++ {
 			if err := s.repo.SaveTx(ctx, tx, c); err != nil {
 				if errors.Is(err, domain.ErrCaseNumberConflict) && attempts < maxRetries-1 {

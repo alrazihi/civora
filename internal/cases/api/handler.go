@@ -270,11 +270,11 @@ func serializeCase(c *domain.Case) map[string]interface{} {
 
 func writeCaseError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, application.ErrCaseNotFound):
+	case errors.Is(err, application.ErrCaseNotFound), errors.Is(err, domain.ErrCaseNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "case not found")
-	case errors.Is(err, application.ErrCaseInvalidInput):
+	case errors.Is(err, application.ErrCaseInvalidInput), errors.Is(err, domain.ErrCaseInvalidInput):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
-	case errors.Is(err, application.ErrCaseTransition):
+	case errors.Is(err, application.ErrCaseTransition), errors.Is(err, domain.ErrInvalidStateTransition):
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "invalid state transition")
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")

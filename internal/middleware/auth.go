@@ -144,23 +144,6 @@ func RequireSameTenant(next http.Handler) http.Handler {
 	})
 }
 
-func RequireRole(roles ...string) func(http.Handler) http.Handler {
-	allowed := make(map[string]bool, len(roles))
-	for _, r := range roles {
-		allowed[r] = true
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			role := GetUserRole(r)
-			if role == "" || !allowed[role] {
-				shared.WriteError(w, http.StatusForbidden, "FORBIDDEN", "insufficient role")
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 func RequireAnyRole(roles ...string) func(http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(roles))
 	for _, r := range roles {

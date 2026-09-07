@@ -79,30 +79,6 @@ components:
               type: string
               example: "title is required"
 
-    SuccessResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        data:
-          type: object
-        meta:
-          type: object
-          nullable: true
-
-    PaginationMeta:
-      type: object
-      properties:
-        page:
-          type: integer
-        per_page:
-          type: integer
-        total:
-          type: integer
-        total_pages:
-          type: integer
-
     Organization:
       type: object
       required: [id, name, slug, created_at]
@@ -163,10 +139,9 @@ components:
           maxLength: 200
         password:
           type: string
-          minLength: 8
-        role_name:
-          type: string
-          description: Name of a role within the organization (e.g., "admin", "staff")
+          minLength: 12
+          pattern: "^(?=.*[a-zA-Z])(?=.*[0-9]).+$"
+          description: "At least 12 characters with at least one letter and one number"
 
     LoginResponse:
       type: object

@@ -164,11 +164,11 @@ func TestRequireSameTenant_BlocksMismatchedOrg(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
 
-func TestRequireRole_AllowsAuthorized(t *testing.T) {
+func TestRequireAnyRole_SingleRole_AllowsAuthorized(t *testing.T) {
 	svc := NewJWTService("secret", time.Hour, "civora")
 	orgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc)(RequireAnyRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
@@ -184,11 +184,11 @@ func TestRequireRole_AllowsAuthorized(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-func TestRequireRole_BlocksUnauthorized(t *testing.T) {
+func TestRequireAnyRole_SingleRole_BlocksUnauthorized(t *testing.T) {
 	svc := NewJWTService("secret", time.Hour, "civora")
 	orgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc)(RequireAnyRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach handler")
 	})))
 

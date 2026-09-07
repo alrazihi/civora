@@ -18,6 +18,13 @@ const (
 	CaseStatusClosed   CaseStatus = "CLOSED"
 )
 
+var (
+	ErrInvalidStateTransition = errors.New("invalid state transition")
+	ErrCaseNotFound           = errors.New("case not found")
+	ErrCaseInvalidInput       = errors.New("invalid case input")
+	ErrCaseNumberConflict     = errors.New("case number conflict")
+)
+
 type Case struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
@@ -32,7 +39,25 @@ type Case struct {
 	ClosedAt       *time.Time `json:"closed_at"`
 }
 
-func NewCase(orgID, createdByID uuid.UUID, title, description string) *Case {
+const (
+	maxTitleLength       = 200
+	maxDescriptionLength = 10000
+)
+
+func validateCaseInput(title, description string) error {
+	if len(title) > maxTitleLength {
+		return fmt.Errorf("%w: title exceeds maximum length of %d characters", ErrCaseInvalidInput, maxTitleLength)
+	}
+	if len(description) > maxDescriptionLength {
+		return fmt.Errorf("%w: description exceeds maximum length of %d characters", ErrCaseInvalidInput, maxDescriptionLength)
+	}
+	return nil
+}
+
+func NewCase(orgID, createdByID uuid.UUID, title, description string) (*Case, error) {
+	if err := validateCaseInput(title, description); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	return &Case{
 		ID:             uuid.New(),
@@ -44,7 +69,7 @@ func NewCase(orgID, createdByID uuid.UUID, title, description string) *Case {
 		CreatedByID:    createdByID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
-	}
+	}, nil
 }
 
 func (c *Case) TransitionTo(status CaseStatus) error {
@@ -113,10 +138,3 @@ func ValidTransitionsFrom(status CaseStatus) []CaseStatus {
 func GenerateCaseNumber(t time.Time) string {
 	return fmt.Sprintf("CAS-%s-%08d-%s", t.Format("20060102"), t.Nanosecond()%100000000, uuid.NewString()[:8])
 }
-
-var (
-	ErrInvalidStateTransition = errors.New("invalid state transition")
-	ErrCaseNotFound           = errors.New("case not found")
-	ErrCaseInvalidInput       = errors.New("invalid case input")
-	ErrCaseNumberConflict     = errors.New("case number conflict")
-)
