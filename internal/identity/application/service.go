@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -88,7 +89,7 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 	}
 
 	if s.auditor != nil {
-		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 			OrganizationID: user.OrganizationID,
 			ActorID:        &user.ID,
 			Action:         "user.created",
@@ -96,7 +97,9 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 			ResourceID:     strPtr(user.ID.String()),
 			Outcome:        "success",
 			Metadata:       map[string]interface{}{"email": user.Email},
-		})
+		}); err != nil {
+			log.Printf("audit event recording failed: %v", err)
+		}
 	}
 
 	return user, nil
@@ -129,14 +132,16 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 	valid, err := s.hasher.Verify(params.Password, *user.PasswordHash)
 	if err != nil || !valid {
 		if s.auditor != nil {
-			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 				OrganizationID: params.OrganizationID,
 				Action:         "auth.failed",
 				Resource:       "user",
 				ResourceID:     strPtr(params.Email),
 				Outcome:        "failure",
 				Metadata:       map[string]interface{}{"reason": "invalid_credentials"},
-			})
+			}); err != nil {
+				log.Printf("audit event recording failed: %v", err)
+			}
 		}
 		return nil, ErrInvalidCredentials
 	}
@@ -155,14 +160,16 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 	}
 
 	if s.auditor != nil {
-		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 			OrganizationID: params.OrganizationID,
 			ActorID:        &user.ID,
 			Action:         "auth.success",
 			Resource:       "user",
 			ResourceID:     strPtr(user.ID.String()),
 			Outcome:        "success",
-		})
+		}); err != nil {
+			log.Printf("audit event recording failed: %v", err)
+		}
 	}
 
 	return &AuthenticateResult{

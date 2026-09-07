@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -48,14 +49,16 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 	}
 
 	if s.auditor != nil {
-		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 			OrganizationID: c.OrganizationID,
 			ActorID:        &c.CreatedByID,
 			Action:         "case.created",
 			Resource:       "case",
 			ResourceID:     strPtr(c.ID.String()),
 			Outcome:        "success",
-		})
+		}); err != nil {
+			log.Printf("audit event recording failed: %v", err)
+		}
 	}
 
 	return c, nil
@@ -86,7 +89,7 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 	}
 
 	if s.auditor != nil {
-		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 			OrganizationID: c.OrganizationID,
 			ActorID:        &params.ActorID,
 			Action:         fmt.Sprintf("case.transition"),
@@ -97,7 +100,9 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 				"from": string(c.Status),
 				"to":   string(params.Status),
 			},
-		})
+		}); err != nil {
+			log.Printf("audit event recording failed: %v", err)
+		}
 	}
 
 	return c, nil
@@ -123,7 +128,7 @@ func (s *CaseService) AssignCase(ctx context.Context, params AssignCaseParams) (
 	}
 
 	if s.auditor != nil {
-		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 			OrganizationID: c.OrganizationID,
 			ActorID:        &params.ActorID,
 			Action:         "case.assigned",
@@ -133,7 +138,9 @@ func (s *CaseService) AssignCase(ctx context.Context, params AssignCaseParams) (
 			Metadata: map[string]interface{}{
 				"assigned_to": params.UserID.String(),
 			},
-		})
+		}); err != nil {
+			log.Printf("audit event recording failed: %v", err)
+		}
 	}
 
 	return c, nil
@@ -147,7 +154,7 @@ func (s *CaseService) GetCase(ctx context.Context, orgID, caseID uuid.UUID) (*do
 	return c, nil
 }
 
-func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Case, error) {
+func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -157,7 +164,18 @@ func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, off
 	if offset < 0 {
 		offset = 0
 	}
-	return s.repo.FindByOrganization(ctx, orgID, limit, offset)
+
+	total, err := s.repo.CountByOrganization(ctx, orgID, filter)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count cases: %w", err)
+	}
+
+	cases, err := s.repo.FindByOrganizationWithFilter(ctx, orgID, limit, offset, filter)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list cases: %w", err)
+	}
+
+	return cases, total, nil
 }
 
 func strPtr(s string) *string {

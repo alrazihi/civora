@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/google/uuid"
@@ -23,30 +24,26 @@ func (s *AuditService) RecordEvent(ctx context.Context, params domain.RecordEven
 		return fmt.Errorf("invalid outcome: %s", params.Outcome)
 	}
 
-	lastHash, err := s.repo.GetLastHash(ctx, params.OrganizationID)
-	if err != nil {
-		return fmt.Errorf("failed to get last hash: %w", err)
-	}
-
 	actorID := uuid.Nil
 	if params.ActorID != nil {
 		actorID = *params.ActorID
 	}
 
-	event := domain.NewAuditEvent(
-		params.OrganizationID,
-		actorID,
-		params.Action,
-		params.Resource,
-		params.ResourceID,
-		params.Outcome,
-		params.RequestID,
-		params.Metadata,
-		lastHash,
-	)
+	event := &domain.AuditEvent{
+		ID:             uuid.New(),
+		OrganizationID: params.OrganizationID,
+		ActorID:        &actorID,
+		Action:         params.Action,
+		Resource:       params.Resource,
+		ResourceID:     params.ResourceID,
+		Outcome:        params.Outcome,
+		RequestID:      params.RequestID,
+		Metadata:       params.Metadata,
+		Timestamp:      time.Now().UTC(),
+	}
 
-	if err := s.repo.Save(ctx, event); err != nil {
-		return fmt.Errorf("failed to save audit event: %w", err)
+	if err := s.repo.RecordEvent(ctx, params.OrganizationID, event); err != nil {
+		return fmt.Errorf("failed to record audit event: %w", err)
 	}
 
 	return nil
@@ -54,4 +51,8 @@ func (s *AuditService) RecordEvent(ctx context.Context, params domain.RecordEven
 
 func (s *AuditService) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.AuditEvent, error) {
 	return s.repo.FindByOrganization(ctx, orgID, limit, offset)
+}
+
+func (s *AuditService) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
+	return s.repo.CountByOrganization(ctx, orgID)
 }

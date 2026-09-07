@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -58,13 +59,15 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 	}
 
 	if s.auditor != nil {
-		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 			OrganizationID: org.ID,
 			Action:         "organization.created",
 			Resource:       "organization",
 			ResourceID:     strPtr(org.ID.String()),
 			Outcome:        "success",
-		})
+		}); err != nil {
+			log.Printf("audit event recording failed: %v", err)
+		}
 	}
 
 	return org, nil
