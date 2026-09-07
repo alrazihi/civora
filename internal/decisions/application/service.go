@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
-	"github.com/alrazihi/civora/internal/database"
 	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database"
 	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
@@ -16,11 +16,11 @@ import (
 )
 
 var (
-	ErrDecisionNotFound    = errors.New("decision not found")
-	ErrDecisionInput       = errors.New("invalid decision input")
-	ErrCaseNotFound        = errors.New("case not found")
-	ErrUserNotFound        = errors.New("user not found")
-	ErrInvalidCaseStatus   = errors.New("case is not in DECISION_PENDING status")
+	ErrDecisionNotFound  = errors.New("decision not found")
+	ErrDecisionInput     = errors.New("invalid decision input")
+	ErrCaseNotFound      = errors.New("case not found")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrInvalidCaseStatus = errors.New("case is not in DECISION_PENDING status")
 )
 
 type DecisionService struct {
