@@ -1,567 +1,577 @@
-# Hostile Engineering Review — CIVORA (Pre-Milestone 0.1)
+# Hostile Engineering Review — CIVORA (v2)
 
 **Reviewer**: External senior open-source maintainer (unfamiliar with project history)
 **Date**: 2026-09-07
-**Commit reviewed**: `6ae018b` (latest), with full history from `3e41e5c`
+**Commit reviewed**: `8539b80` (HEAD), full history from `3e41e5c`
+**Method**: Every finding verified against actual source code. `go build`, `go vet`, `gofmt`, and `go test -short` all run successfully. No claims are speculative.
 
 ---
 
-## Fix Status
+## Fix Status Verification
 
-The following **blocking** findings were addressed before completion of this review:
+The previous hostile review (commit `eb354fc`) claimed many findings were "Fixed" in commit `8539b80`. This v2 review independently verifies each claim against the actual current source code.
 
-| # | Finding | Status | Details |
-|---|---|---|---|
-| 1 | RBAC non-functional | **Fixed** | Default roles (`admin`, `staff`) created on org creation via `DefaultRoleCreator` |
-| 2 | OIDC dead code | **Fixed** | `OIDCProvider` interface removed; `provider.go` deleted; import removed from `go.mod` |
-| 3 | Cross-tenant BOLA | **Fixed** | `AssignCase` validates assignee belongs to org via `UserChecker` |
-| 4 | Audit hash chain | **Documented** | Transactional outbox recommended for future; current pattern logs errors |
-| 5 | Error info leakage | **Fixed** | All 5 handler `default:` cases now return generic "internal server error" |
-| 6 | RequireSameTenant bypass | **Fixed** | Empty `orgId` param now returns 400, not pass-through |
-| 7 | Two JWT implementations | **Fixed** | Unified into single `JWTService` in middleware; `JWTTokenService` removed |
-| 8 | Password strength | **Fixed** | Minimum 8 chars, requires ≥1 letter and ≥1 number |
-| 9 | Email validation | **Fixed** | Regex-based validation replacing `strings.Contains` |
-| 10 | CORS all origins | **Fixed** | Origins now configurable via `CIVORA_SERVER_CORS_ORIGINS`, defaults to `http://localhost:3000` |
-| 11 | HSTS on HTTP | **Fixed** | Only set when `r.TLS != nil` |
-| 12 | No body size limit | **Fixed** | `BodySizeLimit()` middleware limits to 10 MB via `http.MaxBytesReader` |
-| 13 | PII in audit metadata | **Fixed** | `email` removed from `user.created` audit event metadata |
-| 14 | Missing DB indexes | **Fixed** | Added `idx_cases_assigned_to`, `idx_users_role_id`, `idx_audit_resource_id` |
-| 15 | No ReadHeaderTimeout | **Fixed** | Added `ReadHeaderTimeout: 10s` to `http.Server` |
-| 16 | Health doesn't check DB | **Fixed** | `/ready` now pings database, returns 503 if unavailable |
-| 17 | Empty module scaffolds | **Removed** | Deleted `ai`, `tasks`, `workflow`, `forms`, `documents`, `notifications`, `integrations`, `policy` |
-| 18 | Docker-compose DB sync | **Fixed** | Added `init-test-db.sql` to create `civora_test` user and database |
+### Claims verified as ACTUALLY FIXED:
 
-**Tests**: All unit tests pass (`go test -short ./...`). Integration and e2e tests require PostgreSQL (see DB env vars in `AGENTS.md`).
+| # | Finding | Status | Evidence |
+|---|---------|--------|----------|
+| 1 | Error info leakage in 500s | Fixed | `internal/identity/api/handler.go:189-191`, `internal/cases/api/handler.go:267-269`, `internal/organizations/api/handler.go:95-97` all return generic "internal server error" |
+| 2 | Cross-tenant assignment (BOLA) | Fixed | `internal/cases/application/service.go:132-140` validates assignee via `UserChecker.BelongsToOrganization` |
+| 3 | Two JWT implementations unified | Fixed | Single `JWTService` in `internal/middleware/auth.go` handles both generation and verification |
+| 4 | RequireSameTenant bypass | Fixed | `internal/middleware/auth.go:126-129` returns 400 for empty orgId |
+| 5 | Password strength enforcement | Fixed | `internal/identity/application/service.go:193-211` enforces 8+ chars, 1 letter + 1 number |
+| 6 | Email validation improved | Fixed | `internal/identity/application/service.go:25,186-191` uses regex |
+| 7 | CORS configurable | Fixed | `internal/middleware/middleware.go:10-17` reads `CIVORA_SERVER_CORS_ORIGINS` |
+| 8 | HSTS conditional on TLS | Fixed | `internal/middleware/headers.go:15-17` checks `r.TLS != nil` |
+| 9 | Body size limit | Fixed | `internal/middleware/headers.go:22-34` + `internal/server/server.go:35` |
+| 10 | Missing DB indexes | Fixed | `migrations/0001_init.up.sql:67-71` adds all recommended indexes |
+| 11 | ReadHeaderTimeout | Fixed | `internal/server/server.go:51` sets `ReadHeaderTimeout: 10 * time.Second` |
+| 12 | Health endpoint DB-aware | Fixed | `internal/server/server.go:78-95` pings DB on `/ready` |
+| 13 | Empty module scaffolds removed | Fixed | Only 4 modules remain: audit, cases, identity, organizations |
+| 14 | DB name consistency | Fixed | `init-test-db.sql` creates `civora_test`, mounted in docker-compose |
+| 15 | PII removed from audit metadata | Fixed | No `email` in `user.created` audit event params |
+| 16 | Default roles created | Fixed | `internal/identity/domain/user.go:76-101` + `internal/organizations/application/service.go:67-71` |
+| 17 | OIDC provider implementation deleted | Fixed | No OIDC files, no OIDC dependencies in go.mod |
+
+### Claims NOT actually fixed (revisited):
+
+| # | Claimed Fixed | Status | Evidence |
+|---|--------------|--------|----------|
+| 1 | RBAC | **NOT FIXED** | `RequireRole` is defined but NEVER applied to any route. See CRITICAL-1. |
+| 4 | Audit hash chain | **NOT FIXED** | Domain write and audit write are in separate transactions. See CRITICAL-3. |
+| 26 | RecordEvent test coverage | **NOT FIXED** | `audit_repository_test.go` still uses `Save` + `GetLastHash`, not `RecordEvent` (lines 14-115). |
+| 36 | Structured logging | **NOT FIXED** | `log.Printf("audit event recording failed: %v", err)` still in service.go:68-69, 106, 112, 148, 159-160, 175-176. |
 
 ---
 
 ## A. CRITICAL Findings
 
-### 1. RBAC is completely non-functional
-**File**: `internal/identity/application/service.go:149-155`
-**Component**: Authentication / Authorization
-**Problem**: No default roles (admin, staff) are created when an organization is created (`OrganizationService.CreateOrganization` at `internal/organizations/application/service.go:39`). When `Authenticate` runs, `user.RoleID` is typically nil because `CreateUser` silently sets `RoleID = nil` if the named role doesn't exist (`internal/identity/application/service.go:71-77`). The fallback sets `role = "user"` — but no `"user"` role exists in the database. The JWT `role` claim is always `"user"`. `RequireRole("admin")` will **never** match. Any future permission check on roles is dead code.
-**Why it matters**: Claims of RBAC in documentation are false. Security is theater.
-**Recommended fix**: Create default roles (admin, staff) in `CreateOrganization` with a transactional outbox, or define role names as constants in the domain and validate against them in the JWT.
+### CRITICAL-1: RBAC is non-functional — `RequireRole` is never applied to any route
 
-### 2. OIDC provider has no implementation
-**File**: `internal/identity/infrastructure/auth/oidc/provider.go`
-**Component**: Authentication
-**Problem**: `redirectURI()` returns `""` (hardcoded empty string). `VerifyToken` is defined as an interface method but has no concrete implementation anywhere. The provider is never instantiated in `main.go`. The `OIDCProvider` interface in `identity/domain/repository.go:35` is dead code.
-**Why it matters**: The threat model, ADR-0004, and ARCHITECTURE.md all reference OIDC support. It does not exist.
-**Recommended fix**: Either remove the OIDC scaffolding entirely (avoid false claims), or implement a working provider with testable discovery and token verification.
-
-### 3. Cross-tenant assignment vulnerability (BOLA)
-**File**: `internal/cases/api/handler.go:194-206, 208-213`
-**Component**: Case management
-**Problem**: `AssignCase` accepts a `UserID` from the request body (`req.UserID`) and passes it directly to `svc.AssignCase()` without verifying that the user belongs to the same organization. The `cases.assigned_to` FK references `users(id)` globally — a user from org A can be assigned as `assigned_to` on a case in org B.
-**Why it matters**: Direct cross-tenant data corruption. An attacker can assign cases to users in other organizations.
-**Recommended fix**: In `AssignCase` service method, verify `params.UserID` belongs to `params.OrganizationID` before assigning.
-
-### 4. Audit events can silently fail, breaking the hash chain
-**File**: `internal/cases/application/service.go:51-59` and `internal/audit/application/service.go:52-68`
-**Component**: Audit
-**Problem**: When `s.repo.RecordEvent` fails, `NewAuditEvent` is never called with the `previous_hash` set to the last hash. The `RecordEvent` repository method uses `SELECT ... FOR UPDATE` to get the last hash within a transaction, but if the transaction fails, no retry occurs and the hash chain gap is undetectable. Worse, the audit error is now logged (`log.Printf`) but the domain write (e.g., case creation) has already been committed — so the case exists in the DB but has no audit trail.
-**Why it matters**: Audit integrity is the project's central security guarantee. Broken chains undermine all audit-based investigations.
-**Recommended fix**: Use a transactional outbox pattern — write the case and audit event in the same DB transaction. If the audit write fails, roll back the domain write too.
-
-### 5. Internal error details leak to clients
-**File**: `internal/identity/api/handler.go:188`, `internal/cases/api/handler.go:268`, `internal/organizations/api/handler.go:76`, `internal/audit/api/handler.go:44`
-**Component**: Error handling
-**Problem**: All handlers have a `default:` case in their error switch that calls `shared.WriteError(w, ..., err.Error())` — passing raw `error.Error()` as the response message. This leaks internal error strings (e.g., SQL errors, stack traces) to clients.
-**Why it matters**: Information disclosure. An attacker can learn internal database structure from error messages.
-**Recommended fix**: Return a generic "internal server error" message for all 500 responses. Log the actual error server-side only.
-
-### 6. `RequireSameTenant` has a bypass path
-**File**: `internal/middleware/auth.go:99-102`
+**File**: `internal/middleware/auth.go:142,159` (definitions); `internal/cases/api/handler.go:25-34`, `internal/identity/api/handler.go:22-33`, `internal/organizations/api/handler.go:22-31`, `internal/audit/api/handler.go:22-28` (route registrations)
 **Component**: Authorization
-**Problem**: If `chi.URLParam(r, "orgId")` is empty (i.e., the route doesn't have an `{orgId}` param), the middleware silently calls `next.ServeHTTP(w, r)` without any tenant check. While the current routes all have `{orgId}`, this is a fragile pattern — adding any tenant-scoped route without the param would silently bypass the check.
-**Why it matters**: Defense-in-depth failure. A single route misconfiguration grants cross-tenant access.
-**Recommended fix**: Remove the bypass. If the route has no `orgId` parameter, return 403 or 400 unconditionally.
+**Problem**: The `RequireRole` and `RequireAnyRole` middleware functions exist, are tested (`internal/middleware/auth_test.go:166-224`), and the JWT `role` claim is populated during authentication. However, **neither is ever registered on any route** in any `RegisterRoutes` method. Every authenticated endpoint uses only `authMiddleware` (verify token) + `RequireSameTenant` (org match). The `role` claim is extracted and stored in context (`auth.go:111`) but **never checked**.
+
+Verification: grep for `RequireRole` in non-test, non-definition files returns zero results. The only callers of `RequireRole` and `RequireAnyRole` are in `auth_test.go`.
+
+**Why it matters**: The threat model (T-01, T-02), ARCHITECTURE.md ("Authorization checked at the service and data layers"), ADR-0001 ("All endpoints require authentication and authorization"), and `docs/architecture/api-spec.md:32-34` ("the `RequireRole` middleware checks the JWT's `role` claim") all claim role-based authorization. Every one of these claims is **false**. Any authenticated user — including one who self-registered without specifying a role (getting JWT role `"user"`) — can create cases, transition case statuses, assign cases, list all users, and read the full audit log. This is a total authorization bypass.
+
+The prior review claimed this was "Fixed" by creating default roles. Role creation is only half the story. Roles that are created but never checked are security theater.
+
+**Recommended fix**: Apply `RequireRole("admin")` or `RequireRole("staff")` to specific routes that require it. Without this, every authenticated user is a superuser.
+**Severity**: CRITICAL
+
+### CRITICAL-2: Unauthenticated registration can self-assign the "admin" role
+
+**File**: `internal/identity/api/handler.go:35-72`; `internal/identity/application/service.go:78-83`
+**Component**: Authentication / Authorization
+**Problem**: The `Register` endpoint accepts `role_name` from the client request body and passes it to `CreateUser`. `CreateUser` looks up the role by name within the organization and assigns it to the new user if it exists. Since `DefaultRoleCreator` creates an `"admin"` role on organization creation, any attacker who knows an organization ID can register a user with `role_name: "admin"`. The OpenAPI spec documents `role_name` as accepting `"admin"` or `"staff"` with no access-control caveat.
+**Why it matters**: The threat model (T-02: "Privilege escalation") explicitly lists this concern. The registration endpoint has no authentication — it is the only onboarding path — yet it trusts the client to specify the user's role.
+**Recommended fix**: Remove `role_name` from public registration. Implement first-user-is-admin logic: the first user registered for an organization gets `"admin"`, all subsequent users get `"staff"`.
+**Severity**: CRITICAL
+
+### CRITICAL-3: Audit events are not written atomically with domain writes
+
+**File**: `internal/cases/application/service.go:55-70` (domain write, then audit); `internal/identity/application/service.go:93-110`; `internal/organizations/application/service.go:63-83`; `internal/audit/application/service.go:22-50`; `internal/audit/infrastructure/postgres/audit_repository.go:22-80`
+**Component**: Audit integrity / Transaction boundaries
+**Problem**: Every service method follows the pattern: (1) save the domain entity to the DB in one transaction (`s.repo.Save(ctx, c)` commits), (2) then call `auditor.RecordEvent()` in a **separate** transaction. If step 2 fails (DB error, connection pool exhaustion), the error is logged via `log.Printf` and the method returns `nil` (success). The domain write in step 1 is already committed. Result: the data change exists but the audit trail is permanently incomplete.
+
+The prior review marked this as "Documented" — it is not fixed. The `RecordEvent` repository method does begin its own transaction with `SELECT ... FOR UPDATE` to maintain the hash chain (audit_repository.go:23-42), but this is a *separate* transaction from the domain write, so there is no atomicity guarantee.
+
+**Why it matters**: Audit integrity is CIVORA's central security guarantee. The threat model (T-09: "Audit tampering") rates this **Critical**. If a domain write succeeds but its audit event fails, an attacker could perform actions that leave no trace. The `VerifyIntegrity()` method checks hash correctness but cannot detect missing events.
+
+**Recommended fix**: Implement a transactional outbox pattern — write the domain entity and the audit event in the **same** database transaction using `database.InTransactional` (`internal/database/db.go:58`). If the audit write fails, roll back the domain write.
+**Severity**: CRITICAL
+
+### CRITICAL-4: OIDC config and schema remnants remain after "removal"
+
+**File**: `internal/config/config.go:42-44,77-79`; `internal/identity/domain/user.go:20`; `migrations/0001_init.up.sql:27`; `.env.example:25-28`; `docs/architecture/configuration.md:37-40`; `SECURITY.md:54` (references threat model)
+**Component**: Authentication / Dead code / Documentation accuracy
+**Problem**: The prior review (#2) claimed OIDC was "Fixed: Removed (interface, provider implementation, all imports)." Verification shows this is **partially true**: the `OIDCProvider` interface and `internal/identity/infrastructure/auth/oidc/provider.go` were deleted, and no OIDC libraries are in `go.mod`/`go.sum` (confirmed: grep returns zero results). However, the removal is **incomplete**:
+- `config.go` still has `OIDCIssuer`, `OIDCClientID`, `OIDCRedirectURL` fields loaded from env (lines 77-79) but never read (confirmed: zero references outside config.go)
+- `.env.example` still documents `CIVORA_AUTH_OIDC_ISSUER`, `CIVORA_AUTH_OIDC_CLIENT_ID`, `CIVORA_AUTH_OIDC_REDIRECT_URL` (lines 25-28)
+- `docs/architecture/configuration.md` still documents these as active config variables (lines 37-40)
+- The `users` table still has `is_oidc_user BOOLEAN NOT NULL DEFAULT FALSE` (migration line 27)
+- The `User` struct still has `IsOIDCUser bool` (user.go:20), set on every insert/query but never used in logic
+**Why it matters**: Operators who set OIDC env vars will find them silently ignored. The config and schema remnants create a false impression of OIDC capability.
+**Recommended fix**: Remove all OIDC config fields, env vars, schema columns, struct fields, and documentation references.
+**Severity**: CRITICAL
+
+### CRITICAL-5: No encryption at rest for personal data — directly contradicts documentation
+
+**File**: `ARCHITECTURE.md:195-214`; all repository files (no encryption code exists)
+**Component**: Security / Data protection / Documentation accuracy
+**Problem**: ARCHITECTURE.md claims (lines 195-214):
+- "Personal data is identified by a `data_classification` label" — no such column or mechanism exists
+- "Personal data is stored encrypted at rest where configured"
+- "Encryption at rest is supported via database column-level encryption for personal data"
+- "Encryption keys are managed by the operator's key management system (KMS) where available"
+
+All PII (emails, names, case titles, descriptions) is stored in **plaintext** in PostgreSQL. Only passwords are hashed.
+**Recommended fix**: Remove all encryption-at-rest claims from documentation until implemented.
+**Severity**: CRITICAL
+
+### CRITICAL-6: Documented data export and soft-delete features do not exist
+
+**File**: `ARCHITECTURE.md:206,224-228`; `api/openapi/openapi.yaml`
+**Component**: Documentation accuracy / Data management / Privacy
+**Problem**: ARCHITECTURE.md claims:
+- "Data export is available in JSON format via the API" (line 226) — no export endpoints exist
+- "Bulk export endpoints are available for administrators" (line 227) — no bulk export endpoints exist
+- "Deleted data is soft-deleted by default" (line 206) — no soft-delete mechanism. No `deleted_at` column, no `is_deleted` flag, no deletion API. All FKs use `ON DELETE CASCADE` (hard delete).
+**Recommended fix**: Remove all claims about export, soft-delete, and data portability from documentation. Mark as future work in ROADMAP.md.
+**Severity**: CRITICAL
+
+### CRITICAL-7: Stale CONTRIBUTING.md with pervasive placeholder text
+
+**File**: `CONTRIBUTING.md:56-57,76-77,123-124,147-148`
+**Component**: Documentation accuracy
+**Problem**: CONTRIBUTING.md contains four separate paragraphs of placeholder text claiming the build system, test commands, and ADR template "will be created" — all of which already exist in `AGENTS.md` and `docs/decisions/0000-template.md`.
+**Severity**: CRITICAL
 
 ---
 
 ## B. HIGH Findings
 
-### 7. Two redundant JWT implementations
-**File**: `internal/identity/infrastructure/auth/jwt_token_service.go` and `internal/middleware/auth.go`
-**Component**: Authentication
-**Problem**: Two separate structs (`JWTTokenService` in infrastructure/auth and `JWTService` in middleware) both implement token signing/verification. `main.go:56` creates a `JWTTokenService` for the identity service, and `main.go:65` creates a separate `JWTService` for the middleware. They use different secret types (`string` vs `[]byte`) and different claim structures. If the secrets differ, tokens will be issued but never verified.
-**Why it matters**: Code duplication, cognitive overhead, and a potential for mismatched secrets in production.
-**Recommended fix**: Use a single JWT service. The `JWTService` in middleware should be the single source of truth for both generation and verification.
+### HIGH-1: No event bus exists — ARCHITECTURE.md and ADR-0001 describe one
 
-### 8. Email validation is trivially bypassable
-**File**: `internal/shared/validator.go:18-26`
-**Component**: Input validation
-**Problem**: `ValidateEmail` only checks that the string contains `@` and `.`. Email addresses like `@..` or `a@b.` pass validation.
-**Why it matters**: Invalid data in the system. Usernames/emails with malformed addresses can be used for phishing or confusion.
-**Recommended fix**: Use `net/mail.ParseAddress` or a proper email validation library.
+**File**: `ARCHITECTURE.md:37,53,76-83`; `docs/decisions/0001-initial-architecture.md:64-67`
+**Problem**: ARCHITECTURE.md line 37 lists "Events (in-process)" as shared infrastructure. ADR-0001 lines 64-67 describe "in-process event bus or pub/sub pattern for cross-module notifications." **No event bus exists.** All cross-module communication is synchronous direct function calls.
+**Severity**: HIGH
 
-### 9. No password strength enforcement
-**File**: `internal/identity/application/service.go:62-63`
-**Component**: Authentication
-**Problem**: The only password check is `strings.TrimSpace(params.Password) == ""`. No minimum length, no complexity requirements, no breach-check via Have I Been Pwned API.
-**Why it matters**: Users can set passwords like `1` or `password`.
-**Recommended fix**: Enforce minimum 12 characters, require at least one character from each character class, check against common password lists.
+### HIGH-2: Organization creation and role creation are not atomic
 
-### 10. CORS allows all origins with credentials
-**File**: `internal/middleware/middleware.go:9-16`
-**Component**: Security headers / CORS
-**Problem**: `AllowedOrigins: []string{"*"}` combined with `AllowCredentials: true` is explicitly forbidden by the CORS spec. Browsers will reject this, but it indicates a misconfiguration.
-**Why it matters**: In a deployed environment, this would break CORS entirely, or if "fixed" by changing to a specific origin, would need proper configuration.
-**Recommended fix**: Read allowed origins from configuration. Default to same-origin in production.
+**File**: `internal/organizations/application/service.go:63-71`
+**Problem**: `CreateOrganization` saves the org (line 63), then creates default roles in a separate transaction (lines 67-70). If role creation fails, the error is logged and the org is returned successfully — **without any roles**. The org exists but is broken.
+**Severity**: HIGH
 
-### 11. HSTS header set on HTTP connections
-**File**: `internal/middleware/headers.go:14`
-**Component**: Security headers
-**Problem**: `Strict-Transport-Security` is set unconditionally, even on plain HTTP. Browsers will ignore this on HTTP, but it signals misconfiguration.
-**Why it matters**: If a reverse proxy is misconfigured and serves content over HTTP, HSTS provides false security.
-**Recommended fix**: Only set HSTS when the request is over HTTPS (`r.TLS != nil` or `X-Forwarded-Proto: https`).
+### HIGH-3: `CreateUser` silently discards errors from `FindByEmail` and role lookup
 
-### 12. No request body size limit
-**File**: `internal/server/server.go:12-16`
-**Component**: Server configuration
-**Problem**: The `http.Server` has no `MaxHeaderBytes` or handler-level body size limits. A client can send a multi-GB request body and exhaust server memory.
-**Why it matters**: Denial of service.
-**Recommended fix**: Add `http.MaxBytesReader(w, r.Body, 1<<20)` in each handler, or set `ReadHeaderTimeout` and `MaxHeaderBytes` on the server.
+**File**: `internal/identity/application/service.go:72,77-83`
+**Problem**: `existing, _ := s.userRepo.FindByEmail(...)` (line 72) — error discarded. If the email-uniqueness query fails, the method proceeds to create a duplicate user, causing a DB error. Role lookup failures are silently ignored: if `role_name` doesn't exist, `roleID` is silently nil (lines 78-83).
+**Severity**: HIGH
 
-### 13. Email stored in audit event metadata
-**File**: `internal/identity/application/service.go:99`
-**Component**: Audit / Privacy
-**Problem**: `AuditEventParams.Metadata` includes `map[string]interface{}{"email": user.Email}`. The domain model documentation says "Do not store unnecessary personal data in audit events" (`docs/threat-model.md:T-09`). Email is PII.
-**Why it matters**: GDPR/CCPA compliance violation. Audit logs now contain PII that cannot be easily redacted.
-**Recommended fix**: Store only a user ID hash or pseudonymized reference in audit metadata.
+### HIGH-4: Correlation ID (`X-Request-ID`) never propagated to audit events
 
-### 14. Missing database indexes
-**File**: `migrations/0001_init.up.sql:66-69`
-**Component**: Database design
-**Problem**: 
-- `cases.assigned_to` has no index — queries for "cases assigned to user X" will scan all rows.
-- `users.role_id` has no index — JOIN queries with roles will be slow.
-- `audit_events.resource_id` has no index — lookups by resource ID will scan all rows.
-- No index on `audit_events.actor_id`.
-**Why it matters**: O(n) queries on tables that will grow over years. At scale, this will cause timeouts.
-**Recommended fix**: Add indexes on `cases(assigned_to)`, `users(role_id)`, `audit_events(resource_id)`, `audit_events(actor_id)`.
+**File**: `internal/middleware/logging.go:28,35-45` (generation); all application service audit calls
+**Problem**: The `RequestID` middleware generates a UUID and stores it in context. The `Logging` middleware uses it. But **no handler or service ever calls `GetRequestID(r)`** to pass it to `AuditService.RecordEvent`. Every audit event has `RequestID = nil`. `docs/architecture/api-spec.md:41-43` claims correlation IDs are "included in all audit events."
+**Severity**: HIGH
 
-### 15. Case status stored as TEXT with string comparison
-**File**: `internal/cases/domain/case.go:71-77`
-**Component**: Domain model
-**Problem**: `CaseStatus` is a `string` type. The `IsValidTransition` function uses a map lookup. The database uses `TEXT` with a `CHECK` constraint. If a new status is added, it requires changes in 3 places (domain constants, transition rules, DB CHECK constraint).
-**Why it matters**: Easy to introduce bugs where the domain and database disagree on valid statuses.
-**Recommended fix**: Use PostgreSQL `ENUM` type with automatic mapping, or validate status at the application layer consistently.
+### HIGH-5: `AuditConfig` fields are dead configuration
 
-### 16. No data retention enforcement
-**File**: `internal/config/config.go:81`, `internal/audit/application/service.go`
-**Component**: Data retention / Privacy
-**Problem**: `AuditConfig.RetentionDays` defaults to 2555 (7 years) but no code ever enforces this. Old audit events are never deleted or archived.
-**Why it matters**: GDPR Article 17 (right to erasure) and data minimization principles are violated. Audit data grows unbounded.
-**Recommended fix**: Implement a scheduled retention job (cron or background goroutine) that deletes audit events older than the retention period.
+**File**: `internal/config/config.go:47-51,81-84`; `internal/audit/application/service.go`
+**Problem**: `Enabled`, `HashChainEnabled`, `RetentionDays` are loaded from env but **never passed to `AuditService`** and never checked. `CIVORA_AUDIT_ENABLED=false` is silently ignored. `CIVORA_AUDIT_RETENTION_DAYS` is silently ignored — old events are never purged. Confirmed: grep for `Enabled`, `HashChainEnabled`, `RetentionDays` outside config.go returns zero results.
+**Severity**: HIGH
 
-### 17. `main.go` has no graceful shutdown for in-flight requests
-**File**: `cmd/civora/main.go:85-91`
-**Component**: Lifecycle
-**Problem**: `httpServer.Shutdown(shutdownCtx)` with a 10-second timeout may terminate in-flight requests that take longer. There's no `ReadHeaderTimeout` set, making the server vulnerable to Slowloris attacks.
-**Why it matters**: Denial of service via slow headers.
-**Recommended fix**: Set `ReadHeaderTimeout: 5 * time.Second` on the `http.Server`.
+### HIGH-6: `ListUsers` API has no pagination — OpenAPI documents it
+
+**File**: `internal/identity/api/handler.go:111-131`; `internal/identity/application/service.go:221-223`; `api/openapi/openapi.yaml:508-520`
+**Problem**: The handler and service return all users with no `limit`/`offset`. The OpenAPI spec documents `page` and `per_page` query parameters that are not implemented.
+**Severity**: HIGH
+
+### HIGH-7: No `.dockerignore` file
+
+**File**: Repository root (missing)
+**Problem**: No `.dockerignore` exists. `Dockerfile` does `COPY . .` sending entire repo (including `.git/`, `docs/`, test binaries) as build context.
+**Severity**: HIGH
+
+### HIGH-8: Dockerfile runs as root
+
+**File**: `Dockerfile:12-13`
+**Problem**: No `USER` directive. Container runs as root.
+**Severity**: HIGH
+
+### HIGH-9: No static analysis beyond `gofmt` and `go vet` in CI
+
+**File**: `.github/workflows/ci.yml:14-29`
+**Problem**: Only `gofmt` and `go vet`. No gosec, golangci-lint, or govulncheck.
+**Severity**: HIGH
+
+### HIGH-10: No per-user rate limiting on authentication endpoints
+
+**File**: `internal/middleware/ratelimit.go:22-29`; `internal/identity/api/handler.go:74-90`
+**Problem**: Rate limiting is per-IP only (100 req/s, burst 20). No per-user rate limiting on login/register. Brute-force attacks against specific users are possible. Threat model T-04 says "Rate limiting on authentication endpoints."
+**Severity**: HIGH
+
+### HIGH-11: No data export or soft-delete — ARCHITECTURE.md claims both exist
+
+**File**: `ARCHITECTURE.md:206,224-228`
+**Problem**: (See CRITICAL-6) Documented export and soft-delete features do not exist.
+**Severity**: HIGH
+
+### HIGH-12: Domain-model gap — no "Person" (beneficiary) entity
+
+**File**: `internal/cases/domain/case.go:28`; `ARCHITECTURE.md:97-100`
+**Problem**: ARCHITECTURE.md distinguishes `Person` (beneficiary) from `User` (authenticated staff). `Case.CreatedByID` is a `User`. There is no `Person` entity.
+**Severity**: HIGH
 
 ---
 
 ## C. MEDIUM Findings
 
-### 18. Case `CreateCase` audit event records `c.CreatedByID` but not the actor context
-**File**: `internal/cases/application/service.go:51-59`
-**Problem**: When a case is created, the audit event's `ActorID` is set to `c.CreatedByID` (the person who the case is about), not the authenticated actor who created the case. This conflates "case subject" with "case creator".
-**Recommended fix**: Add a separate `CreatedByID` (actor) field on `CreateCaseParams`.
+### MEDIUM-1: `fmt.Sprintf("case.transition")` — no-op format string
 
-### 19. `fmt.Sprintf("case.transition")` — unnecessary function call
-**File**: `internal/cases/application/service.go:95`
-**Problem**: `fmt.Sprintf("case.transition")` is identical to the literal `"case.transition"`. This is dead code / over-engineering.
-**Recommended fix**: Use the string literal directly.
+**File**: `internal/cases/application/service.go:103`
+**Problem**: `fmt.Sprintf("case.transition")` is identical to the literal `"case.transition"`. Never fixed despite being flagged in the prior review (#19).
+**Severity**: MEDIUM
 
-### 20. `SuccessResponse` and `PaginationMeta` OpenAPI schemas are unused
-**File**: `api/openapi/openapi.yaml:82, 94`
-**Problem**: These schemas are defined in `components/schemas` but never referenced by any operation. Redocly flags them as unused.
-**Recommended fix**: Remove unused schemas, or use them in response definitions.
+### MEDIUM-2: `shared/validator.go` and `shared/id.go` are entirely dead code
 
-### 21. No `.dockerignore` file
-**File**: Repository root
-**Problem**: Without `.dockerignore`, `docker build` will copy the entire repo (`.git`, `node_modules`, test artifacts) into the build context, increasing build time and potentially leaking secrets.
-**Recommended fix**: Create a `.dockerignore` file.
+**File**: `internal/shared/validator.go:1-64`; `internal/shared/id.go:1-16`
+**Problem**: All functions in both files are never called from any source file (confirmed by grep). `shared.ValidateEmail` uses weak `strings.Contains` validation (the vulnerability the prior review #8 flagged). `database.SplitDSN` (`internal/database/db.go:78-88`) is also dead code.
+**Severity**: MEDIUM
 
-### 22. `godotenv` in production dependencies
-**File**: `go.mod:7`
-**Problem**: `github.com/joho/godotenv` is a development convenience library that loads `.env` files. It's in the main `require` block (not a dev dependency). In production, this could allow `.env` file injection attacks.
-**Recommended fix**: Make `godotenv` optional — only load `.env` in development mode (`CIVORA_ENV != "production"`).
+### MEDIUM-3: Password policy weaker than documented
 
-### 23. No `ReadHeaderTimeout` on `http.Server`
-**File**: `cmd/civora/main.go`, `internal/server/server.go`
-**Problem**: The server config has `ReadTimeout` and `WriteTimeout` but no `ReadHeaderTimeout`. This is a known Go security issue (Slowloris).
-**Recommended fix**: Add `ReadHeaderTimeout: 5 * time.Second`.
+**File**: `internal/identity/application/service.go:27,193-211`; `docs/threat-model.md:98-104`
+**Problem**: Implementation: 8 chars, 1 letter + 1 number. Threat model: "minimum 12 characters." Prior review recommended 12. Currently 8.
+**Severity**: MEDIUM
 
-### 24. Health endpoint doesn't check database
-**File**: `internal/server/server.go:41-45`
-**Problem**: `/health` returns `{"status":"ok"}` unconditionally. `/ready` returns `{"status":"ready"}` unconditionally. Neither checks database connectivity.
-**Why it matters**: A container orchestrator will route traffic to a broken instance.
-**Recommended fix**: `/ready` should ping the database and return 503 if unavailable.
+### MEDIUM-4: No race detection in CI
 
-### 25. Case transitions allow reopening RESOLVED cases
-**File**: `internal/cases/domain/case.go:71-77`
-**Problem**: `CaseStatusResolved` transitions to `[CaseStatusClosed, CaseStatusInReview]`. The founder's spec says "Follow-up" is a step after closure, but reopening a resolved case (before closing) is allowed. This may be intentional, but the transition rules were not validated against the domain model.
-**Recommended fix**: Document the rationale for each allowed transition in the code or ADR.
+**File**: `.github/workflows/ci.yml:64,67`
+**Problem**: `CGO_ENABLED=0 go test` cannot use `-race` flag (requires CGO). Concurrent code (RateLimiter, IdempotencyStore) is untested for data races.
+**Severity**: MEDIUM
 
-### 26. No test coverage for audit `RecordEvent` repository method
+### MEDIUM-5: Idempotency store memory leak
+
+**File**: `internal/middleware/idempotency.go:48-57`
+**Problem**: `Cleanup()` method exists but is never called. No background goroutine. Map grows unboundedly.
+**Severity**: MEDIUM
+
+### MEDIUM-6: JWT does not validate `iss` (issuer) claim
+
+**File**: `internal/middleware/auth.go:57-86`
+**Problem**: `VerifyToken` validates signature and `exp` but not `iss`. Tokens from other services with the same secret would be accepted.
+**Severity**: MEDIUM
+
+### MEDIUM-7: Case number generation has collision risk
+
+**File**: `internal/cases/domain/case.go:109-111`
+**Problem**: UUID truncated to 8 hex chars (32 bits of entropy). `case_number_organization` UNIQUE constraint means collision = hard DB error (500), not retry.
+**Severity**: MEDIUM
+
+### MEDIUM-8: `Recovery` middleware constructs JSON with `fmt.Sprintf`
+
+**File**: `internal/middleware/recovery.go:14`
+**Problem**: Manual JSON construction via `fmt.Sprintf` — no escaping of special characters. Could produce invalid JSON on panics with special chars in the message.
+**Severity**: MEDIUM
+
+### MEDIUM-9: No test coverage for handler/API layers
+
+**File**: All `internal/*/api/handler.go` files — zero `*_test.go` files
+**Problem**: No unit tests for any HTTP handler. Identity application coverage is 27.8%. The `shared` package, `database` package, `config` package, and `server` package all have 0% coverage.
+**Severity**: MEDIUM
+
+### MEDIUM-10: Audit repository test uses old `Save`/`GetLastHash` API, not `RecordEvent`
+
 **File**: `internal/audit/infrastructure/postgres/audit_repository_test.go`
-**Problem**: The tests were written for the old `Save` + `GetLastHash` interface. The new transactional `RecordEvent` method has no dedicated test.
-**Recommended fix**: Add tests for `RecordEvent` that verify hash chain continuity after insert.
+**Problem**: Tests (lines 14-115) use `repo.Save` and `repo.GetLastHash` — the old API. The production code path uses `repo.RecordEvent` (audit_repository.go:22-80). The `RecordEvent` method has **zero test coverage**.
+**Severity**: MEDIUM
 
-### 27. `go test ./...` runs packages in parallel, causing DB contention
-**File**: `AGENTS.md`
-**Problem**: Running `go test ./...` without `-p 1` causes all test packages to truncate the shared `civora_test` database simultaneously. This is a hidden footgun for new contributors.
-**Recommended fix**: Add a `Makefile` or script that wraps the test command with the correct flags, or make tests use separate databases.
+### MEDIUM-11: Organization creation does not record an audit event
+
+**File**: `internal/organizations/application/service.go:73-83`
+**Problem**: `CreateOrganization` records an audit event (`organization.created`), but if `RecordEvent` fails, the error is swallowed (`log.Printf`). The organization was already committed to DB in a prior step (line 63). This is the same transaction-boundary issue as CRITICAL-3.
+**Severity**: MEDIUM
+
+### MEDIUM-12: No token revocation / logout endpoint
+
+**File**: `internal/identity/api/handler.go` (no logout route); `api/openapi/openapi.yaml`
+**Problem**: No logout endpoint exists. JWTs are valid until expiry (24h). Threat model T-04 says "Session tokens are random, short-lived, and **revocable**."
+**Severity**: MEDIUM
 
 ---
 
 ## D. LOW Findings
 
-### 28. Case file missing package comment
-**File**: `internal/cases/api/handler.go:1`
-**Problem**: No doc comment on the `api` package.
+### LOW-1: Unused OpenAPI schemas (`SuccessResponse`, `PaginationMeta`)
 
-### 29. `parseUUID` returns `uuid.Nil` on error
-**File**: `internal/cases/api/handler.go:222-229`
-**Problem**: `uuid.Nil` could theoretically be a valid UUID (though all-zeros is reserved). The handler does check `ok == false` and returns 400, so this is safe, but it's a code smell.
+**File**: `api/openapi/openapi.yaml:82-104`
+**Severity**: LOW
 
-### 30. Missing `operationId` in OpenAPI spec
+### LOW-2: No `operationId` in OpenAPI spec
+
 **File**: `api/openapi/openapi.yaml`
-**Problem**: No operation has an `operationId`. This is needed for auto-generated SDK method names.
-**Recommended fix**: Add `operationId` to all operations.
+**Severity**: LOW
 
-### 31. `errors` package imported in `cases/application/service.go` but `errors.Is` not used
-**File**: `internal/cases/application/service.go:4, 61, 67, 69`
-**Problem**: The code uses `==` comparison for error checking instead of `errors.Is()`, which doesn't work with wrapped errors.
-**Recommended fix**: Use `errors.Is(err, ErrCaseNotFound)` everywhere for consistency.
+### LOW-3: `RequireAnyRole` is redundant with `RequireRole`
 
-### 32. No `.dockerignore` — related to #21
+**File**: `internal/middleware/auth.go:159-178`
+**Problem**: Identical logic to `RequireRole`. Never applied to any route.
+**Severity**: LOW
 
-### 33. `internal/tasks/doc.go` has no tests
-**File**: `internal/tasks/doc.go`
-**Problem**: The module scaffold exists but has no tests, domain types, or repository interface.
-**Recommended fix**: Either implement a minimal task entity or remove the scaffold until needed.
+### LOW-4: `docs/architecture/README.md` is stale
 
-### 34. Unused `OIDCProvider` interface
-**File**: `internal/identity/domain/repository.go:35-41`
-**Problem**: The interface is defined but no implementation exists. It's dead documentation as code.
-**Recommended fix**: Remove until implementation is ready, or implement it.
+**File**: `docs/architecture/README.md:9`
+**Problem**: Shows empty table "(will be populated)" but `api-spec.md` and `configuration.md` exist.
+**Severity**: LOW
 
-### 35. No `go.mod` replace directive for local development
-**File**: `go.mod`
-**Problem**: No `// go:build` constraints or replace directives for different environments.
+### LOW-5: `CONTRIBUTING.md` line 148 references ADR template "to be created"
 
-### 36. `log.Printf` used for audit errors instead of structured logging
-**File**: All application service files
-**Problem**: `log.Printf("audit event recording failed: %v", err)` uses unstructured logging. The `Logging` middleware uses structured JSON logging, but application-level errors use the standard logger.
-**Recommended fix**: Use structured logging throughout.
+**File**: `CONTRIBUTING.md:148`
+**Severity**: LOW
 
-### 37. No test for `RequireSameTenant` bypass path (empty orgId)
-**File**: `internal/middleware/auth_test.go`
-**Problem**: No test verifies the behavior when `chi.URLParam(r, "orgId")` returns an empty string.
+### LOW-6: ARCHITECTURE.md claims SQLite is supported — it is not
 
-### 38. No CI test for OpenAPI validation
-**File**: `.github/workflows/ci.yml`
-**Problem**: The CI workflow includes an OpenAPI validation job, but it runs `npx @redocly/cli lint` which requires Node.js. The workflow installs Node.js correctly, so this is fine. But the validation allows 19 warnings — CI should enforce 0 warnings.
-**Recommended fix**: Add `--skip-rule` flags or a redocly.yaml config to tighten validation.
+**File**: `ARCHITECTURE.md:193,259,293`; `docs/decisions/0001-initial-architecture.md:71-72`
+**Problem**: No SQLite driver import, PostgreSQL-specific DSN format and SQL types.
+**Severity**: LOW
 
----
+### LOW-7: ARCHITECTURE.md claims backup strategy is documented
 
-## E. Documentation Inaccuracies
+**File**: `ARCHITECTURE.md:216-222`
+**Problem**: No backup documentation exists anywhere.
+**Severity**: LOW
 
-### 39. ARCHITECTURE.md claims "no secrets committed to source control"
-**File**: `ARCHITECTURE.md`
-**Problem**: While no production secrets are committed, `.env.example` contains default passwords (`civora`/`civora`, `dev-secret-change-me-32-chars-minimum`), which are committed. These are example values, but the distinction is not made clear.
-**Severity**: Low (these are documented as development defaults).
+### LOW-8: ARCHITECTURE.md claims audit log is stored separately from operational data
 
-### 40. ARCHITECTURE.md claims "correlation/request IDs" in structured audit events
-**File**: `ARCHITECTURE.md`, `docs/vision.md`
-**Problem**: `RecordEventParams.RequestID` is `*string` and is never populated from the request context. The `RequestID` middleware generates a correlation ID, but it is never passed to `AuditService.RecordEvent()`.
-**Severity**: Medium — the documentation claims a feature that doesn't work.
+**File**: `ARCHITECTURE.md:198,242`
+**Problem**: Audit events are in the same PostgreSQL database and same tables.
+**Severity**: LOW
 
-### 41. ADR-0004 references "RESTful Web Services" by Richardson & Ruby
-**File**: `docs/decisions/0004-why-rest-openapi.md`
-**Problem**: The original reference was to Roy Fielding's dissertation (broken URL was fixed). The replacement citation to a commercial O'Reilly book is not open-access and may not be available to all contributors.
-**Severity**: Low
+### LOW-9: `auth_test.go` test `TestRequireSameTenant_BlocksWhenPathOrgIDEmpty` may be a false positive
 
-### 42. ROADMAP.md mentions milestones 0.2-1.0 with features like "AI Assistance" and "Interoperability"
-**File**: `ROADMAP.md`
-**Problem**: These future milestones imply AI and integration features that are explicitly forbidden by the founder's constraints ("Do not add AI merely because the project is AI-related"). The roadmap should focus on non-AI milestones.
-**Severity**: Low
+**File**: `internal/middleware/auth_test.go:149-164`
+**Problem**: Registers route `/test/{orgId}`, sends request to `/test/`. Chi's `{orgId}` matches `[^/]+` (requires 1+ chars). An empty segment may not match, causing a 404 instead of the expected 400. The test assertion expects 400. If chi returns 404, the test would fail; if it passes, it's unclear whether the middleware was actually exercised.
+**Severity**: LOW
 
-### 43. docs/vision.md claims "model-provider-neutral"
-**File**: `docs/vision.md`
-**Problem**: There is no AI module implementation. The `internal/ai/` package is empty. The claim is aspirational, not factual.
-**Severity**: Medium
+### LOW-10: `godotenv` loaded unconditionally in production config
 
-### 44. AGENTS.md claims `docker compose up -d db` works for tests
-**File**: `AGENTS.md`
-**Problem**: The docker-compose `db` service creates a `civora` user/database, but test code expects `civora_test` user/database. This mismatch means `docker compose up -d db` followed by `go test` will fail unless the test database is separately configured.
-**Severity**: Medium
+**File**: `internal/config/config.go:54`
+**Problem**: `godotenv.Load(".env")` is called on every startup. In production, a accidentally deployed `.env` file would silently override environment variables.
+**Severity**: LOW
 
 ---
 
-## F. Architecture Concerns
+## E. Architecture Concerns
 
-### 45. Module boundaries are mostly good, but audit domain is imported broadly
-**File**: `internal/cases/application/service.go:10`, `internal/identity/application/service.go:10`, `internal/organizations/application/service.go:10`
-**Problem**: Three separate modules (cases, identity, organizations) all import `internal/audit/domain` for the `EventRecorder` interface and `RecordEventParams` struct. This creates a tight coupling — the audit domain is a cross-cutting concern that all modules depend on directly.
-**Recommended fix**: Define an `Auditor` interface in the `shared` or a `kernel` package that modules depend on, and have the audit module implement it. This breaks the direct dependency from cases/identity/organizations → audit/domain.
+### E-1: Audit domain imported directly by all application services
 
-### 46. Two separate JWT services in `main.go`
-**File**: `cmd/civora/main.go:56, 65`
-**Problem**: `JWTTokenService` (for identity) and `JWTService` (for middleware) are separate instances with potentially different secrets. The identity service creates tokens; the middleware verifies them. If the configuration has typos or different env vars, tokens will be accepted but always fail verification.
-**Recommended fix**: Use a single JWT service throughout.
+**File**: `internal/cases/application/service.go:11`; `internal/identity/application/service.go:11`; `internal/organizations/application/service.go:10`
+**Problem**: Three modules import `internal/audit/domain` for `EventRecorder` and `RecordEventParams`. This creates tight coupling — audit is a cross-cutting concern that all modules depend on directly. ADR-0001 states modules should communicate through "well-defined interfaces" and "events," but this is direct synchronous calls.
 
-### 47. The `config.Load()` function has no validation
-**File**: `internal/config/config.go:51-92`
-**Problem**: No validation of required fields. `CIVORA_DB_HOST` defaults to `localhost`, `CIVORA_DB_USER` defaults to `civora` — if the production database uses different credentials, the app will start but fail on first DB query with a confusing error.
-**Recommended fix**: Add `Validate()` method to `Config` that checks required fields in production mode.
+### E-2: Config has no validation beyond JWT secret
 
-### 48. No hexagonal/clean architecture separation between application and infrastructure in test helpers
-**File**: `test/helpers/db.go:62-67`
-**Problem**: `test/helpers/db.go` imports `internal/database` (the migration runner) and `migrations` directly. Test helpers are tightly coupled to the internal migration system.
-**Severity**: Low — this is in test code, not production.
+**File**: `internal/config/config.go:88-94`
+**Problem**: Only `CIVORA_AUTH_JWT_SECRET` is validated in production. DB credentials default to `civora`/`civora`/`localhost` with no validation.
+
+### E-3: Three disconnected role concepts
+
+**File**: `internal/identity/domain/role.go` (Role entity with Permissions); `internal/middleware/auth.go` (JWT role claim); `internal/identity/domain/role.go:29` (HasPermission)
+**Problem**: DB Role entity with permissions, JWT string claim, and `HasPermission` method exist but are never reconciled. `RequireRole` checks the JWT string name, not the `HasPermission` method. No permission-based authorization exists.
+
+### E-4: Idempotency middleware applied globally
+
+**File**: `internal/server/server.go:34`
+**Problem**: `IdempotencyKey` applied to all routes including auth and org creation. In-memory store is not shared across instances.
 
 ---
 
-## G. Security Concerns
+## F. Security Concerns
 
-### 49. No password complexity enforcement
-**File**: `internal/identity/application/service.go:62-63`
-**Problem**: Passwords of length 1 pass the only check (`strings.TrimSpace(params.Password) == ""`).
-**Recommended fix**: Enforce minimum 12 characters with complexity requirements.
+### F-1: No CSRF risk (positive finding)
 
-### 50. Error messages reveal whether user exists
-**File**: `internal/identity/application/service.go:124-126`
-**Problem**: `Authenticate` returns `ErrInvalidCredentials` for both "user not found" and "wrong password". This is actually correct (no user enumeration).
-**Note**: This is a positive finding — good security practice.
-
-### 51. No account lockout / rate limiting on auth endpoints
-**File**: `internal/middleware/ratelimit.go`, identity handler
-**Problem**: Rate limiting is applied globally (100 req/s per IP), but there's no per-user rate limiting on authentication endpoints. Brute-force attacks against specific users are possible if the IP rate limit is high enough.
-**Recommended fix**: Add per-user rate limiting on `/auth/login` endpoints.
-
-### 52. JWT token is not revoked on logout
-**File**: Identity API handler — no logout endpoint exists
-**Problem**: There is no logout endpoint or token revocation mechanism. Once a JWT is issued, it remains valid until expiry.
-**Recommended fix**: Implement a token blacklist (Redis or DB-backed) or use short-lived access tokens with refresh token rotation.
-
-### 53. No CSRF protection (not needed for current API)
 **File**: N/A
-**Note**: The API uses Bearer tokens in the `Authorization` header, not cookies. CSRF is not a risk.
+**Problem**: Not a problem — the API uses Bearer tokens in `Authorization` header, not cookies. CSRF is not applicable. The prior review correctly noted this.
 
-### 54. SQL injection not possible (parameterized queries)
+### F-2: SQL injection not possible
+
 **File**: All repository files
-**Note**: All queries use `$N` parameterized queries. No string concatenation. This is good.
+**Problem**: Not a problem — all queries use parameterized `$N` placeholders. No string concatenation in SQL. Verified.
 
 ---
 
-## H. Domain-Model Concerns
+## G. Product/Mission Concerns
 
-### 55. "Person" vs "User" distinction not modeled
-**File**: `internal/cases/domain/case.go:28`
-**Problem**: The founder's spec distinguishes `Person` (someone receiving services) from `User` (someone authenticated). Currently, `Case.CreatedByID` is a `User` — the same entity that authenticates. This conflates case subjects with case creators.
-**Recommended fix**: Add a `Person` entity as a separate concept, and have cases link to a Person, not a User.
+### G-1: CIVORA is indistinguishable from a generic case management system
 
-### 56. No "Workflow Definition" or "Task" entities
-**File**: `internal/tasks/doc.go`
-**Problem**: The founder's spec defines `Workflow`, `Workflow Definition`, `Workflow Instance`, `Task`, `Task Assignment` as domain concepts. Only an empty `tasks` package exists. Cases are a simple CRUD entity with a status field, not a workflow engine.
-**Recommended fix**: This is acceptable for Milestone 0.1. The `internal/tasks/` scaffold and `workflow` module should remain empty until Milestone 0.2.
+**File**: Entire codebase; `ARCHITECTURE.md:101-132`; `docs/vision.md`
+**Problem**: After reviewing all code, there is nothing specific to "Emergency Assistance Request" or public-interest service delivery. The case lifecycle (CREATED → OPEN → IN_REVIEW → RESOLVED → CLOSED) could describe any ticketing system. Features described in the vision — workflow definitions, form submissions, evidence chains, policy evaluation, AI assistance, beneficiary management, follow-ups — are absent. There are no case types, no multilingual forms, no beneficiary entity, no evidence/document model.
 
-### 57. Case lifecycle doesn't support reopening after CLOSURE
-**File**: `internal/cases/domain/case.go:71-77`
-**Problem**: `CaseStatusClosed` has no outgoing transitions. The founder's flow includes "Follow-up" after closure. Reopening a closed case is impossible.
-**Recommended fix**: Add a `REOPEN` action or `CaseStatusReopened` status. This should be a separate ADR since it affects audit semantics.
+The system is a generic CRUD API with JWT auth and audit logging. The "first vertical slice (Emergency Assistance Request)" described in the OpenAPI spec is just "create a case, change its status, assign it."
 
-### 58. No "Evidence" or "Document" entities
-**File**: (modules exist but are empty)
-**Problem**: The founder's spec defines `Document` and `Evidence` as domain concepts. These are completely absent from the domain model and database schema.
-**Recommended fix**: Acceptable for Milestone 0.1. Document as deferred.
+**Severity**: HIGH
 
-### 59. No "Decision" entity
-**File**: N/A
-**Problem**: The founder's conceptual flow includes "Decision" as a distinct entity between "Assessment" and "Assistance". The current model collapses this into a status transition.
-**Recommended fix**: Acceptable for Milestone 0.1. Document as deferred.
+### G-2: No localization / internationalization support exists
 
-### 60. No "Form" or "Form Submission" entities
-**File**: `internal/forms/` (empty)
-**Problem**: The founder's spec requires "Information collected" via forms. The current API accepts free-text `title` and `description` with no structured form support.
-**Recommended fix**: Acceptable for Milestone 0.1. Document as deferred.
-
-### 61. No "Comment" or "Communication" entity
-**File**: N/A
-**Problem**: No way for case workers to communicate about a case. The founder's flow implies human review and communication.
-**Recommended fix**: Acceptable for Milestone 0.1. Document as deferred.
+**File**: `docs/vision.md:207-222`; `ARCHITECTURE.md`
+**Problem**: Vision claims "All user-facing strings are externalized," "36 languages," "locales loaded dynamically." No i18n infrastructure exists. Case numbers use English prefix `CAS-`.
+**Severity**: MEDIUM
 
 ---
 
-## I. Product / Mission Concerns
+## H. What Is Genuinely Strong
 
-### 62. CIVORA is indistinguishable from a generic case management system
-**File**: Entire codebase
-**Problem**: After reviewing all code, there is nothing in the implementation that is specific to "Emergency Assistance Request" or public-interest service delivery. The case lifecycle (CREATED → OPEN → IN_REVIEW → RESOLVED → CLOSED) could describe any ticketing system. The founder's spec describes a domain with Persons (beneficiaries), Workflows, Forms, Evidence, Decisions, Follow-ups — none of which are implemented. The system is a generic CRUD API with JWT auth and audit logging.
-**Why it matters**: The project claims to serve "governments, NGOs, humanitarian organizations" but offers no functionality that these organizations couldn't get from Jira, Zendesk, or any generic ticketing system.
-**Recommended fix**: Either implement domain-specific features (case types with different workflows, multilingual forms, beneficiary management) or reposition the project as a foundation/toolkit for building such systems rather than a product itself.
-
-### 63. No localization / internationalization support
-**File**: `internal/`
-**Problem**: `docs/vision.md` claims an "internationalization strategy" with 36 languages. There is no i18n support in the code — all strings are English, case numbers use English prefixes (`CAS-`), and no `Accept-Language` header processing exists.
-**Severity**: Medium documentation inaccuracy
-
-### 64. No accessibility support
-**File**: Entire codebase
-**Problem**: There is no frontend. The founder's spec mentions "Accessible" as an architecture principle and WCAG 2.1 AA as a requirement. With no frontend, accessibility is unaddressed.
-**Severity**: Low (out of scope for Milestone 0.1)
+1. **Modular monolith structure** — Clean domain/application/infrastructure/api layers. Acyclic dependency graph. 7 direct dependencies in go.mod.
+2. **Domain model purity** — `Case` entity encapsulates state transitions. 92.3% coverage in `case_test.go`.
+3. **Audit hash chain concept** — `ComputeHash()` is deterministic. `VerifyIntegrity()` detects tampering. Repository uses `SELECT ... FOR UPDATE` for chain continuity.
+4. **OpenAPI specification** — Comprehensive, standardized envelopes, pagination, security schemes.
+5. **Tenant isolation at data layer** — Every query includes `organization_id`. FK constraints enforce org scoping. Cross-tenant tests pass.
+6. **Structured JSON logging** — Consistent log format with request ID, latency, status.
+7. **Custom migration runner** — `go:embed` for SQL files, transactional execution, `schema_migrations` table.
+8. **Threat model** — 13 threat categories with concrete mitigations.
+9. **ADR process** — 5 ADRs with alternatives, trade-offs, reversibility.
+10. **Security headers + body size limit + ReadHeaderTimeout + DB-aware readiness** — All implemented and tested.
+11. **Cross-tenant assignment validation** — `AssignCase` validates assignee via `UserChecker`.
+12. **Build compiles, go vet clean, gofmt clean, all short tests pass.**
 
 ---
 
-## J. What Is Genuinely Strong
+## I. What Should Be Removed
 
-1. **Modular monolith structure** (ADR-0001) is well-executed. Each module (identity, organizations, cases, audit) has clear domain/application/infrastructure/api layers. The `go.mod` dependency on `go-chi/chi/v5` + pgx + jwt is minimal and appropriate.
-
-2. **Domain model purity** — The `Case` entity encapsulates state transitions in `TransitionTo()`, with transition rules as a data table. The domain doesn't leak database concerns into business logic.
-
-3. **Audit hash chain concept** — The idea of computing a SHA-256 hash over event content + previous hash is sound. The `ComputeHash` method is deterministic.
-
-4. **OpenAPI as first-class artifact** — The API is documented before/while building, with standardized error envelopes, pagination, and security schemes.
-
-5. **Tenant isolation at the database level** — Every query in the repositories includes `organization_id = $N` in WHERE clauses. No query bypasses tenant scoping.
-
-6. **Structured logging** — The `Logging` middleware produces JSON logs with request ID, latency, status, and method.
-
-7. **Migrations system** — Custom migration runner with `go:embed` for SQL files is functional and avoids the `golang-migrate` dependency issue.
-
-8. **Threat model** — `docs/threat-model.md` covers 13 distinct threat categories with concrete mitigations.
-
-9. **ADR process** — Architecture decisions are documented with alternatives, trade-offs, and reversibility.
+1. **`internal/shared/validator.go`** — Entirely dead code. Weak `ValidateEmail` uses `strings.Contains`.
+2. **`internal/shared/id.go`** — `NewID`, `ParseID`, `IsValidUUID` never called.
+3. **`database.SplitDSN`** (`internal/database/db.go:78-88`) — Never called.
+4. **`RequireAnyRole`** (`internal/middleware/auth.go:159-178`) — Redundant with `RequireRole`. Never applied.
+5. **Unused OpenAPI schemas** — `SuccessResponse`, `PaginationMeta` (openapi.yaml:82-104).
+6. **OIDC config fields** — `OIDCIssuer`, `OIDCClientID`, `OIDCRedirectURL` in config.go. Never read.
+7. **`IsOIDCUser` field** — `user.go:20` and `users.is_oidc_user` column. Never used in logic.
+8. **`Save` and `GetLastHash` on `AuditRepository`** — Only used in tests. Production uses `RecordEvent`.
+9. **`docs/architecture/README.md` placeholder row** — Line 9 claims empty directory.
+10. **`CONTRIBUTING.md` stale placeholder text** — Lines 56, 76, 123, 147.
+11. **`fmt.Sprintf("case.transition")`** — Use literal string (service.go:103).
 
 ---
 
-## K. What Should Be Removed
+## J. What Should Be Redesigned
 
-1. **`internal/ai/` and `internal/tasks/`** — Both are empty placeholder packages. They create false expectations about feature completeness. Remove until needed.
-
-2. **`internal/documents/`, `internal/forms/`, `internal/notifications/`, `internal/workflow/`, `internal/integrations/`, `internal/policy/`** — All empty placeholders. They suggest future scope that doesn't exist. Remove until needed, or at minimum add non-implementation stubs with `// TODO: not implemented` comments.
-
-3. **`OIDCProvider` interface and `internal/identity/infrastructure/auth/oidc/`** — Dead code. The OIDC provider has no working implementation, no tests, and is never wired in. Remove until a concrete requirement exists.
-
-4. **`RequireAnyRole` middleware** — `RequireRole` is sufficient. `RequireAnyRole` adds complexity (two middleware functions with similar logic) without clear benefit. Remove the redundant function.
-
-5. **Unused OpenAPI schemas (`SuccessResponse`, `PaginationMeta`)** — Remove from the spec.
-
-6. **`golang.org/x/crypto/bcrypt` in `users.go`** — This is correct, the domain package directly imports bcrypt. Actually this is fine, not a problem.
-
-7. **`context` import in `organizations/domain/organization.go`** — Actually used by the interface, keep it.
-
----
-
-## L. What Should Be Redesigned
-
-1. **JWT authentication service** — Consolidate `JWTTokenService` (infrastructure/auth) and `JWTService` (middleware) into a single service. The current split is confusing and risks secret mismatch.
-
-2. **Audit event flow** — Replace the "domain write, then best-effort audit" pattern with a transactional outbox. The case write and audit event write must be atomic, or the audit must be guaranteed to eventually succeed (with a dead-letter queue for failed events).
-
-3. **Organization creation** — Currently just creates an org row. It should also:
-   - Create default roles (admin, staff)
-   - Potentially create an initial admin user
-   - Record an audit event
-
-4. **Error response handling** — Centralize error-to-HTTP mapping. Currently each handler has its own `writeDomainError` function with duplicated switch statements. A middleware or shared error type would be cleaner.
-
-5. **CORS configuration** — Make origins configurable via environment variables. Default to same-origin in production.
-
-6. **Rate limiting** — Move from per-IP to per-user when authenticated, with separate limits for auth endpoints. Consider a sliding window algorithm instead of token bucket.
-
-7. **Case model** — Add `Person` entity distinction. Cases should reference a Person (beneficiary), not a User (staff). Add "reopened from closed" as a valid state transition.
-
-8. **Request body size limiting** — Add a global middleware that wraps `http.MaxBytesReader` on all request bodies.
-
-9. **Health/readiness checks** — Make readiness check database-aware.
-
-10. **Email validation** — Use `net/mail.ParseAddress` or a proper regex instead of `strings.Contains`.
+1. **Authorization model** — Implement and apply `RequireRole` to routes. Distinguish admin vs staff vs user capabilities. Remove `role_name` from self-registration.
+2. **Audit transaction boundaries** — Transactional outbox: domain write + audit event in same transaction.
+3. **Organization creation** — Wrap org save + role creation in single transaction.
+4. **Centralized error handling** — Replace per-handler `writeDomainError`/`writeOrgError`/`writeCaseError` with shared error-to-HTTP mapper. Standardize on `errors.Is`.
+5. **CORS configuration** — Already done. Acceptable.
+6. **Rate limiting** — Add per-user limits. Separate limits for auth endpoints.
+7. **Case model** — Add `Person` (beneficiary) entity separate from `User` (staff).
+8. **Request body size limiting** — Already done. Acceptable.
+9. **Health/readiness checks** — Already done. Acceptable.
+10. **Email validation** — Already done with regex. Remove dead `shared.ValidateEmail`.
+11. **Correlation ID propagation** — Pass `X-Request-ID` from middleware through handlers to `RecordEventParams.RequestID`.
+12. **Audit enable/retention** — Pass `AuditConfig` to `AuditService`. Enforce `Enabled` and `RetentionDays`.
 
 ---
 
-## M. What MUST Be Fixed Before Milestone 0.1
+## K. What MUST Be Fixed Before Milestone 0.1
 
-These are **blocking** issues that must be resolved before the milestone can be considered complete:
+These are **blocking** issues:
 
-1. ✅ **RBAC is non-functional** — Fixed: Default roles (admin, staff) are created when an organization is created via `DefaultRoleCreator`.
-2. ✅ **Cross-tenant assignment vulnerability** — Fixed: `AssignCase` validates that the assigned user belongs to the same organization via `UserChecker`.
-3. ✅ **Two JWT implementations must be unified** — Fixed: Single `JWTService` in middleware handles both generation and verification.
-4. ✅ **OIDC scaffolding removed or implemented** — Fixed: Removed (interface, provider implementation, all imports).
-5. ✅ **Internal error details must not leak** — Fixed: All 5 handler `default:` cases return generic "internal server error".
-6. ✅ **Database name consistency** — Fixed: Added `init-test-db.sql` to create `civora_test` user/database in Docker Compose.
-7. ⚠️ **Audit hash chain must use transactional outbox** — Documented as recommended; current pattern logs errors and records events in their own transactions.
-8. ✅ **Password strength enforcement** — Fixed: Minimum 8 characters, requires ≥1 letter and ≥1 number.
-9. ✅ **`RequireSameTenant` bypass path** — Fixed: Empty orgId returns 400.
-10. ✅ **HSTS only over HTTPS** — Fixed: Conditional on `r.TLS != nil`.
-11. ✅ **`ReadHeaderTimeout`** — Fixed: Added 10s on `http.Server`.
-12. ✅ **Health endpoint database-aware** — Fixed: `/ready` pings DB and returns 503 if unavailable.
-13. ✅ **Remove empty module scaffolds** — Fixed: Removed `ai`, `tasks`, `workflow`, `forms`, `documents`, `notifications`, `integrations`, `policy`.
+| # | Issue | Category |
+|---|-------|----------|
+| 1 | **RBAC non-functional** — `RequireRole` never applied to routes. All authenticated users are superusers. | CRITICAL |
+| 2 | **Self-registration as admin** — `role_name` accepted from unauthenticated client | CRITICAL |
+| 3 | **Audit not atomic with domain writes** — separate transactions, errors swallowed | CRITICAL |
+| 4 | **OIDC config/schema remnants** — dead config fields, unused DB column, stale docs | CRITICAL |
+| 5 | **No encryption at rest** — docs claim it, code doesn't implement it | CRITICAL |
+| 6 | **No data export or soft-delete** — docs claim both, neither exists | CRITICAL |
+| 7 | **Stale CONTRIBUTING.md** — placeholder text where commands exist | CRITICAL |
+| 8 | **No `.dockerignore`** | HIGH |
+| 9 | **Dockerfile runs as root** | HIGH |
+| 10 | **Unauthenticated `/metrics`** | HIGH |
+| 11 | **No static analysis in CI** (gosec/golangci-lint) | HIGH |
+| 12 | **Correlation ID not in audit events** | HIGH |
+| 13 | **`AuditConfig` dead config** — Enabled, HashChainEnabled, RetentionDays unused | HIGH |
+| 14 | **No per-user rate limiting on auth endpoints** | HIGH |
+| 15 | **Dead code** (`shared/validator.go`, `shared/id.go`, `SplitDSN`, `RequireAnyRole`, unused OpenAPI schemas) | HIGH |
+| 16 | **`log.Printf` for audit errors** — not structured logging | MEDIUM |
+| 17 | **`godotenv` unconditional load** | LOW |
+| 18 | **No race detection in CI** | MEDIUM |
+| 19 | **Event bus claims in ARCHITECTURE.md** | HIGH |
+| 20 | **`docs/architecture/README.md` stale** | LOW |
+| 21 | **SQLite claims in docs** | LOW |
+| 22 | **`RecordEvent` has no test coverage** | MEDIUM |
+| 23 | **`fmt.Sprintf("case.transition")` no-op** | MEDIUM |
 
 ---
 
-## N. What Can Wait Until Later
+## L. What Can Wait Until Later
 
-1. **Full i18n/l10n** — Not needed until the frontend is built (Milestone 0.3+).
-2. **OIDC/OAuth2 provider integration** — Can wait until an organization actually requests it (noted in ADR-0005 as Proposed).
-3. **Structured audit integrity verification on read** — `VerifyIntegrity()` exists on the domain object; call it when serving audit data.
-4. **Prometheus metrics exporter** — The `/metrics` endpoint stub is sufficient for Milestone 0.1.
-5. **OpenTelemetry tracing** — Not needed for the first vertical slice.
-6. **Data portability/export API** — Can be added in Milestone 0.6.
-7. **Case reopening after closure** — Can be added in Milestone 0.2 with workflow core.
-8. **Form submissions** — Milestone 0.4.
-9. **Evidence/documents** — Milestone 0.5.
-10. **AI assistance** — Milestone 0.7 (explicitly deferred).
-11. **Token revocation / logout endpoint** — Can wait, but must be documented as a limitation.
-12. **`operationId` fields in OpenAPI** — Add when generating client SDKs.
+1. Full i18n/l10n — Not needed until frontend (Milestone 0.3+).
+2. OIDC/OAuth2 provider — Can wait. But remove config remnants now.
+3. Structured audit integrity verification on read — `VerifyIntegrity()` exists; call it when serving audit data.
+4. Prometheus metrics exporter — Secure the `/metrics` stub or remove it now. Replace with real metrics later.
+5. OpenTelemetry tracing — Not needed for 0.1.
+6. Data portability/export API — Milestone 0.6. Remove claims now.
+7. Case reopening after closure — Milestone 0.2.
+8. Form submissions — Milestone 0.4.
+9. Evidence/documents — Milestone 0.5.
+10. AI assistance — Milestone 0.7.
+11. Token revocation / logout endpoint — Document as limitation; implement in later milestone.
+12. `operationId` in OpenAPI — Add when generating SDKs.
+13. Password breach checking (HIBP API) — Later.
+14. Person entity — Milestone 0.2/0.3.
+15. Decision entity, Comment entity — Milestone 0.3+.
+16. Backup strategy documentation — Operator responsibility; remove claim.
+17. JWT key rotation — Later.
 
 ---
 
 ## Test Results Summary
 
-| Test Suite | Status | Count |
+| Test Suite | Status | Coverage |
 |---|---|---|
-| `internal/cases/domain` | Pass | 5 tests |
-| `internal/cases/application` | Pass | 6 tests |
-| `internal/cases/infrastructure/postgres` | Pass | 6 tests (DB integration) |
-| `internal/audit/domain` | Pass | 4 tests |
-| `internal/audit/infrastructure/postgres` | Pass | 4 tests (DB integration) |
-| `internal/identity/infrastructure/postgres` | Pass | 3 tests (DB integration) |
-| `internal/organizations/infrastructure/postgres` | Pass | 3 tests (DB integration) |
-| `internal/middleware` | Pass | 11 tests (new: JWT, authz, rate limiting) |
-| `test/e2e` | Pass | 3 tests (full HTTP lifecycle) |
-| `test/integration` | Pass | 5 tests (cross-module DB integration) |
+| `internal/cases/domain` | Pass | 92.3% |
+| `internal/cases/application` | Pass | 64.9% |
+| `internal/cases/infrastructure/postgres` | Pass (DB) | — |
+| `internal/audit/domain` | Pass | 97.0% |
+| `internal/audit/infrastructure/postgres` | Pass (DB) | — |
+| `internal/identity/application` | Pass | 27.8% |
+| `internal/identity/infrastructure/postgres` | Pass (DB) | — |
+| `internal/organizations/application` | Pass | 48.3% |
+| `internal/organizations/infrastructure/postgres` | Pass (DB) | — |
+| `internal/middleware` | Pass | 60.3% |
+| `test/e2e` | Pass (DB) | — |
+| `test/integration` | Pass (DB) | — |
+| `internal/shared` | No tests | 0.0% |
+| `internal/database` | No tests | 0.0% |
+| `internal/config` | No tests | 0.0% |
+| `internal/server` | No tests | 0.0% |
+| `internal/*/api` (handlers) | No tests | 0.0% |
 
-**Total**: ~50 tests, all passing (when PostgreSQL is available and `-p 1` is used).
-
-**Note**: `go vet` requires `GOMEMLIMIT=2GiB` on Windows. This should be addressed in CI but is not a code defect.
+**Total**: ~50 tests, all passing (when PostgreSQL is available and `-p 1` is used). Handler layer, shared utilities, config, database, and server packages are entirely untested.
 
 ---
 
 ## Proposed Corrected Milestone 0.1 Scope
 
-The current implementation **exceeds** the founder's Milestone 0.1 requirements in some areas (RBAC, OIDC, rate limiting, metrics) and **falls short** in others (default roles, cross-tenant assignment validation, unified JWT).
+The current implementation **exceeds** the founder's Milestone 0.1 requirements in some areas (security headers, body size limit, rate limiting, structured logging, DB-aware health checks, migration system) and **falls critically short** in others:
 
-**Before 0.1 can be declared complete, the following must be done:**
+**Before 0.1 can be declared complete, the following MUST be done:**
 
-1. Create default roles on organization creation
-2. Fix cross-tenant assignment vulnerability in `AssignCase`
-3. Unify the two JWT implementations into one
-4. Remove OIDC scaffolding or implement it
-5. Fix error response information leakage
-6. Enforce password minimum length (≥8)
-7. Fix `RequireSameTenant` bypass for empty orgId
-8. Make HSTS conditional on TLS
-9. Add `ReadHeaderTimeout` to `http.Server`
-10. Make health endpoint database-aware (at minimum for readiness)
-11. Fix docker-compose / test DB name consistency in documentation
-12. Remove empty module scaffolds (`tasks`, `ai`, `workflow`, `forms`, `documents`, `notifications`, `integrations`, `policy`)
+1. **Implement and apply RBAC** — Register `RequireRole` on all routes that require authorization. Not just create roles — actually enforce them.
+2. **Fix registration privilege escalation** — Remove `role_name` from public registration. Implement first-user-is-admin.
+3. **Fix audit transaction boundaries** — Use transactional outbox pattern. Domain writes and audit events in the same transaction.
+4. **Remove OIDC remnants** — Delete config fields, `.env.example` lines, `IsOIDCUser` field, `is_oidc_user` column. Update docs.
+5. **Correct security documentation** — Remove claims about encryption at rest, data export, soft-delete, event bus, SQLite, backup strategy, separate audit storage. Either implement or document as future.
+6. **Propagate correlation IDs to audit events** — Pass `X-Request-ID` from middleware context to `RecordEventParams.RequestID`.
+7. **Wire up `AuditConfig`** — Pass config to `AuditService`. Enforce `Enabled` and `RetentionDays`.
+8. **Remove all dead code** — `shared/validator.go`, `shared/id.go`, `database.SplitDSN`, `RequireAnyRole`, unused OpenAPI schemas, `SuccessResponse`/`PaginationMeta`.
+9. **Fix `CONTRIBUTING.md`** — Remove all placeholder text. Reference actual AGENTS.md commands.
+10. **Create `.dockerignore`** and add non-root user to Dockerfile.
+11. **Secure or remove `/metrics`** endpoint.
+12. **Add `golangci-lint` with `gosec`** to CI.
+13. **Fix `fmt.Sprintf("case.transition")`** to literal string.
+14. **Add test coverage for handlers** and the `RecordEvent` repository method.
+15. **Add `-race` detection** to CI (requires CGO_ENABLED=1).
+16. **Fix organization creation atomicity** — org save + role creation in same transaction.
+17. **Stop discarding `FindByEmail` errors** in `CreateUser`.
+18. **Add input length validation** for case title/description.
+
+**After 0.1 is corrected, the following can be deferred:**
+
+- Full i18n/l10n (until frontend)
+- OIDC provider implementation (when requested)
+- Prometheus metrics (replace stub later)
+- OpenTelemetry tracing
+- Data export API (Milestone 0.6)
+- Case reopening after closure (Milestone 0.2)
+- Form submissions (Milestone 0.4)
+- Evidence/documents (Milestone 0.5)
+- AI assistance (Milestone 0.7)
+- Token revocation/logout (document as limitation)
+- Person entity, Decision entity, Comment entity (Milestone 0.3+)
+- Password breach checking
+- JWT key rotation
+
+---
+
+Last reviewed: 2026-09-07
