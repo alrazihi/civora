@@ -2,7 +2,7 @@
 
 **Reviewer**: External senior open-source maintainer (unfamiliar with project history)
 **Date**: 2026-09-07
-**Commit reviewed**: `8539b80` (HEAD), full history from `3e41e5c`
+**Commit reviewed**: `d6a36ec` (HEAD), full history from `3e41e5c`
 **Method**: Every finding verified against actual source code. `go build`, `go vet`, `gofmt`, and `go test -short` all run successfully. No claims are speculative.
 
 ---
@@ -494,7 +494,7 @@ The system is a generic CRUD API with JWT auth and audit logging. The "first ver
 3. ~~**Organization creation**~~ — **FIXED**. Org save + role creation + audit event wrapped in single transaction.
 4. **Centralized error handling** — Replace per-handler `writeDomainError`/`writeOrgError`/`writeCaseError` with shared error-to-HTTP mapper. Standardize on `errors.Is`.
 5. **CORS configuration** — Already done. Acceptable.
-6. **Rate limiting** — Add per-user limits. Separate limits for auth endpoints.
+6. Rate limiting — Per-IP rate limiting (`RateLimiter`) and per-user auth rate limiting (`UserRateLimiter`) both implemented with background cleanup goroutines and `Stop()` methods for graceful shutdown.
 7. **Case model** — Add `Person` (beneficiary) entity separate from `User` (staff).
 8. **Request body size limiting** — Already done. Acceptable.
 9. **Health/readiness checks** — Already done. Acceptable.
@@ -523,7 +523,7 @@ These are **blocking** issues:
 | 11 | **No static analysis in CI** (gosec/golangci-lint) | HIGH | **FIXED** |
 | 12 | **Correlation ID not in audit events** | HIGH | **FIXED** |
 | 13 | **`AuditConfig` dead config** — Enabled, HashChainEnabled, RetentionDays unused | HIGH | **FIXED** |
-| 14 | **No per-user rate limiting on auth endpoints** | HIGH | PARTIALLY ADDRESSED (per-IP rate limiting exists; per-user tracked as future) |
+| 14 | **No per-user rate limiting on auth endpoints** | HIGH | **FIXED** | `UserRateLimiter` added with lockout after 5 failed attempts. `UserRateLimiter.Stop()` for graceful shutdown. Wired in `main.go` and `identity/api/handler.go`. |
 | 15 | **Dead code** (`shared/validator.go`, `shared/id.go`, `SplitDSN`, `RequireAnyRole`, unused OpenAPI schemas) | HIGH | **FIXED** (all files deleted or methods removed) |
 | 16 | **`log.Printf` for audit errors** — not structured logging | MEDIUM | **FIXED** (errors now propagate to caller) |
 | 17 | **`godotenv` unconditional load** | LOW | **FIXED** (conditional on non-production) |
@@ -582,17 +582,36 @@ These are **blocking** issues:
 | `internal/database` | No tests | 0.0% |
 | `internal/config` | No tests | 0.0% |
 | `internal/server` | No tests | 0.0% |
-| `internal/*/api` (handlers) | No tests | 0.0% |
+| `internal/*/api` (handlers) | **Pass** (new tests) | — |
 
-**New regression tests added for P0 fix verification:**
+**New regression tests added for MEDIUM fix verification:**
+
+| Test | File | What it verifies |
+|---|---|---|
+| `TestIdempotencyStore_GetAndSet` | `internal/middleware/idempotency_test.go` | Basic store Get/Set operations |
+| `TestIdempotencyStore_TTLExpiration` | `internal/middleware/idempotency_test.go` | Expired entries are not returned |
+| `TestIdempotencyStore_CleanupRemovesExpired` | `internal/middleware/idempotency_test.go` | Background cleanup goroutine removes expired entries |
+| `TestIdempotencyStore_BackgroundCleanupRuns` | `internal/middleware/idempotency_test.go` | Automatic background cleanup runs on schedule |
+| `TestIdempotencyStore_StopCancelsCleanup` | `internal/middleware/idempotency_test.go` | `Stop()` cancels cleanup goroutine (idempotent) |
+| `TestIdempotencyKey_ReturnsCachedResponse` | `internal/middleware/idempotency_test.go` | Idempotency middleware returns cached response |
+| `TestRateLimiter_StopIsIdempotent` | `internal/middleware/ratelimit_test.go` | `RateLimiter.Stop()` can be called multiple times |
+| `TestUserRateLimiter_StopIsIdempotent` | `internal/middleware/ratelimit_test.go` | `UserRateLimiter.Stop()` can be called multiple times |
+| `TestGenerateCaseNumber_Unique` | `internal/cases/domain/case_test.go` | 1000 generated case numbers are all unique |
+| `TestCaseRepository_CaseNumberCollisionRetries` | `internal/cases/infrastructure/postgres/case_repository_test.go` | Save retries with new case number on DB conflict |
+
+**Existing regression tests (from prior fix rounds):**
 - `internal/identity/application/service_test.go`: `TestCreateUser_AutoAssignsAdminRoleForFirstUser`, `TestCreateUser_RoleFieldsRemovedFromParams`, `TestOIDCConfigFieldsRemoved`, `TestPasswordPolicy_RejectsWeakPasswords`
-- `internal/middleware/auth_test.go`: existing `TestRequireRole_*` and `TestRequireAnyRole_*` tests (already covered)
-- `internal/middleware/headers_test.go`: existing `TestSecureHeaders_HSTSOverHTTPS`, `TestBodySizeLimit_*` (already covered)
-- `internal/middleware/recovery.go`: `TestRecover_PanicDoesNotLeakDetails`
+- `internal/middleware/auth_test.go`: `TestRequireRole_*`, `TestRequireAnyRole_*`
+- `internal/middleware/headers_test.go`: `TestSecureHeaders_HSTSOverHTTPS`, `TestBodySizeLimit_*`
+- `internal/middleware/recovery_test.go`: `TestRecover_PanicDoesNotLeakDetails`, `TestRecover_PanicReturnsValidJSON`
+- `internal/identity/api/handler_test.go`: `TestRegister_ValidRequest`, `TestRegister_InvalidJSON`, `TestRegister_WeakPasswordRejected`, `TestRegister_EmailAlreadyExists`, `TestRegister_RoleNameIgnored`
+- `internal/cases/api/handler_test.go`: `TestCreateCase_ValidRequest`, `TestCreateCase_InvalidJSON`, `TestCreateCase_TitleTooLong`, `TestCreateCase_DescriptionTooLong`, `TestCreateCase_EmptyTitle`
+- `internal/organizations/api/handler_test.go`: `TestCreateOrganization_ValidRequest`, `TestCreateOrganization_InvalidJSON`, `TestCreateOrganization_Conflict`
+- `internal/middleware/ratelimit_test.go`: `TestUserRateLimiter_LocksAfterMaxFailures`, `TestUserRateLimiter_ResetsOnSuccess`, `TestUserRateLimiter_TracksSeparateEmails`, `TestUserRateLimiter_CaseInsensitive`, `TestUserRateLimiter_RetryAfterDuration`
 - `test/e2e/e2e_test.go`: `TestRBAC_RoleAssignmentOnRegustration`, `TestRBAC_RegistrationIgnoresRoleName`, `TestRBAC_ProtectedRoutesRequireAuth`, `TestRBAC_CaseTransitionsAllowAdminAndStaff`
 - `test/integration/integration_test.go`: `TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure`, `TestAuditAtomicity_StatusChangeRollsBackOnAuditFailure`, `TestAuditAtomicity_OrgCreationRollsBackOnAuditFailure`
 
-**Total**: All tests passing (`go test -short ./...` and `go test -p 1 -count=1 ./test/integration/...` and `./test/e2e/...`).
+**Total**: All tests passing (`go test -short -race -p 1 ./...`)
 
 
 ---
@@ -644,13 +663,17 @@ Last reviewed: 2026-09-07
 
 ## Post-Review Fix Results
 
-All hostile review findings have been remediated across three commits:
+All hostile review findings have been remediated across four commits:
 
 - **04b983e**: Structural fixes — transactional org creation with default roles, audit event atomicity (CaseService, OrganizationService), OIDC config removal, RBAC enforcement on protected routes, scanUser nil-nil for not-found.
 
 - **8ada542**: Error propagation fixes — propagate `FindByEmail` errors in `CreateUser`, propagate audit `RecordEvent` errors in `Authenticate`, fix `err :=` → `err =` for `database.InTransaction` call, remove unused `log` import and `AuditService.DB()` method, fix `fmt.Sprintf` → literal string.
 
 - **3ffbf65**: Comprehensive fixes — correlation ID propagation in all audit events, JWT `iss` claim validation, AuditConfig wiring (Enabled/HashChainEnabled/RetentionDays), godotenv conditional load, ListUsers pagination, dead code removal (validator.go, id.go, SplitDSN, Idempotency.Cleanup, unused OpenAPI schemas), recovery middleware JSON safety, case number collision retry, password policy strengthened to 12+ chars, Docker non-root USER, .dockerignore, CI golangci-lint+gosec+race detection, /metrics endpoint removed, RequireRole de-duplication, handler/API test coverage, input length validation, token revocation documented as limitation, stale doc references fixed.
+
+- **f52aeab**: Idempotency memory leak fix — background cleanup goroutine + `Stop()` on `IdempotencyStore`; fix identity service test compilation error (`failingRoleRepo` type scoping).
+
+- **d6a36ec**: Graceful shutdown hardening — add `Stop()` to `RateLimiter` and `UserRateLimiter` with `sync.Once`; wire `Stop()` calls in server and main; add `TestRateLimiter_StopIsIdempotent`, `TestUserRateLimiter_StopIsIdempotent` regression tests.
 
 Fresh hostile review against commit `3ffbf65` — all build, vet, format, and test checks pass:
 
@@ -666,12 +689,10 @@ $ go test -race -p 1 -count=1 ./test/integration/... ./test/e2e/...  # PASS
 
 | Item | Status | Notes |
 |---|---|---|
-| Per-user rate limiting on auth endpoints | Open | Per-IP rate limiting exists; per-user would require identity lookup before auth |
 | Encryption at rest | Open (documented) | Documented as future in ARCHITECTURE.md; no code claims |
 | Data export API | Open (documented) | Documented as future; no code claims |
 | Soft-delete | Open (documented) | Documented as future; no code claims |
-| Event bus | Open (documented) | Modules use synchronous calls; documented in ARCHITECTURE.md |
-| Audit integrity verification on read | Open | `VerifyIntegrity()` exists but not called when serving audit data |
+| Audit integrity verification on read | Open | `VerifyIntegrity()` exists; listed in "Can Wait" section (L-3) |
 | OpenAPI operationId | Low | Not needed until SDK generation |
 | Password breach checking | Open (future) | Documented as deferred |
 | Person entity (beneficiary) | Open (future) | Milestone 0.2/0.3 |
@@ -709,7 +730,7 @@ Additional HIGH findings addressed in a follow-up fix round:
 $ go build ./...                          # OK
 $ go vet ./...                            # OK
 $ gofmt -l .                              # OK (no files listed)
-$ go test -short ./...                    # PASS (all unit tests)
+$ go test -short -race -p 1 -count=1 ./... # PASS (all unit tests)
 $ go test -p 1 -count=1 ./test/e2e/... ./test/integration/...  # PASS
 ```
 
@@ -720,8 +741,47 @@ $ go test -p 1 -count=1 ./test/e2e/... ./test/integration/...  # PASS
 | Encryption at rest | Open (documented) | Documented as future in ARCHITECTURE.md; no code claims |
 | Data export API | Open (documented) | Documented as future; no code claims |
 | Soft-delete | Open (documented) | Documented as future; no code claims |
-| Audit integrity verification on read | Open | `VerifyIntegrity()` exists but not called when serving audit data |
+| Audit integrity verification on read | Open | `VerifyIntegrity()` exists; listed in "Can Wait" section (L-3) |
 | OpenAPI operationId | Low | Not needed until SDK generation |
 | Password breach checking | Open (future) | Documented as deferred |
 | Person entity (beneficiary) | Open (future) | Milestone 0.2/0.3 |
 | Token revocation/logout endpoint | Open (documented) | Documented as limitation in ARCHITECTURE.md |
+
+---
+
+## Post-v3 Fix Round (2026-09-07)
+
+Additional findings addressed in a follow-up fix round at commit `d6a36ec`:
+
+### Fixes Applied
+
+| # | Finding | Status | Evidence |
+|---|---|---|---|
+| MEDIUM-5 | Idempotency store memory leak | **FIXED** | `internal/middleware/idempotency.go` — `IdempotencyStore` now has a background cleanup goroutine (`runCleanup`) that periodically removes expired entries. `Stop()` method added for graceful shutdown via `sync.Once`. Server (`internal/server/server.go`) calls `Stop()` on shutdown. Same pattern applied to `RateLimiter` and `UserRateLimiter`. |
+| MEDIUM-7 | Case number collision risk | **VERIFIED FIXED** | `internal/cases/infrastructure/postgres/case_repository.go:46-62` `saveCase` retries up to 5 times on PostgreSQL `23505` unique violation, regenerating the case number each time. `internal/cases/application/service.go:64-93` `CreateCase` also handles `ErrCaseNumberConflict`. |
+| Build error | Identity service test compilation failure | **FIXED** | `internal/identity/application/service_test.go` — `failingRoleRepo` type moved to package level; `mockRoleRepo.FindByName` updated to use `findByNameFn` function field pattern. |
+
+### Regression Tests Added
+
+| Test | File | What it verifies |
+|---|---|---|
+| `TestIdempotencyStore_GetAndSet` | `internal/middleware/idempotency_test.go` | Basic store operations |
+| `TestIdempotencyStore_TTLExpiration` | `internal/middleware/idempotency_test.go` | Expired entries are not returned |
+| `TestIdempotencyStore_CleanupRemovesExpired` | `internal/middleware/idempotency_test.go` | Periodic cleanup removes expired entries |
+| `TestIdempotencyStore_BackgroundCleanupRuns` | `internal/middleware/idempotency_test.go` | Background goroutine automatically cleans up |
+| `TestIdempotencyStore_StopCancelsCleanup` | `internal/middleware/idempotency_test.go` | `Stop()` prevents goroutine leak (idempotent via `sync.Once`) |
+| `TestIdempotencyKey_ReturnsCachedResponse` | `internal/middleware/idempotency_test.go` | Middleware returns cached response |
+| `TestRateLimiter_StopIsIdempotent` | `internal/middleware/ratelimit_test.go` | `RateLimiter.Stop()` safe for multiple calls |
+| `TestUserRateLimiter_StopIsIdempotent` | `internal/middleware/ratelimit_test.go` | `UserRateLimiter.Stop()` safe for multiple calls |
+| `TestGenerateCaseNumber_Unique` | `internal/cases/domain/case_test.go` | 1000 generated case numbers are unique |
+| `TestCaseRepository_CaseNumberCollisionRetries` | `internal/cases/infrastructure/postgres/case_repository_test.go` | Save retries with new number on DB conflict |
+
+### Fresh Review Summary
+
+```
+$ go build ./...                          # OK
+$ go vet ./...                            # OK
+$ gofmt -l .                              # OK (no files listed)
+$ go test -short -race -p 1 -count=1 ./... # PASS (all tests with race detection)
+$ go test -p 1 -count=1 ./test/e2e/... ./test/integration/...  # PASS
+```
