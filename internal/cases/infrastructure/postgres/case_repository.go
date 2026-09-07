@@ -3,10 +3,13 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/google/uuid"
+	"github.com/jackc/pgconn"
 )
 
 type PostgresCaseRepository struct {
@@ -40,13 +43,22 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 			status, created_by, assigned_to, created_at, updated_at, closed_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	_, err := e.ExecContext(ctx, query,
-		c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
-		c.Status, c.CreatedByID, c.AssignedToID, c.CreatedAt, c.UpdatedAt, c.ClosedAt)
-	if err != nil {
+	const maxRetries = 5
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		_, err := e.ExecContext(ctx, query,
+			c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
+			c.Status, c.CreatedByID, c.AssignedToID, c.CreatedAt, c.UpdatedAt, c.ClosedAt)
+		if err == nil {
+			return nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			c.CaseNumber = domain.GenerateCaseNumber(time.Now().UTC())
+			continue
+		}
 		return fmt.Errorf("failed to insert case: %w", err)
 	}
-	return nil
+	return domain.ErrCaseNumberConflict
 }
 
 func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {

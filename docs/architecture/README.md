@@ -6,7 +6,8 @@ This directory contains detailed architecture documents.
 
 | Document | Description |
 |----------|-------------|
-| (will be populated as the architecture evolves) | |
+| `api-spec.md` | OpenAPI specification for the initial API surface. |
+| `configuration.md` | Configuration reference (environment variables, config file options). |
 
 ## Planned documents
 

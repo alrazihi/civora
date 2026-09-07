@@ -7,15 +7,20 @@ import (
 	"time"
 
 	"github.com/alrazihi/civora/internal/audit/domain"
+	"github.com/alrazihi/civora/internal/config"
 	"github.com/google/uuid"
 )
 
 type AuditService struct {
-	repo domain.AuditRepository
+	repo   domain.AuditRepository
+	config config.AuditConfig
 }
 
-func NewAuditService(repo domain.AuditRepository) *AuditService {
-	return &AuditService{repo: repo}
+func NewAuditService(repo domain.AuditRepository, cfg config.AuditConfig) *AuditService {
+	return &AuditService{
+		repo:   repo,
+		config: cfg,
+	}
 }
 
 var _ domain.EventRecorder = (*AuditService)(nil)
@@ -29,6 +34,10 @@ func (s *AuditService) RecordEventInTx(ctx context.Context, tx *sql.Tx, params d
 }
 
 func (s *AuditService) recordEvent(ctx context.Context, tx *sql.Tx, params domain.RecordEventParams) error {
+	if !s.config.Enabled {
+		return nil
+	}
+
 	if !domain.IsValidOutcome(params.Outcome) {
 		return fmt.Errorf("invalid outcome: %s", params.Outcome)
 	}
@@ -74,4 +83,12 @@ func (s *AuditService) FindByOrganization(ctx context.Context, orgID uuid.UUID, 
 
 func (s *AuditService) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
 	return s.repo.CountByOrganization(ctx, orgID)
+}
+
+func (s *AuditService) PurgeOld(ctx context.Context) (int, error) {
+	if s.config.RetentionDays <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().AddDate(0, 0, -s.config.RetentionDays)
+	return s.repo.PurgeOld(ctx, cutoff)
 }

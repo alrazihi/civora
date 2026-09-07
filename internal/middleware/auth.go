@@ -74,6 +74,11 @@ func (s *JWTService) VerifyToken(tokenString string) (userID, organizationID, ro
 		return "", "", "", time.Time{}, errors.New("invalid claims")
 	}
 
+	iss, _ := claims["iss"].(string)
+	if s.issuer != "" && iss != s.issuer {
+		return "", "", "", time.Time{}, errors.New("token issuer mismatch")
+	}
+
 	userID, _ = claims["sub"].(string)
 	organizationID, _ = claims["organization_id"].(string)
 	role, _ = claims["role"].(string)

@@ -58,7 +58,7 @@ func main() {
 	caseRepo := casepostgres.NewPostgresCaseRepository(db.DB)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db.DB)
 
-	auditService := auditapp.NewAuditService(auditRepo)
+	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
 	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
 	authMiddleware := intmid.AuthRequired(jwtSvc)

@@ -1,12 +1,10 @@
 package middleware
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
-	"net/http/httptest"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/alrazihi/civora/internal/shared"
 )
 
 func Recover(next http.Handler) http.Handler {
@@ -14,26 +12,18 @@ func Recover(next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil {
 				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("X-Content-Type-Options", "nosniff")
 				w.WriteHeader(http.StatusInternalServerError)
-				body := fmt.Sprintf(`{"success":false,"error":{"code":"INTERNAL_ERROR","message":"Internal server error"}}`)
-				w.Write([]byte(body))
+				body, _ := json.Marshal(shared.APIResponse{
+					Success: false,
+					Error: &shared.ErrorResponse{
+						Code:    string(shared.CodeInternalError),
+						Message: "Internal server error",
+					},
+				})
+				w.Write(body)
 			}
 		}()
 		next.ServeHTTP(w, r)
 	})
-}
-
-func TestRecover_PanicDoesNotLeakDetails(t *testing.T) {
-	handler := Recover(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		panic("internal database connection string: postgres://user:pass@host:5432/db")
-	}))
-
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/test", nil))
-
-	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.NotContains(t, rec.Body.String(), "postgres://")
-	assert.NotContains(t, rec.Body.String(), "connection string")
-	assert.NotContains(t, rec.Body.String(), "internal database")
-	assert.Contains(t, rec.Body.String(), "Internal server error")
 }

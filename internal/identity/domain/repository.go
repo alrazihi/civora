@@ -13,7 +13,7 @@ type UserRepository interface {
 	SaveTx(ctx context.Context, tx *sql.Tx, user *User) error
 	FindByEmail(ctx context.Context, orgID uuid.UUID, email string) (*User, error)
 	FindByID(ctx context.Context, orgID, userID uuid.UUID) (*User, error)
-	FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*User, error)
+	FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*User, error)
 	CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error)
 	CountByOrganizationTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) (int, error)
 }

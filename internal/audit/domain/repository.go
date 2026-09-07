@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -15,4 +16,5 @@ type AuditRepository interface {
 	CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error)
 	RecordEvent(ctx context.Context, orgID uuid.UUID, event *AuditEvent) error
 	RecordEventTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *AuditEvent) error
+	PurgeOld(ctx context.Context, olderThan time.Time) (int, error)
 }

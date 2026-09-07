@@ -36,7 +36,6 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 
 	r.Get("/health", healthHandler)
 	r.Get("/ready", readinessHandler(db))
-	r.Get("/metrics", metricsHandler)
 
 	return &Server{
 		router: r,
@@ -92,10 +91,4 @@ func readinessHandler(db *sql.DB) http.HandlerFunc {
 			Data:    map[string]interface{}{"status": "ready"},
 		})
 	}
-}
-
-func metricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("# CIVORA metrics\n# endpoint: /metrics\n"))
 }

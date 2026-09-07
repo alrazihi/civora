@@ -10,6 +10,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
+	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/google/uuid"
 )
 
@@ -57,27 +58,35 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 
 	c := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description)
 
+	const maxRetries = 3
 	var result *domain.Case
 	err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		if err := s.repo.SaveTx(ctx, tx, c); err != nil {
-			return fmt.Errorf("failed to save case: %w", err)
-		}
-
-		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
-				OrganizationID: c.OrganizationID,
-				ActorID:        &c.CreatedByID,
-				Action:         "case.created",
-				Resource:       "case",
-				ResourceID:     strPtr(c.ID.String()),
-				Outcome:        "success",
-			}); err != nil {
-				return fmt.Errorf("failed to record audit event: %w", err)
+		for attempts := 0; ; attempts++ {
+			if err := s.repo.SaveTx(ctx, tx, c); err != nil {
+				if errors.Is(err, domain.ErrCaseNumberConflict) && attempts < maxRetries-1 {
+					c.RegenerateCaseNumber()
+					continue
+				}
+				return fmt.Errorf("failed to save case: %w", err)
 			}
-		}
 
-		result = c
-		return nil
+			if s.auditor != nil {
+				if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+					OrganizationID: c.OrganizationID,
+					ActorID:        &c.CreatedByID,
+					Action:         "case.created",
+					Resource:       "case",
+					ResourceID:     strPtr(c.ID.String()),
+					Outcome:        "success",
+					RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				}); err != nil {
+					return fmt.Errorf("failed to record audit event: %w", err)
+				}
+			}
+
+			result = c
+			return nil
+		}
 	})
 	if err != nil {
 		return nil, err
@@ -120,6 +129,7 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 				Resource:       "case",
 				ResourceID:     strPtr(c.ID.String()),
 				Outcome:        "success",
+				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"from": string(c.Status),
 					"to":   string(params.Status),
@@ -178,6 +188,7 @@ func (s *CaseService) AssignCase(ctx context.Context, params AssignCaseParams) (
 				Resource:       "case",
 				ResourceID:     strPtr(c.ID.String()),
 				Outcome:        "success",
+				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"assigned_to": params.UserID.String(),
 				},

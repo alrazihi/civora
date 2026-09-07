@@ -11,6 +11,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
 	"github.com/alrazihi/civora/internal/identity/domain"
+	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/google/uuid"
 )
 
@@ -20,12 +21,12 @@ var (
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrInvalidEmail       = errors.New("invalid email format")
 	ErrInvalidInput       = errors.New("invalid input")
-	ErrWeakPassword       = errors.New("password must be at least 8 characters and contain at least one letter and one number")
+	ErrWeakPassword       = errors.New("password must be at least 12 characters and contain at least one letter and one number")
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
-const minPasswordLength = 8
+const minPasswordLength = 12
 
 type IdentityService struct {
 	userRepo domain.UserRepository
@@ -122,6 +123,7 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 					Resource:       "user",
 					ResourceID:     strPtr(user.ID.String()),
 					Outcome:        "success",
+					RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 				}); err != nil {
 					return fmt.Errorf("failed to record audit event: %w", err)
 				}
@@ -133,6 +135,7 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 					Resource:       "user",
 					ResourceID:     strPtr(user.ID.String()),
 					Outcome:        "success",
+					RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 				}); err != nil {
 					return fmt.Errorf("failed to record audit event: %w", err)
 				}
@@ -182,6 +185,7 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 				ResourceID:     strPtr(params.Email),
 				Outcome:        "failure",
 				Metadata:       map[string]interface{}{"reason": "invalid_credentials"},
+				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 			})
 		}
 		return nil, ErrInvalidCredentials
@@ -208,6 +212,7 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 			Resource:       "user",
 			ResourceID:     strPtr(user.ID.String()),
 			Outcome:        "success",
+			RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 		}); err != nil {
 			return nil, fmt.Errorf("failed to record audit event: %w", err)
 		}
@@ -254,8 +259,28 @@ func (s *IdentityService) GetUser(ctx context.Context, orgID, userID uuid.UUID) 
 	return user, nil
 }
 
-func (s *IdentityService) ListUsers(ctx context.Context, orgID uuid.UUID) ([]*domain.User, error) {
-	return s.userRepo.FindByOrganization(ctx, orgID)
+func (s *IdentityService) ListUsers(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	total, err := s.userRepo.CountByOrganization(ctx, orgID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	}
+
+	users, err := s.userRepo.FindByOrganization(ctx, orgID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list users: %w", err)
+	}
+
+	return users, total, nil
 }
 
 func strPtr(s string) *string {

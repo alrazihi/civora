@@ -62,9 +62,6 @@ Modules communicate through:
   interfaces) for operations within the same process.
 - **Database** for persistence, with each module owning its tables and
   foreign keys.
-- **Events** (in-process event bus or pub/sub pattern) for
-  cross-module notifications (e.g., "case created" triggers a
-  "task assigned" action).
 
 ### Data layer
 

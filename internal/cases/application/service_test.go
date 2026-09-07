@@ -361,3 +361,56 @@ func TestListCases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, cases, 5)
 }
+
+type collisionMockCaseRepo struct {
+	*mockCaseRepository
+	collisions    int
+	maxCollisions int
+}
+
+func (m *collisionMockCaseRepo) SaveTx(ctx context.Context, tx *sql.Tx, c *domain.Case) error {
+	if m.collisions < m.maxCollisions {
+		m.collisions++
+		return domain.ErrCaseNumberConflict
+	}
+	return m.mockCaseRepository.SaveTx(ctx, tx, c)
+}
+
+func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
+	repo := &collisionMockCaseRepo{
+		mockCaseRepository: newMockCaseRepo(),
+		maxCollisions:      1,
+	}
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
+
+	orgID := uuid.New()
+	userID := uuid.New()
+
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Case with Collision",
+		CreatedByID:    userID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, c)
+	assert.Equal(t, orgID, c.OrganizationID)
+	assert.Equal(t, 1, repo.collisions, "service should have retried after case number conflict")
+}
+
+func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
+	repo := &collisionMockCaseRepo{
+		mockCaseRepository: newMockCaseRepo(),
+		maxCollisions:      10,
+	}
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
+
+	orgID := uuid.New()
+	userID := uuid.New()
+
+	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Case That Keeps Colliding",
+		CreatedByID:    userID,
+	})
+	require.Error(t, err, "should fail after exhausting retries")
+}

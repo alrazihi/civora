@@ -15,6 +15,10 @@ RUN apk --no-cache add ca-certificates
 
 COPY --from=builder /civora /civora
 
+RUN addgroup -S civora && adduser -S -G civora civora
+
+USER civora
+
 EXPOSE 8080
 
 ENTRYPOINT ["/civora"]

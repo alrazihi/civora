@@ -45,17 +45,6 @@ func (s *IdempotencyStore) Set(key string, rec *IdempotencyRecord) {
 	s.data[key] = rec
 }
 
-func (s *IdempotencyStore) Cleanup() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := time.Now()
-	for k, v := range s.data {
-		if now.Sub(v.CreatedAt) > s.ttl {
-			delete(s.data, k)
-		}
-	}
-}
-
 func IdempotencyKey(store *IdempotencyStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

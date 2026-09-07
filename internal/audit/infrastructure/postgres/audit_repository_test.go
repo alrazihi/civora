@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuditRepository_SaveAndGetLastHash(t *testing.T) {
+func TestAuditRepository_RecordEventAndGetLastHash(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -28,7 +28,7 @@ func TestAuditRepository_SaveAndGetLastHash(t *testing.T) {
 	assert.Nil(t, lastHash, "no events should mean nil last hash")
 
 	ev1 := domain.NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
-	err = repo.Save(context.Background(), ev1)
+	err = repo.RecordEvent(context.Background(), orgID, ev1)
 	require.NoError(t, err)
 
 	lastHash, err = repo.GetLastHash(context.Background(), orgID)
@@ -37,7 +37,7 @@ func TestAuditRepository_SaveAndGetLastHash(t *testing.T) {
 	assert.Equal(t, ev1.Hash, *lastHash)
 
 	ev2 := domain.NewAuditEvent(orgID, actorID, "case.status_changed", "case", nil, "success", nil, nil, lastHash)
-	err = repo.Save(context.Background(), ev2)
+	err = repo.RecordEvent(context.Background(), orgID, ev2)
 	require.NoError(t, err)
 
 	lastHash, err = repo.GetLastHash(context.Background(), orgID)
@@ -61,7 +61,7 @@ func TestAuditRepository_TenantIsolation(t *testing.T) {
 	actor := helpers.SeedUser(db, org1)
 
 	ev := domain.NewAuditEvent(org1, actor, "test.action", "test", nil, "success", nil, nil, nil)
-	err := repo.Save(context.Background(), ev)
+	err := repo.RecordEvent(context.Background(), org1, ev)
 	require.NoError(t, err)
 
 	lastHash, err := repo.GetLastHash(context.Background(), org2)
@@ -83,7 +83,7 @@ func TestAuditRepository_FindByOrganization(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		ev := domain.NewAuditEvent(orgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
-		err := repo.Save(context.Background(), ev)
+		err := repo.RecordEvent(context.Background(), orgID, ev)
 		require.NoError(t, err)
 	}
 
@@ -110,6 +110,6 @@ func TestAuditRepository_ForeignKeyConstraint(t *testing.T) {
 	actor := uuid.New()
 
 	ev := domain.NewAuditEvent(fakeOrgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
-	err := repo.Save(context.Background(), ev)
+	err := repo.RecordEvent(context.Background(), fakeOrgID, ev)
 	require.Error(t, err, "should fail due to foreign key constraint")
 }

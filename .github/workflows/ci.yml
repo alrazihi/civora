@@ -28,6 +28,12 @@ jobs:
       - name: Run go vet
         run: GOMEMLIMIT=2GiB go vet ./internal/... ./cmd/...
 
+      - name: golangci-lint (with gosec)
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.64
+          args: --enable=gosec --timeout=5m ./...
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -61,10 +67,10 @@ jobs:
           done
 
       - name: Run unit tests
-        run: CGO_ENABLED=0 go test -short -p 1 ./...
+        run: CGO_ENABLED=1 go test -race -short -p 1 ./...
 
       - name: Run integration tests
-        run: CGO_ENABLED=0 go test -p 1 -count=1 ./internal/... ./test/e2e/... ./test/integration/...
+        run: CGO_ENABLED=1 go test -race -p 1 -count=1 ./internal/... ./test/e2e/... ./test/integration/...
 
   build:
     name: Build

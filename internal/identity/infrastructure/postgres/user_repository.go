@@ -66,14 +66,15 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, orgID, userID uui
 	return r.scanUser(r.db.QueryRowContext(ctx, query, orgID, userID))
 }
 
-func (r *PostgresUserRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*domain.User, error) {
+func (r *PostgresUserRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, error) {
 	query := `
 		SELECT id, organization_id, email, name, role_id, password_hash, created_at, updated_at
 		FROM users
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.QueryContext(ctx, query, orgID)
+	rows, err := r.db.QueryContext(ctx, query, orgID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
 	caseDomain "github.com/alrazihi/civora/internal/cases/domain"
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
+	"github.com/alrazihi/civora/internal/config"
 	identityDomain "github.com/alrazihi/civora/internal/identity/domain"
 	identitypostgres "github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
@@ -38,7 +39,7 @@ func setupAppServices(t *testing.T) (
 	caseRepo := casepostgres.NewPostgresCaseRepository(db)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db)
 
-	auditService := auditapp.NewAuditService(auditRepo)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
 	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
 	return orgapp.NewOrganizationService(orgRepo, roleCreator, auditService),
@@ -302,7 +303,7 @@ func TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure(t *testing.T) {
 	caseRepo := casepostgres.NewPostgresCaseRepository(db)
 
 	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
-	auditService := auditapp.NewAuditService(auditRepo)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
 	caseSvc := caseapp.NewCaseService(caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
 
@@ -343,7 +344,7 @@ func TestAuditAtomicity_StatusChangeRollsBackOnAuditFailure(t *testing.T) {
 	caseRepo := casepostgres.NewPostgresCaseRepository(db)
 
 	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
-	auditService := auditapp.NewAuditService(auditRepo)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
 	caseSvc := caseapp.NewCaseService(caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
 
@@ -386,7 +387,7 @@ func TestAuditAtomicity_OrgCreationRollsBackOnAuditFailure(t *testing.T) {
 	roleRepo := identitypostgres.NewPostgresRoleRepository(db)
 
 	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
-	auditService := auditapp.NewAuditService(auditRepo)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
 	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
 	orgSvc := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)

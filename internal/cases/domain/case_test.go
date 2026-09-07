@@ -2,6 +2,7 @@ package domain
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -90,5 +91,24 @@ func TestCase_AssignTo(t *testing.T) {
 func TestGenerateCaseNumber(t *testing.T) {
 	c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
 	assert.NotEmpty(t, c.CaseNumber)
+	assert.Contains(t, c.CaseNumber, "CAS-")
+}
+
+func TestCaseNumberCollision_Uniqueness(t *testing.T) {
+	now := time.Now().UTC()
+	seen := make(map[string]bool)
+	for i := 0; i < 10000; i++ {
+		num := GenerateCaseNumber(now)
+		assert.NotContains(t, seen, num, "case number collision at iteration %d", i)
+		seen[num] = true
+	}
+}
+
+func TestCase_RegenerateCaseNumber(t *testing.T) {
+	c := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	original := c.CaseNumber
+	c.RegenerateCaseNumber()
+	assert.NotEmpty(t, c.CaseNumber)
+	assert.NotEqual(t, original, c.CaseNumber, "regenerated case number should differ from original")
 	assert.Contains(t, c.CaseNumber, "CAS-")
 }

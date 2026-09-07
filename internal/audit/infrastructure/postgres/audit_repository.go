@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/google/uuid"
@@ -200,4 +201,18 @@ func (r *PostgresAuditRepository) CountByOrganization(ctx context.Context, orgID
 		return 0, fmt.Errorf("failed to count audit events: %w", err)
 	}
 	return total, nil
+}
+
+func (r *PostgresAuditRepository) PurgeOld(ctx context.Context, olderThan time.Time) (int, error) {
+	result, err := r.db.ExecContext(ctx, `
+		DELETE FROM audit_events WHERE timestamp < $1
+	`, olderThan)
+	if err != nil {
+		return 0, fmt.Errorf("failed to purge old audit events: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return int(n), nil
 }

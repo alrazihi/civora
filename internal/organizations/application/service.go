@@ -9,6 +9,7 @@ import (
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
+	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/organizations/domain"
 	"github.com/google/uuid"
 )
@@ -85,6 +86,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 				Resource:       "organization",
 				ResourceID:     strPtr(org.ID.String()),
 				Outcome:        "success",
+				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
 			}); err != nil {
 				return fmt.Errorf("failed to record audit event: %w", err)
 			}

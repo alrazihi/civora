@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,11 +16,19 @@ import (
 )
 
 type Handler struct {
-	svc *application.CaseService
+	svc CaseService
 }
 
-func NewHandler(svc *application.CaseService) *Handler {
+func NewHandler(svc CaseService) *Handler {
 	return &Handler{svc: svc}
+}
+
+type CaseService interface {
+	CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
+	ListCases(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
+	GetCase(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
+	ChangeStatus(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
+	AssignCase(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {

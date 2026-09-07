@@ -34,10 +34,10 @@ module boundaries, data flow, and deployment model.
 │  └────────┘                                             │
 ├─────────────────────────────────────────────────────────┤
 │                    Shared Infrastructure                │
-│   Events (in-process) │ Config │ Logging │ Metrics    │
+│   Config │ Logging │ Metrics    │
 ├─────────────────────────────────────────────────────────┤
 │                    Data & Storage Layer                 │
-│  Primary DB (PostgreSQL/SQLite) │ Object Storage (S3)   │
+│  Primary DB (PostgreSQL) │ Object Storage (S3)   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -50,7 +50,6 @@ communicate through:
 
 - **Internal service interfaces** (in-process function calls with
   defined contracts).
-- **Events** (in-process event bus) for cross-module notifications.
 - **Shared database** for persistence, with per-module schema ownership.
 
 | Module | Owns | Communicates with |
@@ -73,14 +72,12 @@ communicate through:
 1. Modules do not access another module's database tables directly.
    They go through the owning module's service interface.
 2. Module-to-module calls use the internal service interface.
-3. Events are published for side effects and cross-module state changes.
-   Consumers should handle events idempotently.
-4. The Audit module is write-only from the perspective of other
-   modules: all modules emit audit events, but only the Audit module
-   writes to and reads from the audit store.
-5. Direct cross-module calls are allowed for synchronous operations
-   within a transaction boundary. For non-critical side effects, events
-   are preferred.
+3. The Audit module is write-only from the perspective of other
+   modules: all modules record audit entries via the Audit module's
+   interface, but only the Audit module writes to and reads from the
+   audit store.
+4. Direct cross-module calls are allowed for synchronous operations
+   within a transaction boundary.
 
 ---
 
@@ -192,40 +189,19 @@ claim ownership of any data stored in the system.
 
 ### Personal data
 
-- Personal data is identified by a `data_classification` label.
-- Personal data is stored encrypted at rest where configured.
-- Personal data export and deletion are supported.
-- Audit logs containing personal data follow the same retention and
-  access controls.
+(Future: data classification labels, encrypted storage, and export/
+deletion workflows.)
 
 ### Retention
 
 - Data retention is configurable per organization and data type.
 - Default retention: 7 years for audit records (changeable by operator).
-- Deleted data is soft-deleted by default; hard deletion is governed
-  by retention schedule.
 
 ### Encryption
 
 - TLS 1.2+ in transit (required in production).
-- Encryption at rest is supported via database column-level encryption
-  for personal data and via object-storage server-side encryption.
-- Encryption keys are managed by the operator's key management system
-  (KMS) where available.
 
-### Backups
-
-- Backup strategy is documented for operators.
-- Backups include database and object storage.
-- Backup encryption and access controls are the operator's
-  responsibility.
-- Audit log backups are append-only and separately retained.
-
-### Export and portability
-
-- Data export is available in JSON format via the API.
-- Bulk export endpoints are available for administrators.
-- Export respects tenant isolation and authorization.
+(Future: encryption at rest and key management via KMS.)
 
 ---
 
@@ -239,7 +215,6 @@ model. Key security properties:
 - All input validated and sanitized.
 - No execution of code from user-supplied data (including workflow
   definitions).
-- Audit log is append-only and tamper-evident.
 - Secrets are never logged.
 - Rate limiting on all endpoints.
 
@@ -256,7 +231,7 @@ model. Key security properties:
 
 ### Supported configurations
 
-- **Development**: SQLite + local file storage (single command).
+- **Development**: PostgreSQL + local file storage (single command).
 - **Production**: PostgreSQL + S3-compatible object storage.
 - **Container**: Docker image, runnable with `docker run`.
 - **Orchestrated**: Kubernetes manifests provided (future).
@@ -271,7 +246,7 @@ See `docs/architecture/configuration.md` (to be created).
 ## Observability
 
 - **Logging**: Structured JSON logs to stdout/stderr.
-- **Metrics**: Prometheus-format metrics endpoint (`/metrics`).
+- **Metrics**: Not exposed. A Prometheus exporter will be added in a later milestone.
 - **Tracing**: OpenTelemetry support.
 - **Health**: Health check endpoint (`/health`).
 - **Alerting**: Operators configure alerting based on metrics.
@@ -290,7 +265,7 @@ The following technology decisions have been finalized and recorded as ADRs:
 | Why React/TypeScript (future frontend) | [ADR-0005](docs/decisions/0005-why-react-typescript.md) |
 
 **Backend**: Go 1.23+, compiled to a single static binary.
-**Database**: PostgreSQL 16 (SQLite supported for local development).
+**Database**: PostgreSQL 16.
 **API**: HTTP REST with JSON, OpenAPI 3.0 specification as the source of truth.
 **Frontend**: Not implemented in Milestone 0.1; React + TypeScript chosen for the future frontend (ADR-0005).
 **Deployment**: Docker container image; Docker Compose for local development.

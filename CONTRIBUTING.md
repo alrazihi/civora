@@ -53,8 +53,7 @@ All contributions are welcome, large or small. See
    git remote add upstream https://github.com/alrazihi/civora.git
    ```
 
-4. Build and run the project (instructions will be provided once the
-   implementation starts in milestone 0.1).
+4. Build and run the project (see [AGENTS.md](AGENTS.md)):
 
 ---
 
@@ -73,8 +72,7 @@ All contributions are welcome, large or small. See
 
 3. Write or update tests as needed.
 
-4. Ensure linting and tests pass (commands will be defined once the
-   build system exists).
+4. Ensure linting and tests pass (see [AGENTS.md](AGENTS.md)).
 
 5. Commit your changes with a clear commit message following
    [Conventional Commits](https://www.conventionalcommits.org/) format:
@@ -120,8 +118,7 @@ All contributions are welcome, large or small. See
 - Integration tests must cover cross-module interactions.
 - End-to-end tests must cover API-level workflows.
 - Test coverage should not drop below 80% for new code.
-- (Specific test commands will be documented once the build system is
-  established in milestone 0.1.)
+- See [AGENTS.md](AGENTS.md) for test commands.
 
 ---
 
@@ -144,8 +141,8 @@ To propose a decision:
 
 1. Create a new file: `docs/decisions/NNNN-short-title.md` (where
    `NNNN` is the next number).
-2. Use the [ADR template](docs/decisions/0000-template.md) (to be
-   created when the first real ADR is authored).
+2. Use the [ADR template](docs/decisions/0000-template.md). See
+   [AGENTS.md](AGENTS.md) for project conventions.
 3. Include: context, decision, alternatives considered, trade-offs,
    assumptions, how to reverse.
 4. Submit as a pull request for review.

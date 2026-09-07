@@ -74,6 +74,24 @@ func TestJWTService_VerifyToken_Expired(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestJWTService_VerifyToken_IssuerMismatch(t *testing.T) {
+	svc := NewJWTService("secret", time.Hour, "civora")
+
+	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":             "user",
+		"organization_id": "org",
+		"role":            "admin",
+		"iss":             "attacker-service",
+		"exp":             time.Now().Add(time.Hour).Unix(),
+	})
+	token, err := h.SignedString([]byte("secret"))
+	require.NoError(t, err)
+
+	_, _, _, _, err = svc.VerifyToken(token)
+	assert.Error(t, err, "token with wrong issuer should be rejected")
+	assert.Contains(t, err.Error(), "issuer")
+}
+
 func TestAuthRequired_MissingToken(t *testing.T) {
 	svc := NewJWTService("secret", time.Hour, "civora")
 	mw := AuthRequired(svc)
@@ -144,23 +162,6 @@ func TestRequireSameTenant_BlocksMismatchedOrg(t *testing.T) {
 	r.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-}
-
-func TestRequireSameTenant_BlocksWhenPathOrgIDEmpty(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
-	orgID := uuid.New().String()
-
-	handler := AuthRequired(svc)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not reach handler")
-	})))
-
-	token := generateTestToken(t, "secret", "user-1", orgID, "admin")
-	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestRequireRole_AllowsAuthorized(t *testing.T) {

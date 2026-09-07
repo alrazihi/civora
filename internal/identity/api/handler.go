@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/alrazihi/civora/internal/identity/application"
+	"github.com/alrazihi/civora/internal/identity/domain"
 	"github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/go-chi/chi/v5"
@@ -12,11 +15,18 @@ import (
 )
 
 type Handler struct {
-	svc *application.IdentityService
+	svc IdentityService
 }
 
-func NewHandler(svc *application.IdentityService) *Handler {
+func NewHandler(svc IdentityService) *Handler {
 	return &Handler{svc: svc}
+}
+
+type IdentityService interface {
+	CreateUser(ctx context.Context, params application.CreateUserParams) (*domain.User, error)
+	ListUsers(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
+	Authenticate(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
+	GetUser(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error)
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
@@ -109,7 +119,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetTenantID(r)
-	users, err := h.svc.ListUsers(r.Context(), mustParseUUID(orgID))
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 200 {
+		perPage = 200
+	}
+	offset := (page - 1) * perPage
+
+	users, total, err := h.svc.ListUsers(r.Context(), mustParseUUID(orgID), perPage, offset)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to list users")
 		return
@@ -126,7 +150,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	shared.WriteSuccess(w, http.StatusOK, result, nil)
+	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
 }
 
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +206,7 @@ func writeDomainError(w http.ResponseWriter, err error) {
 	case application.ErrInvalidEmail:
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid email format")
 	case application.ErrWeakPassword:
-		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "password must be at least 8 characters and contain at least one letter and one number")
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "password must be at least 12 characters and contain at least one letter and one number")
 	case application.ErrInvalidInput:
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
 	default:

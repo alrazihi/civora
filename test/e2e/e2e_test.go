@@ -67,6 +67,11 @@ func SetupTestServer(t *testing.T) *TestServer {
 			JWTExpiry:  time.Hour,
 			BCryptCost: 4,
 		},
+		Audit: config.AuditConfig{
+			Enabled:          true,
+			HashChainEnabled: true,
+			RetentionDays:    2555,
+		},
 	}
 
 	dsn := database.BuildDSN(cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode)
@@ -88,7 +93,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	caseRepo := casepostgres.NewPostgresCaseRepository(db.DB)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db.DB)
 
-	auditService := auditapp.NewAuditService(auditRepo)
+	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
 	hasher := domain.NewBCryptHasher(cfg.Auth.BCryptCost)
 	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
@@ -287,11 +292,11 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 	org1 := ts.createOrg(t, "org1", "Organization 1")
 	org2 := ts.createOrg(t, "org2", "Organization 2")
 
-	ts.registerUser(t, org1, "user1@example.com", "User One", "password123")
-	ts.registerUser(t, org2, "user2@example.com", "User Two", "password123")
+	ts.registerUser(t, org1, "user1@example.com", "User One", "password1234")
+	ts.registerUser(t, org2, "user2@example.com", "User Two", "password1234")
 
-	token1 := ts.login(t, org1, "user1@example.com", "password123")
-	token2 := ts.login(t, org2, "user2@example.com", "password123")
+	token1 := ts.login(t, org1, "user1@example.com", "password1234")
+	token2 := ts.login(t, org2, "user2@example.com", "password1234")
 
 	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+org1.String()+"/cases", token1, map[string]interface{}{
 		"title": "Case in Org 1",
@@ -320,11 +325,11 @@ func TestRBAC_RoleAssignmentOnRegistration(t *testing.T) {
 
 	orgID := ts.createOrg(t, "rbac-test", "RBAC Test Org")
 
-	ts.registerUser(t, orgID, "first@example.com", "First User", "password123")
-	ts.registerUser(t, orgID, "second@example.com", "Second User", "password123")
+	ts.registerUser(t, orgID, "first@example.com", "First User", "password1234")
+	ts.registerUser(t, orgID, "second@example.com", "Second User", "password1234")
 
-	firstToken := ts.login(t, orgID, "first@example.com", "password123")
-	secondToken := ts.login(t, orgID, "second@example.com", "password123")
+	firstToken := ts.login(t, orgID, "first@example.com", "password1234")
+	secondToken := ts.login(t, orgID, "second@example.com", "password1234")
 
 	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/users", firstToken, nil)
 	require.Equal(t, http.StatusOK, resp.Code, "admin should list users; body: %s", resp.Body.String())
@@ -347,12 +352,12 @@ func TestRBAC_RegistrationIgnoresRoleName(t *testing.T) {
 	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/auth/register", "", map[string]interface{}{
 		"email":     "attacker@example.com",
 		"name":      "Attacker",
-		"password":  "password123",
+		"password":  "password1234",
 		"role_name": "admin",
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "registration should succeed; body: %s", resp.Body.String())
 
-	token := ts.login(t, orgID, "attacker@example.com", "password123")
+	token := ts.login(t, orgID, "attacker@example.com", "password1234")
 	require.NotEmpty(t, token)
 
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/audit", token, nil)
@@ -363,7 +368,7 @@ func TestRBAC_ProtectedRoutesRequireAuth(t *testing.T) {
 	ts := SetupTestServer(t)
 
 	orgID := ts.createOrg(t, "rbac-noauth", "RBAC No Auth Org")
-	ts.registerUser(t, orgID, "user@example.com", "Test User", "password123")
+	ts.registerUser(t, orgID, "user@example.com", "Test User", "password1234")
 
 	tests := []struct {
 		method string
@@ -389,11 +394,11 @@ func TestRBAC_CaseTransitionsAllowAdminAndStaff(t *testing.T) {
 	ts := SetupTestServer(t)
 
 	orgID := ts.createOrg(t, "rbac-transitions", "RBAC Transitions Org")
-	ts.registerUser(t, orgID, "first@example.com", "First User", "password123")
-	ts.registerUser(t, orgID, "second@example.com", "Second User", "password123")
+	ts.registerUser(t, orgID, "first@example.com", "First User", "password1234")
+	ts.registerUser(t, orgID, "second@example.com", "Second User", "password1234")
 
-	adminToken := ts.login(t, orgID, "first@example.com", "password123")
-	staffToken := ts.login(t, orgID, "second@example.com", "password123")
+	adminToken := ts.login(t, orgID, "first@example.com", "password1234")
+	staffToken := ts.login(t, orgID, "second@example.com", "password1234")
 
 	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", adminToken, map[string]interface{}{
 		"title": "RBAC Case",

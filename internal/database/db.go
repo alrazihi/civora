@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -77,16 +76,4 @@ func InTransaction(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) e
 	}
 
 	return nil
-}
-
-func SplitDSN(dsn string) map[string]string {
-	result := make(map[string]string)
-	parts := strings.Fields(dsn)
-	for _, p := range parts {
-		kv := strings.SplitN(p, "=", 2)
-		if len(kv) == 2 {
-			result[kv[0]] = kv[1]
-		}
-	}
-	return result
 }

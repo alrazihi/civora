@@ -48,7 +48,9 @@ type AuditConfig struct {
 }
 
 func Load() (*Config, error) {
-	_ = godotenv.Load(".env")
+	if os.Getenv("CIVORA_ENV") != "production" {
+		_ = godotenv.Load(".env")
+	}
 
 	cfg := &Config{
 		Server: ServerConfig{

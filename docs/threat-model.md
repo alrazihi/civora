@@ -156,8 +156,8 @@ insecure logging, error messages, or exports.
 **Mitigation strategies**:
 - No sensitive data in logs (PII, credentials, tokens).
 - Error messages are generic; details go to secure logs.
-- Export endpoints enforce authorization.
-- TLS in transit; optional encryption at rest.
+- Export endpoints enforce authorization. (Future)
+- TLS in transit; encryption at rest is planned for a future milestone.
 - Data classification labels guide handling.
 **Severity**: High
 

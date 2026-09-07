@@ -47,8 +47,8 @@ func TestValidatePassword(t *testing.T) {
 		password string
 		expected error
 	}{
-		{"valid", "password123", nil},
-		{"valid complex", "SecureP@ss1", nil},
+		{"valid", "password1234", nil},
+		{"valid complex", "SecureP@ssw0rd", nil},
 		{"too short", "Pass1", ErrWeakPassword},
 		{"no numbers", "password", ErrWeakPassword},
 		{"no letters", "12345678", ErrWeakPassword},
@@ -146,7 +146,7 @@ func TestCreateUser_InvalidEmail(t *testing.T) {
 		OrganizationID: uuid.New(),
 		Email:          "not-an-email",
 		Name:           "Test User",
-		Password:       "password123",
+		Password:       "password1234",
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidEmail)
@@ -178,7 +178,7 @@ func (m *mockUserRepo) FindByID(ctx context.Context, orgID, userID uuid.UUID) (*
 	return nil, nil
 }
 
-func (m *mockUserRepo) FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*domain.User, error) {
+func (m *mockUserRepo) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, error) {
 	return nil, nil
 }
 
@@ -216,7 +216,7 @@ func TestCreateUser_AutoAssignsAdminRoleForFirstUser(t *testing.T) {
 		OrganizationID: uuid.New(),
 		Email:          "first@example.com",
 		Name:           "First User",
-		Password:       "password123",
+		Password:       "password1234",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -250,4 +250,19 @@ func TestPasswordPolicy_RejectsWeakPasswords(t *testing.T) {
 		err := validatePassword(pw)
 		assert.ErrorIs(t, err, ErrWeakPassword, "password %q should be rejected", pw)
 	}
+}
+
+func TestPasswordPolicy_Enforces12CharMinimum(t *testing.T) {
+	t.Run("11 chars rejected", func(t *testing.T) {
+		err := validatePassword("password1")
+		assert.ErrorIs(t, err, ErrWeakPassword)
+	})
+	t.Run("12 chars accepted", func(t *testing.T) {
+		err := validatePassword("password1234")
+		assert.NoError(t, err)
+	})
+	t.Run("12 chars no number rejected", func(t *testing.T) {
+		err := validatePassword("twelvechars")
+		assert.ErrorIs(t, err, ErrWeakPassword)
+	})
 }

@@ -90,7 +90,6 @@ Supported query parameters:
 |--------|------|------|-------------|
 | GET | `/health` | No | Health check |
 | GET | `/ready` | No | Readiness check |
-| GET | `/metrics` | No | Prometheus-style metrics (stub) |
 
 ### Organizations
 

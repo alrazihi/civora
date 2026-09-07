@@ -37,7 +37,7 @@ func NewCase(orgID, createdByID uuid.UUID, title, description string) *Case {
 	return &Case{
 		ID:             uuid.New(),
 		OrganizationID: orgID,
-		CaseNumber:     generateCaseNumber(now),
+		CaseNumber:     GenerateCaseNumber(now),
 		Title:          title,
 		Description:    description,
 		Status:         CaseStatusCreated,
@@ -66,6 +66,10 @@ func (c *Case) TransitionTo(status CaseStatus) error {
 func (c *Case) AssignTo(userID uuid.UUID) {
 	c.AssignedToID = &userID
 	c.UpdatedAt = time.Now().UTC()
+}
+
+func (c *Case) RegenerateCaseNumber() {
+	c.CaseNumber = GenerateCaseNumber(time.Now().UTC())
 }
 
 var transitionRules = map[CaseStatus][]CaseStatus{
@@ -106,7 +110,7 @@ func ValidTransitionsFrom(status CaseStatus) []CaseStatus {
 	return transitionRules[status]
 }
 
-func generateCaseNumber(t time.Time) string {
+func GenerateCaseNumber(t time.Time) string {
 	return fmt.Sprintf("CAS-%s-%08d-%s", t.Format("20060102"), t.Nanosecond()%100000000, uuid.NewString()[:8])
 }
 
@@ -114,4 +118,5 @@ var (
 	ErrInvalidStateTransition = errors.New("invalid state transition")
 	ErrCaseNotFound           = errors.New("case not found")
 	ErrCaseInvalidInput       = errors.New("invalid case input")
+	ErrCaseNumberConflict     = errors.New("case number conflict")
 )
