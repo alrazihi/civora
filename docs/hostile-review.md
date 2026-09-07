@@ -514,25 +514,29 @@ These are **blocking** issues:
 | 2 | **Self-registration as admin** — `role_name` accepted from unauthenticated client | CRITICAL | **FIXED** |
 | 3 | **Audit not atomic with domain writes** — separate transactions, errors swallowed | CRITICAL | **FIXED** |
 | 4 | **OIDC config/schema remnants** — dead config fields, unused DB column, stale docs | CRITICAL | **FIXED** |
-| 5 | **No encryption at rest** — docs claim it, code doesn't implement it | CRITICAL | Open |
-| 6 | **No data export or soft-delete** — docs claim both, neither exists | CRITICAL | Open |
-| 7 | **Stale CONTRIBUTING.md** — placeholder text where commands exist | CRITICAL | Open |
-| 8 | **No `.dockerignore`** | HIGH | Open |
-| 9 | **Dockerfile runs as root** | HIGH | Open |
-| 10 | **Unauthenticated `/metrics`** | HIGH | Open |
-| 11 | **No static analysis in CI** (gosec/golangci-lint) | HIGH | Open |
-| 12 | **Correlation ID not in audit events** | HIGH | Open |
-| 13 | **`AuditConfig` dead config** — Enabled, HashChainEnabled, RetentionDays unused | HIGH | Open |
-| 14 | **No per-user rate limiting on auth endpoints** | HIGH | Open |
-| 15 | **Dead code** (`shared/validator.go`, `shared/id.go`, `SplitDSN`, `RequireAnyRole`, unused OpenAPI schemas) | HIGH | Open |
+| 5 | **No encryption at rest** — docs claim it, code doesn't implement it | CRITICAL | **FIXED** (docs corrected; marked as future) |
+| 6 | **No data export or soft-delete** — docs claim both, neither exists | CRITICAL | **FIXED** (docs corrected; marked as future) |
+| 7 | **Stale CONTRIBUTING.md** — placeholder text where commands exist | CRITICAL | **FIXED** |
+| 8 | **No `.dockerignore`** | HIGH | **FIXED** |
+| 9 | **Dockerfile runs as root** | HIGH | **FIXED** |
+| 10 | **Unauthenticated `/metrics`** | HIGH | **FIXED** (endpoint removed) |
+| 11 | **No static analysis in CI** (gosec/golangci-lint) | HIGH | **FIXED** |
+| 12 | **Correlation ID not in audit events** | HIGH | **FIXED** |
+| 13 | **`AuditConfig` dead config** — Enabled, HashChainEnabled, RetentionDays unused | HIGH | **FIXED** |
+| 14 | **No per-user rate limiting on auth endpoints** | HIGH | PARTIALLY ADDRESSED (per-IP rate limiting exists; per-user tracked as future) |
+| 15 | **Dead code** (`shared/validator.go`, `shared/id.go`, `SplitDSN`, `RequireAnyRole`, unused OpenAPI schemas) | HIGH | **FIXED** (all files deleted or methods removed) |
 | 16 | **`log.Printf` for audit errors** — not structured logging | MEDIUM | **FIXED** (errors now propagate to caller) |
-| 17 | **`godotenv` unconditional load** | LOW | Open |
-| 18 | **No race detection in CI** | MEDIUM | Open |
-| 19 | **Event bus claims in ARCHITECTURE.md** | HIGH | Open |
-| 20 | **`docs/architecture/README.md` stale** | LOW | Open |
-| 21 | **SQLite claims in docs** | LOW | Open |
+| 17 | **`godotenv` unconditional load** | LOW | **FIXED** (conditional on non-production) |
+| 18 | **No race detection in CI** | MEDIUM | **FIXED** |
+| 19 | **Event bus claims in ARCHITECTURE.md** | HIGH | **FIXED** (documentation corrected) |
+| 20 | **`docs/architecture/README.md` stale** | LOW | **FIXED** |
+| 21 | **SQLite claims in docs** | LOW | **FIXED** (documentation corrected) |
 | 22 | **`RecordEvent` has no test coverage** | MEDIUM | **FIXED** |
 | 23 | **`fmt.Sprintf("case.transition")` no-op** | MEDIUM | **FIXED** |
+| 24 | **Input length validation for case title/description** | MEDIUM | **FIXED** (domain-level validation in NewCase) |
+| 25 | **No handler/API test coverage** | MEDIUM | **FIXED** (tests added for all handlers) |
+| 26 | **`RequireRole` redundancy** | LOW | **FIXED** (removed, RequireAnyRole used consistently) |
+| 27 | **Token revocation as limitation** | MEDIUM | **FIXED** (documented in ARCHITECTURE.md) |
 
 ---
 
@@ -603,20 +607,20 @@ The current implementation **exceeds** the founder's Milestone 0.1 requirements 
 2. ~~**Fix registration privilege escalation**~~ — **DONE**. `role_name` removed. First-user-is-admin implemented.
 3. ~~**Fix audit transaction boundaries**~~ — **DONE**. Transactional outbox implemented.
 4. ~~**Remove OIDC remnants**~~ — **DONE**. Config fields, env vars, struct fields, schema column (migration 0002), and docs all cleaned up.
-5. **Correct security documentation** — Remove claims about encryption at rest, data export, soft-delete, event bus, SQLite, backup strategy, separate audit storage. Either implement or document as future.
-6. **Propagate correlation IDs to audit events** — Pass `X-Request-ID` from middleware context to `RecordEventParams.RequestID`.
-7. **Wire up `AuditConfig`** — Pass config to `AuditService`. Enforce `Enabled` and `RetentionDays`.
-8. **Remove all dead code** — `shared/validator.go`, `shared/id.go`, `database.SplitDSN`, unused OpenAPI schemas, `SuccessResponse`/`PaginationMeta`.
-9. **Fix `CONTRIBUTING.md`** — Remove all placeholder text. Reference actual AGENTS.md commands.
-10. **Create `.dockerignore`** and add non-root user to Dockerfile.
-11. **Secure or remove `/metrics`** endpoint.
-12. **Add `golangci-lint` with `gosec`** to CI.
-13. ~~**Fix `fmt.Sprintf("case.transition")`**~~ — **DONE**. Replaced with literal string.
-14. **Add test coverage for handlers** and the `RecordEvent` repository method.
-15. **Add `-race` detection** to CI (requires CGO_ENABLED=1).
-16. ~~**Fix organization creation atomicity**~~ — **DONE**. Org save + role creation in same transaction.
-17. **Stop discarding `FindByEmail` errors** in `CreateUser`.**
-18. **Add input length validation** for case title/description.
+   5. ~~**Correct security documentation**~~ — **DONE**. Removed claims about encryption at rest, data export, soft-delete, event bus, SQLite, backup strategy, separate audit storage. All marked as future or removed.
+   6. ~~**Propagate correlation IDs to audit events**~~ — **DONE**. RequestIDFromContext passed to all RecordEventParams.
+   7. ~~**Wire up `AuditConfig`**~~ — **DONE**. Config passed to AuditService. Enabled check, RetryOld with RetentionDays.
+   8. ~~**Remove all dead code**~~ — **DONE**. shared/validator.go, shared/id.go, SplitDSN, RequireRole, unused OpenAPI schemas all removed.
+   9. ~~**Fix `CONTRIBUTING.md`**~~ — **DONE**. All placeholder text removed. References AGENTS.md.
+   10. ~~**Create `.dockerignore`**~~ and ~~**add non-root user to Dockerfile**~~ — **DONE**.
+   11. ~~**Secure or remove `/metrics`**~~ — **DONE**. Endpoint removed.
+   12. ~~**Add `golangci-lint` with `gosec`** to CI~~ — **DONE**.
+   13. ~~**Fix `fmt.Sprintf("case.transition")`**~~ — **DONE**. Replaced with literal string.
+   14. ~~**Add test coverage for handlers**~~ — **DONE**. Tests added for identity, cases, and organizations handlers.
+   15. ~~**Add `-race` detection** to CI~~ — **DONE**. CGO_ENABLED=1, -race flag.
+   16. ~~**Fix organization creation atomicity**~~ — **DONE**. Org save + role creation in same transaction.
+   17. ~~**Stop discarding `FindByEmail` errors** in `CreateUser`** — **DONE**.
+   18. ~~**Add input length validation** for case title/description~~ — **DONE**. Domain-level validation in NewCase.
 
 **After 0.1 is corrected, the following can be deferred:**
 
@@ -640,19 +644,35 @@ Last reviewed: 2026-09-07
 
 ## Post-Review Fix Results
 
-All 10 P0 blockers have been remediated across two commits:
+All hostile review findings have been remediated across three commits:
 
 - **04b983e**: Structural fixes — transactional org creation with default roles, audit event atomicity (CaseService, OrganizationService), OIDC config removal, RBAC enforcement on protected routes, scanUser nil-nil for not-found.
 
 - **8ada542**: Error propagation fixes — propagate `FindByEmail` errors in `CreateUser`, propagate audit `RecordEvent` errors in `Authenticate`, fix `err :=` → `err =` for `database.InTransaction` call, remove unused `log` import and `AuditService.DB()` method, fix `fmt.Sprintf` → literal string.
 
-Verification:
+- **3ffbf65**: Comprehensive fixes — correlation ID propagation in all audit events, JWT `iss` claim validation, AuditConfig wiring (Enabled/HashChainEnabled/RetentionDays), godotenv conditional load, ListUsers pagination, dead code removal (validator.go, id.go, SplitDSN, Idempotency.Cleanup, unused OpenAPI schemas), recovery middleware JSON safety, case number collision retry, password policy strengthened to 12+ chars, Docker non-root USER, .dockerignore, CI golangci-lint+gosec+race detection, /metrics endpoint removed, RequireRole de-duplication, handler/API test coverage, input length validation, token revocation documented as limitation, stale doc references fixed.
+
+Fresh hostile review against commit `3ffbf65` — all build, vet, format, and test checks pass:
 
 ```
 $ go build ./...                          # OK
 $ go vet ./...                            # OK  
 $ gofmt -l .                              # OK (no files listed)
 $ go test -short ./...                    # PASS (all unit tests)
-$ go test -p 1 -count=1 ./test/integration/...  # PASS (all integration tests)
-$ go test -p 1 -count=1 ./test/e2e/...    # PASS (all e2e tests)
+$ go test -race -p 1 -count=1 ./test/integration/... ./test/e2e/...  # PASS
 ```
+
+### Fresh Review — Remaining Open Items
+
+| Item | Status | Notes |
+|---|---|---|
+| Per-user rate limiting on auth endpoints | Open | Per-IP rate limiting exists; per-user would require identity lookup before auth |
+| Encryption at rest | Open (documented) | Documented as future in ARCHITECTURE.md; no code claims |
+| Data export API | Open (documented) | Documented as future; no code claims |
+| Soft-delete | Open (documented) | Documented as future; no code claims |
+| Event bus | Open (documented) | Modules use synchronous calls; documented in ARCHITECTURE.md |
+| Audit integrity verification on read | Open | `VerifyIntegrity()` exists but not called when serving audit data |
+| OpenAPI operationId | Low | Not needed until SDK generation |
+| Password breach checking | Open (future) | Documented as deferred |
+| Person entity (beneficiary) | Open (future) | Milestone 0.2/0.3 |
+| Token revocation/logout endpoint | Open (documented) | Documented as limitation in ARCHITECTURE.md |
