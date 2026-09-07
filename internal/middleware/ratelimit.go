@@ -18,14 +18,38 @@ type RateLimiter struct {
 	limit    int
 	burst    int
 	ttl      time.Duration
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 func NewRateLimiter(requestsPerSecond, burst int) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		visitors: make(map[string]*visitor),
 		limit:    requestsPerSecond,
 		burst:    burst,
 		ttl:      5 * time.Minute,
+		stopCh:   make(chan struct{}),
+	}
+	go rl.runCleanup()
+	return rl
+}
+
+func (rl *RateLimiter) Stop() {
+	rl.stopOnce.Do(func() {
+		close(rl.stopCh)
+	})
+}
+
+func (rl *RateLimiter) runCleanup() {
+	ticker := time.NewTicker(rl.ttl)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-rl.stopCh:
+			return
+		case <-ticker.C:
+			rl.cleanup()
+		}
 	}
 }
 
@@ -53,14 +77,6 @@ func (rl *RateLimiter) cleanup() {
 }
 
 func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
-	go func() {
-		ticker := time.NewTicker(rl.ttl)
-		defer ticker.Stop()
-		for range ticker.C {
-			rl.cleanup()
-		}
-	}()
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := realIP(r)
@@ -103,6 +119,8 @@ type UserRateLimiter struct {
 	maxFailures     int
 	lockoutDuration time.Duration
 	failureWindow   time.Duration
+	stopCh          chan struct{}
+	stopOnce        sync.Once
 }
 
 func NewUserRateLimiter(maxFailures int, lockoutDuration, failureWindow time.Duration) *UserRateLimiter {
@@ -111,17 +129,29 @@ func NewUserRateLimiter(maxFailures int, lockoutDuration, failureWindow time.Dur
 		maxFailures:     maxFailures,
 		lockoutDuration: lockoutDuration,
 		failureWindow:   failureWindow,
+		stopCh:          make(chan struct{}),
 	}
 
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			rl.cleanup()
+		for {
+			select {
+			case <-rl.stopCh:
+				return
+			case <-ticker.C:
+				rl.cleanup()
+			}
 		}
 	}()
 
 	return rl
+}
+
+func (rl *UserRateLimiter) Stop() {
+	rl.stopOnce.Do(func() {
+		close(rl.stopCh)
+	})
 }
 
 func (rl *UserRateLimiter) getAttempt(email string) *authAttempt {

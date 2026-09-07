@@ -91,4 +91,5 @@ func main() {
 	if err := srv.Start(ctx); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
+	userRateLimiter.Stop()
 }

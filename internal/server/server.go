@@ -14,11 +14,12 @@ import (
 )
 
 type Server struct {
-	router     *chi.Mux
-	cfg        *config.Config
-	httpServer *http.Server
-	db         *sql.DB
-	idemStore  *middleware.IdempotencyStore
+	router      *chi.Mux
+	cfg         *config.Config
+	httpServer  *http.Server
+	db          *sql.DB
+	rateLimiter *middleware.RateLimiter
+	idemStore   *middleware.IdempotencyStore
 }
 
 func New(cfg *config.Config, db *sql.DB) *Server {
@@ -40,10 +41,11 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	r.Get("/ready", readinessHandler(db))
 
 	return &Server{
-		router:    r,
-		cfg:       cfg,
-		db:        db,
-		idemStore: idemStore,
+		router:      r,
+		cfg:         cfg,
+		db:          db,
+		rateLimiter: rl,
+		idemStore:   idemStore,
 		httpServer: &http.Server{
 			Addr:              fmt.Sprintf(":%s", cfg.Server.Port),
 			Handler:           r,
@@ -65,6 +67,7 @@ func (s *Server) Start(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		s.idemStore.Stop()
+		s.rateLimiter.Stop()
 		s.httpServer.Shutdown(shutdownCtx)
 	}()
 

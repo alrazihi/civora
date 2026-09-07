@@ -98,3 +98,25 @@ func TestUserRateLimiter_RetryAfterDuration(t *testing.T) {
 	_, _, retryAfter := rl.CheckRateLimit(email)
 	assert.GreaterOrEqual(t, retryAfter, 4*time.Minute, "retry-after should be near lockout duration")
 }
+
+func TestRateLimiter_StopIsIdempotent(t *testing.T) {
+	rl := NewRateLimiter(100, 20)
+
+	assert.NotPanics(t, func() {
+		rl.Stop()
+	})
+	assert.NotPanics(t, func() {
+		rl.Stop()
+	})
+}
+
+func TestUserRateLimiter_StopIsIdempotent(t *testing.T) {
+	rl := NewUserRateLimiter(3, 15*time.Minute, 15*time.Minute)
+
+	assert.NotPanics(t, func() {
+		rl.Stop()
+	})
+	assert.NotPanics(t, func() {
+		rl.Stop()
+	})
+}
