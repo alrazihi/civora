@@ -159,8 +159,9 @@ If and when scale or organizational needs change:
 1. Individual modules can be extracted into separate services by
    replacing internal API calls with HTTP/gRPC calls.
 2. The repository pattern allows swapping the database per module.
-3. The event-based communication layer allows modules to be moved
-   to separate processes with minimal code changes.
+3. Module extraction requires adapting the service interface layer;
+   no event bus exists currently, but an event bus could be introduced
+   later if asynchronous communication becomes necessary.
 4. The OpenAPI API layer already decouples external clients from the
    internal structure.
 

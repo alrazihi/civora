@@ -92,14 +92,16 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 		var roleID *uuid.UUID
 		if count == 0 {
 			role, err := s.roleRepo.FindByName(ctx, params.OrganizationID, domain.RoleAdmin)
-			if err == nil {
-				roleID = &role.ID
+			if err != nil {
+				return fmt.Errorf("failed to find admin role: %w", err)
 			}
+			roleID = &role.ID
 		} else {
 			role, err := s.roleRepo.FindByName(ctx, params.OrganizationID, domain.RoleStaff)
-			if err == nil {
-				roleID = &role.ID
+			if err != nil {
+				return fmt.Errorf("failed to find staff role: %w", err)
 			}
+			roleID = &role.ID
 		}
 
 		user = domain.NewUser(params.OrganizationID, params.Email, params.Name, roleID)

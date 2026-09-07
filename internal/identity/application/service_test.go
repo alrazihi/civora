@@ -69,7 +69,8 @@ func TestValidatePassword(t *testing.T) {
 }
 
 type mockRoleRepo struct {
-	roles []*domain.Role
+	roles        []*domain.Role
+	findByNameFn func(ctx context.Context, orgID uuid.UUID, name string) (*domain.Role, error)
 }
 
 func (m *mockRoleRepo) DB() *sql.DB {
@@ -91,6 +92,9 @@ func (m *mockRoleRepo) FindByID(ctx context.Context, orgID, roleID uuid.UUID) (*
 }
 
 func (m *mockRoleRepo) FindByName(ctx context.Context, orgID uuid.UUID, name string) (*domain.Role, error) {
+	if m.findByNameFn != nil {
+		return m.findByNameFn(ctx, orgID, name)
+	}
 	for _, r := range m.roles {
 		if r.Name == name {
 			return r, nil
@@ -265,4 +269,100 @@ func TestPasswordPolicy_Enforces12CharMinimum(t *testing.T) {
 		err := validatePassword("twelvechars")
 		assert.ErrorIs(t, err, ErrWeakPassword)
 	})
+}
+
+func TestCreateUser_RoleLookupErrorIsPropagated(t *testing.T) {
+	orgID := uuid.New()
+	adminRoleID := uuid.New()
+
+	roleRepo := &mockRoleRepo{}
+	roleRepo.roles = append(roleRepo.roles,
+		domain.NewRole(adminRoleID, "admin", "Admin role", []string{"*"}),
+	)
+
+	fr := &failingRoleRepo{mockRoleRepo: roleRepo}
+
+	svc := &IdentityService{
+		userRepo: &mockUserRepo{users: []*domain.User{
+			{ID: uuid.New(), OrganizationID: orgID, Email: "existing@example.com"},
+		}},
+		roleRepo: &roleRepoWithError{
+			base:        fr,
+			returnError: true,
+			errorOnName: "staff",
+		},
+		hasher: &mockHasher{},
+	}
+
+	_, err := svc.CreateUser(context.Background(), CreateUserParams{
+		OrganizationID: orgID,
+		Email:          "new@example.com",
+		Name:           "New User",
+		Password:       "password1234",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to find staff role")
+}
+
+func TestCreateUser_AdminRoleLookupErrorIsPropagated(t *testing.T) {
+	orgID := uuid.New()
+
+	roleRepo := &mockRoleRepo{}
+
+	svc := &IdentityService{
+		userRepo: &mockUserRepo{},
+		roleRepo: &roleRepoWithError{
+			base:        &failingRoleRepo{mockRoleRepo: roleRepo},
+			returnError: true,
+		},
+		hasher: &mockHasher{},
+	}
+
+	_, err := svc.CreateUser(context.Background(), CreateUserParams{
+		OrganizationID: orgID,
+		Email:          "first@example.com",
+		Name:           "First User",
+		Password:       "password1234",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to find admin role")
+}
+
+type failingRoleRepo struct {
+	*mockRoleRepo
+}
+
+type roleRepoWithError struct {
+	base        *failingRoleRepo
+	returnError bool
+	errorOnName string
+}
+
+func (r *roleRepoWithError) DB() *sql.DB {
+	return nil
+}
+
+func (r *roleRepoWithError) Save(ctx context.Context, role *domain.Role) error {
+	return r.base.Save(ctx, role)
+}
+
+func (r *roleRepoWithError) SaveTx(ctx context.Context, tx *sql.Tx, role *domain.Role) error {
+	return r.base.SaveTx(ctx, tx, role)
+}
+
+func (r *roleRepoWithError) FindByID(ctx context.Context, orgID, roleID uuid.UUID) (*domain.Role, error) {
+	return r.base.FindByID(ctx, orgID, roleID)
+}
+
+func (r *roleRepoWithError) FindByName(ctx context.Context, orgID uuid.UUID, name string) (*domain.Role, error) {
+	if r.returnError && (r.errorOnName == "" || r.errorOnName == name) {
+		return nil, assert.AnError
+	}
+	return r.base.FindByName(ctx, orgID, name)
+}
+
+func (r *roleRepoWithError) FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*domain.Role, error) {
+	return r.base.FindByOrganization(ctx, orgID)
 }

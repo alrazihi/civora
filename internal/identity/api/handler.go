@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -15,11 +16,8 @@ import (
 )
 
 type Handler struct {
-	svc IdentityService
-}
-
-func NewHandler(svc IdentityService) *Handler {
-	return &Handler{svc: svc}
+	svc             IdentityService
+	userRateLimiter *middleware.UserRateLimiter
 }
 
 type IdentityService interface {
@@ -27,6 +25,14 @@ type IdentityService interface {
 	ListUsers(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
 	Authenticate(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
 	GetUser(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error)
+}
+
+func NewHandler(svc IdentityService) *Handler {
+	return &Handler{svc: svc}
+}
+
+func NewHandlerWithRateLimiter(svc IdentityService, userRateLimiter *middleware.UserRateLimiter) *Handler {
+	return &Handler{svc: svc, userRateLimiter: userRateLimiter}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
@@ -81,6 +87,28 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	if h.userRateLimiter != nil {
+		var req struct {
+			Email string `json:"email"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Email != "" {
+			if locked, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); locked {
+				retrySeconds := int(retryAfter.Seconds()) + 1
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+				w.WriteHeader(http.StatusTooManyRequests)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"error": map[string]string{
+						"code":    "ACCOUNT_LOCKED",
+						"message": fmt.Sprintf("Account temporarily locked due to too many failed login attempts. Try again in %d seconds.", retrySeconds),
+					},
+				})
+				return
+			}
+		}
+	}
+
 	orgID, ok := parseOrgID(r)
 	if !ok {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
@@ -102,8 +130,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Password:       req.Password,
 	})
 	if err != nil {
+		if h.userRateLimiter != nil && req.Email != "" {
+			h.userRateLimiter.RecordFailedAttempt(req.Email)
+		}
 		writeDomainError(w, err)
 		return
+	}
+
+	if h.userRateLimiter != nil && req.Email != "" {
+		h.userRateLimiter.RecordSuccessfulAttempt(req.Email)
 	}
 
 	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{

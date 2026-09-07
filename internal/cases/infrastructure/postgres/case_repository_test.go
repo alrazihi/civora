@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/test/helpers"
@@ -156,4 +157,35 @@ func TestCaseRepository_ForeignKeyConstraint(t *testing.T) {
 	require.NoError(t, err)
 	err = repo.Save(context.Background(), c)
 	require.Error(t, err, "should fail due to foreign key constraint")
+}
+
+func TestCaseRepository_CaseNumberCollisionRetries(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	repo := NewPostgresCaseRepository(db)
+
+	orgID := helpers.SeedOrg(db)
+	userID := helpers.SeedUser(db, orgID)
+
+	existing := domain.GenerateCaseNumber(time.Now().UTC())
+
+	directQuery := `INSERT INTO cases (id, organization_id, case_number, title, description, status, created_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	_, err := db.ExecContext(context.Background(), directQuery,
+		uuid.New(), orgID, existing, "Existing Case", "Desc",
+		domain.CaseStatusCreated, userID, time.Now().UTC(), time.Now().UTC())
+	require.NoError(t, err)
+
+	c, err := domain.NewCase(orgID, userID, "Collision Case", "Description")
+	require.NoError(t, err)
+	c.CaseNumber = existing
+
+	err = repo.Save(context.Background(), c)
+	require.NoError(t, err, "Save should retry with a new case number on collision")
+
+	assert.NotEqual(t, existing, c.CaseNumber, "case number should have been regenerated after collision")
 }

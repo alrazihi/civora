@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	auditapi "github.com/alrazihi/civora/internal/audit/api"
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
@@ -64,7 +65,9 @@ func main() {
 	authMiddleware := intmid.AuthRequired(jwtSvc)
 
 	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
-	identityHandler := identityapi.NewHandler(identityService)
+
+	userRateLimiter := intmid.NewUserRateLimiter(5, 15*time.Minute, 15*time.Minute)
+	identityHandler := identityapi.NewHandlerWithRateLimiter(identityService, userRateLimiter)
 
 	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)

@@ -10,9 +10,11 @@ import (
 )
 
 type IdempotencyStore struct {
-	mu   sync.RWMutex
-	data map[string]*IdempotencyRecord
-	ttl  time.Duration
+	mu       sync.RWMutex
+	data     map[string]*IdempotencyRecord
+	ttl      time.Duration
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 type IdempotencyRecord struct {
@@ -23,9 +25,46 @@ type IdempotencyRecord struct {
 }
 
 func NewIdempotencyStore(ttl time.Duration) *IdempotencyStore {
-	return &IdempotencyStore{
-		data: make(map[string]*IdempotencyRecord),
-		ttl:  ttl,
+	s := &IdempotencyStore{
+		data:   make(map[string]*IdempotencyRecord),
+		ttl:    ttl,
+		stopCh: make(chan struct{}),
+	}
+	go s.runCleanup()
+	return s
+}
+
+func (s *IdempotencyStore) Stop() {
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
+}
+
+func (s *IdempotencyStore) runCleanup() {
+	interval := s.ttl / 2
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.cleanup()
+		}
+	}
+}
+
+func (s *IdempotencyStore) cleanup() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for key, rec := range s.data {
+		if now.Sub(rec.CreatedAt) > s.ttl {
+			delete(s.data, key)
+		}
 	}
 }
 

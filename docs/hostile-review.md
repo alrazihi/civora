@@ -676,3 +676,52 @@ $ go test -race -p 1 -count=1 ./test/integration/... ./test/e2e/...  # PASS
 | Password breach checking | Open (future) | Documented as deferred |
 | Person entity (beneficiary) | Open (future) | Milestone 0.2/0.3 |
 | Token revocation/logout endpoint | Open (documented) | Documented as limitation in ARCHITECTURE.md |
+
+---
+
+## Post-v2 Fix Round (2026-09-07)
+
+Additional HIGH findings addressed in a follow-up fix round:
+
+### Fixes Applied
+
+| # | Finding | Status | Evidence |
+|---|---|---|---|
+| HIGH-1 | Event bus documentation | **FIXED** | ARCHITECTURE.md updated to clarify audit event types are recorded via synchronous calls, not an event bus. ADR-0001 updated to remove "event-based communication layer" claim. |
+| HIGH-3 | Role lookup errors silently ignored in CreateUser | **FIXED** | `internal/identity/application/service.go:92-103` now propagates role lookup errors: `if err != nil { return fmt.Errorf("failed to find admin role: %w", err) }` |
+| HIGH-10 | Per-user rate limiting on auth endpoints | **FIXED** | `internal/middleware/ratelimit.go` added `UserRateLimiter` with lockout after 5 failed attempts. `internal/identity/api/handler.go:89-156` checks rate limit before login processing. |
+
+### Regression Tests Added
+
+| Test | File | Coverage |
+|---|---|---|
+| `TestCreateUser_RoleLookupErrorIsPropagated` | `internal/identity/application/service_test.go` | Verifies staff role lookup failure returns error |
+| `TestCreateUser_AdminRoleLookupErrorIsPropagated` | `internal/identity/application/service_test.go` | Verifies admin role lookup failure returns error |
+| `TestUserRateLimiter_LocksAfterMaxFailures` | `internal/middleware/ratelimit_test.go` | Verifies account locked after 5 failed attempts |
+| `TestUserRateLimiter_ResetsOnSuccess` | `internal/middleware/ratelimit_test.go` | Verifies lockout cleared on successful auth |
+| `TestUserRateLimiter_TracksSeparateEmails` | `internal/middleware/ratelimit_test.go` | Verifies per-email tracking |
+| `TestUserRateLimiter_CaseInsensitive` | `internal/middleware/ratelimit_test.go` | Verifies email normalization |
+| `TestUserRateLimiter_RetryAfterDuration` | `internal/middleware/ratelimit_test.go` | Verifies retry-after header value |
+
+### Test Results
+
+```
+$ go build ./...                          # OK
+$ go vet ./...                            # OK
+$ gofmt -l .                              # OK (no files listed)
+$ go test -short ./...                    # PASS (all unit tests)
+$ go test -p 1 -count=1 ./test/e2e/... ./test/integration/...  # PASS
+```
+
+### Fresh Review — Current Open Items
+
+| Item | Status | Notes |
+|---|---|---|
+| Encryption at rest | Open (documented) | Documented as future in ARCHITECTURE.md; no code claims |
+| Data export API | Open (documented) | Documented as future; no code claims |
+| Soft-delete | Open (documented) | Documented as future; no code claims |
+| Audit integrity verification on read | Open | `VerifyIntegrity()` exists but not called when serving audit data |
+| OpenAPI operationId | Low | Not needed until SDK generation |
+| Password breach checking | Open (future) | Documented as deferred |
+| Person entity (beneficiary) | Open (future) | Milestone 0.2/0.3 |
+| Token revocation/logout endpoint | Open (documented) | Documented as limitation in ARCHITECTURE.md |

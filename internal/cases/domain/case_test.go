@@ -139,3 +139,14 @@ func TestNewCase_InputValidation(t *testing.T) {
 		assert.NotEmpty(t, c.CaseNumber)
 	})
 }
+
+func TestGenerateCaseNumber_Unique(t *testing.T) {
+	now := time.Now().UTC()
+	numbers := make(map[string]bool)
+	for i := 0; i < 1000; i++ {
+		n := GenerateCaseNumber(now.Add(time.Duration(i) * time.Microsecond))
+		assert.NotContains(t, numbers, n, "case number should be unique")
+		numbers[n] = true
+	}
+	assert.Len(t, numbers, 1000, "all 1000 generated case numbers should be unique")
+}

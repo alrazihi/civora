@@ -117,16 +117,20 @@ The conceptual domain model distinguishes between **entities**,
 - **Comment** — a time-stamped annotation on a Case, Task, or Document.
 - **Audit Event** — an immutable record of an action.
 
-### Events
+### Audit event types
 
-- `CaseCreated`, `CaseStatusChanged`, `CaseClosed`
-- `WorkflowStarted`, `WorkflowCompleted`, `WorkflowFailed`
-- `TaskAssigned`, `TaskCompleted`, `TaskEscalated`
-- `FormSubmitted`
-- `DocumentUploaded`, `DocumentDeleted`
-- `DecisionMade`
-- `PolicyEvaluated`
-- (Future) `AIRecommendationGenerated`, `AIRecommendationReviewed`
+CIVORA records audit events for important state changes. These are recorded
+in the audit log via synchronous calls from each module (no event bus).
+Audit event types include:
+
+- `case.created`, `case.status_changed`, `case.closed`, `case.assigned`
+- `user.created`, `auth.success`, `auth.failed`
+- `organization.created`
+- (Future) additional event types as features are implemented
+
+Note: An event bus is not currently implemented. Cross-module communication
+uses direct synchronous function calls. Future milestones may introduce
+an event bus if asynchronous patterns become necessary.
 
 ### Projections / read models
 

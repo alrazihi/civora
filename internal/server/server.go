@@ -18,12 +18,14 @@ type Server struct {
 	cfg        *config.Config
 	httpServer *http.Server
 	db         *sql.DB
+	idemStore  *middleware.IdempotencyStore
 }
 
 func New(cfg *config.Config, db *sql.DB) *Server {
 	r := chi.NewRouter()
 
 	rl := middleware.NewRateLimiter(100, 20)
+	idemStore := middleware.NewIdempotencyStore(24 * time.Hour)
 
 	r.Use(middleware.SecureHeaders)
 	r.Use(middleware.RequestID)
@@ -31,16 +33,17 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	r.Use(middleware.Recover)
 	r.Use(middleware.CORSHandler(cfg))
 	r.Use(middleware.RateLimit(rl))
-	r.Use(middleware.IdempotencyKey(middleware.NewIdempotencyStore(24 * time.Hour)))
+	r.Use(middleware.IdempotencyKey(idemStore))
 	r.Use(middleware.BodySizeLimit())
 
 	r.Get("/health", healthHandler)
 	r.Get("/ready", readinessHandler(db))
 
 	return &Server{
-		router: r,
-		cfg:    cfg,
-		db:     db,
+		router:    r,
+		cfg:       cfg,
+		db:        db,
+		idemStore: idemStore,
 		httpServer: &http.Server{
 			Addr:              fmt.Sprintf(":%s", cfg.Server.Port),
 			Handler:           r,
@@ -61,6 +64,7 @@ func (s *Server) Start(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		s.idemStore.Stop()
 		s.httpServer.Shutdown(shutdownCtx)
 	}()
 
