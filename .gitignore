@@ -1,0 +1,35 @@
+# CIVORA .gitignore
+
+# Binaries
+civora
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Testing
+*.test
+*.out
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CI/CD
+/.serverless/
+\endpoint-cloud/
+
+# Terraform
+.terraform/

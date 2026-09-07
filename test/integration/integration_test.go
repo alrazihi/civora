@@ -221,3 +221,52 @@ func TestCaseTenantIsolation(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, caseapp.ErrCaseNotFound)
 }
+
+func TestCaseGeneratesAuditEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	orgSvc, caseSvc, db := setupAppServices(t)
+	ctx := context.Background()
+
+	org, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
+		Name:        "Audit Org",
+		Description: "",
+		Slug:        "audit-org-" + uuid.NewString()[:8],
+	})
+	require.NoError(t, err)
+
+	actorID := helpers.SeedUser(db, org.ID)
+
+	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
+		OrganizationID: org.ID,
+		Title:          "Test Case for Audit",
+		Description:    "Description",
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	_, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
+		OrganizationID: org.ID,
+		CaseID:         c.ID,
+		Status:         caseDomain.CaseStatusOpen,
+		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	var count int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition')", org.ID).Scan(&count)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, count, 2, "should have at least 2 audit events")
+
+	var hash, prevHash *string
+	err = db.QueryRowContext(ctx, "SELECT hash, previous_hash FROM audit_events WHERE organization_id = $1 ORDER BY timestamp DESC, id DESC LIMIT 1", org.ID).Scan(&hash, &prevHash)
+	require.NoError(t, err)
+	require.NotNil(t, hash, "audit event should have a hash")
+
+	var firstHash *string
+	err = db.QueryRowContext(ctx, "SELECT hash FROM audit_events WHERE organization_id = $1 ORDER BY timestamp ASC, id ASC LIMIT 1", org.ID).Scan(&firstHash)
+	require.NoError(t, err)
+	require.NotNil(t, firstHash, "first audit event should have a hash")
+}
