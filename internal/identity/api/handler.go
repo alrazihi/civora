@@ -182,9 +182,11 @@ func writeDomainError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "email already exists")
 	case application.ErrInvalidEmail:
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid email format")
+	case application.ErrWeakPassword:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "password must be at least 8 characters and contain at least one letter and one number")
 	case application.ErrInvalidInput:
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
 	default:
-		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, err.Error())
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
 }

@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: civora
       POSTGRES_PASSWORD: civora
       POSTGRES_DB: civora
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     ports:
       - "5432:5432"
     healthcheck:
@@ -14,6 +15,7 @@ services:
       retries: 20
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
     restart: unless-stopped
     command: >
       postgres -c log_statement=mod

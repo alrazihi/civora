@@ -93,6 +93,6 @@ func writeOrgError(w http.ResponseWriter, err error) {
 	case application.ErrOrgSlugTaken:
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "organization slug already taken")
 	default:
-		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, err.Error())
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
 }

@@ -22,8 +22,7 @@ import (
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
-	"github.com/alrazihi/civora/internal/identity/infrastructure/auth"
-	"github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
+	identitypostgres "github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	orgapi "github.com/alrazihi/civora/internal/organizations/api"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
@@ -84,20 +83,20 @@ func SetupTestServer(t *testing.T) *TestServer {
 	require.NoError(t, err)
 
 	orgRepo := orgpostgres.NewPostgresOrganizationRepository(db.DB)
-	userRepo := postgres.NewPostgresUserRepository(db.DB)
-	roleRepo := postgres.NewPostgresRoleRepository(db.DB)
+	userRepo := identitypostgres.NewPostgresUserRepository(db.DB)
+	roleRepo := identitypostgres.NewPostgresRoleRepository(db.DB)
 	caseRepo := casepostgres.NewPostgresCaseRepository(db.DB)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db.DB)
 
 	auditService := auditapp.NewAuditService(auditRepo)
 
 	hasher := domain.NewBCryptHasher(cfg.Auth.BCryptCost)
-	tokenSvc := auth.NewJWTTokenService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
-	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, tokenSvc, auditService)
-	orgService := orgapp.NewOrganizationService(orgRepo, auditService)
-	caseService := caseapp.NewCaseService(caseRepo, auditService)
+	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
+	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
+	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
+	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
+	caseService := caseapp.NewCaseService(caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 
-	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret)
 	authMiddleware := intmid.AuthRequired(jwtSvc)
 
 	orgHandler := orgapi.NewHandler(orgService)
@@ -105,7 +104,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	caseHandler := caseapi.NewHandler(caseService)
 	auditHandler := auditapi.NewHandler(auditService)
 
-	srv := server.New(cfg)
+	srv := server.New(cfg, db.DB)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	identityHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	caseHandler.RegisterRoutes(srv.Router(), authMiddleware)

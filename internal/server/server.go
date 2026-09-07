@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
@@ -16,9 +17,10 @@ type Server struct {
 	router     *chi.Mux
 	cfg        *config.Config
 	httpServer *http.Server
+	db         *sql.DB
 }
 
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, db *sql.DB) *Server {
 	r := chi.NewRouter()
 
 	rl := middleware.NewRateLimiter(100, 20)
@@ -27,23 +29,26 @@ func New(cfg *config.Config) *Server {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logging)
 	r.Use(middleware.Recover)
-	r.Use(middleware.CORSHandler())
+	r.Use(middleware.CORSHandler(cfg))
 	r.Use(middleware.RateLimit(rl))
 	r.Use(middleware.IdempotencyKey(middleware.NewIdempotencyStore(24 * time.Hour)))
+	r.Use(middleware.BodySizeLimit())
 
 	r.Get("/health", healthHandler)
-	r.Get("/ready", readinessHandler)
+	r.Get("/ready", readinessHandler(db))
 	r.Get("/metrics", metricsHandler)
 
 	return &Server{
 		router: r,
 		cfg:    cfg,
+		db:     db,
 		httpServer: &http.Server{
-			Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
-			Handler:      r,
-			ReadTimeout:  cfg.Server.ReadTimeout,
-			WriteTimeout: cfg.Server.WriteTimeout,
-			IdleTimeout:  cfg.Server.IdleTimeout,
+			Addr:              fmt.Sprintf(":%s", cfg.Server.Port),
+			Handler:           r,
+			ReadTimeout:       cfg.Server.ReadTimeout,
+			WriteTimeout:      cfg.Server.WriteTimeout,
+			IdleTimeout:       cfg.Server.IdleTimeout,
+			ReadHeaderTimeout: 10 * time.Second,
 		},
 	}
 }
@@ -70,11 +75,23 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func readinessHandler(w http.ResponseWriter, r *http.Request) {
-	shared.WriteJSON(w, http.StatusOK, shared.APIResponse{
-		Success: true,
-		Data:    map[string]interface{}{"status": "ready"},
-	})
+func readinessHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := db.Ping(); err != nil {
+			shared.WriteJSON(w, http.StatusServiceUnavailable, shared.APIResponse{
+				Success: false,
+				Error: &shared.ErrorResponse{
+					Code:    "SERVICE_UNAVAILABLE",
+					Message: "database unavailable",
+				},
+			})
+			return
+		}
+		shared.WriteJSON(w, http.StatusOK, shared.APIResponse{
+			Success: true,
+			Data:    map[string]interface{}{"status": "ready"},
+		})
+	}
 }
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {

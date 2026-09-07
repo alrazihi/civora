@@ -23,19 +23,3 @@ type RoleRepository interface {
 type TokenService interface {
 	GenerateToken(userID, organizationID, role string) (string, error)
 }
-
-// OIDCProvider is an abstraction for external OpenID Connect / OAuth2
-// identity providers. When OIDCIssuer is configured, the IdentityService
-// delegates authentication to the provider and maps the external user to a
-// local User record on first login.
-//
-// This interface is defined but not yet implemented. A concrete provider
-// (e.g., for Keycloak, Auth0, or Google) will be added when OIDC
-// authentication becomes an operational requirement.
-type OIDCProvider interface {
-	// ExchangeCode exchanges an authorization code for tokens.
-	ExchangeCode(ctx context.Context, code string) (accessToken, idToken string, err error)
-
-	// VerifyToken verifies an ID token and returns the user info.
-	VerifyToken(ctx context.Context, idToken string) (externalID, email, name string, err error)
-}

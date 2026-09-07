@@ -13,20 +13,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestJWTService_VerifyToken(t *testing.T) {
-	svc := NewJWTService("test-secret-key-for-testing-1234567890")
+func TestJWTService_GenerateAndVerifyToken(t *testing.T) {
+	svc := NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
 
 	userID := uuid.New().String()
 	orgID := uuid.New().String()
 
-	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":             userID,
-		"organization_id": orgID,
-		"role":            "admin",
-		"exp":             time.Now().Add(time.Hour).Unix(),
-	})
-	token, err := h.SignedString([]byte("test-secret-key-for-testing-1234567890"))
+	token, err := svc.GenerateToken(userID, orgID, "admin")
 	require.NoError(t, err)
+	require.NotEmpty(t, token)
 
 	uid, oid, role, exp, err := svc.VerifyToken(token)
 	require.NoError(t, err)
@@ -36,8 +31,19 @@ func TestJWTService_VerifyToken(t *testing.T) {
 	assert.True(t, exp.After(time.Now()))
 }
 
+func TestJWTService_GenerateToken_InvalidSecret(t *testing.T) {
+	svc := NewJWTService("secret-a", time.Hour, "civora")
+	svc2 := NewJWTService("secret-b", time.Hour, "civora")
+
+	token, err := svc.GenerateToken(uuid.New().String(), uuid.New().String(), "admin")
+	require.NoError(t, err)
+
+	_, _, _, _, err = svc2.VerifyToken(token)
+	assert.Error(t, err, "token signed with different secret should fail verification")
+}
+
 func TestJWTService_VerifyToken_InvalidSignature(t *testing.T) {
-	svc := NewJWTService("secret-a")
+	svc := NewJWTService("secret-a", time.Hour, "civora")
 
 	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":             "user",
@@ -53,7 +59,7 @@ func TestJWTService_VerifyToken_InvalidSignature(t *testing.T) {
 }
 
 func TestJWTService_VerifyToken_Expired(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 
 	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":             "user",
@@ -69,7 +75,7 @@ func TestJWTService_VerifyToken_Expired(t *testing.T) {
 }
 
 func TestAuthRequired_MissingToken(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	mw := AuthRequired(svc)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +90,7 @@ func TestAuthRequired_MissingToken(t *testing.T) {
 }
 
 func TestAuthRequired_InvalidToken(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	mw := AuthRequired(svc)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +106,7 @@ func TestAuthRequired_InvalidToken(t *testing.T) {
 }
 
 func TestRequireSameTenant_AllowsMatchingOrg(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	orgID := uuid.New().String()
 
 	handler := AuthRequired(svc)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +126,7 @@ func TestRequireSameTenant_AllowsMatchingOrg(t *testing.T) {
 }
 
 func TestRequireSameTenant_BlocksMismatchedOrg(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	jwtOrgID := uuid.New().String()
 	pathOrgID := uuid.New().String()
 
@@ -140,8 +146,25 @@ func TestRequireSameTenant_BlocksMismatchedOrg(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
 
+func TestRequireSameTenant_BlocksWhenPathOrgIDEmpty(t *testing.T) {
+	svc := NewJWTService("secret", time.Hour, "civora")
+	orgID := uuid.New().String()
+
+	handler := AuthRequired(svc)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach handler")
+	})))
+
+	token := generateTestToken(t, "secret", "user-1", orgID, "admin")
+	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestRequireRole_AllowsAuthorized(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	orgID := uuid.New().String()
 
 	handler := AuthRequired(svc)(RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +184,7 @@ func TestRequireRole_AllowsAuthorized(t *testing.T) {
 }
 
 func TestRequireRole_BlocksUnauthorized(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	orgID := uuid.New().String()
 
 	handler := AuthRequired(svc)(RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +204,7 @@ func TestRequireRole_BlocksUnauthorized(t *testing.T) {
 }
 
 func TestRequireAnyRole_AllowsAnyListed(t *testing.T) {
-	svc := NewJWTService("secret")
+	svc := NewJWTService("secret", time.Hour, "civora")
 	orgID := uuid.New().String()
 
 	handler := AuthRequired(svc)(RequireAnyRole("admin", "staff")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -249,14 +272,8 @@ func TestGetUserRole_NotAuthenticated(t *testing.T) {
 
 func generateTestToken(t *testing.T, secret, userID, orgID, role string) string {
 	t.Helper()
-	claims := jwt.MapClaims{
-		"sub":             userID,
-		"organization_id": orgID,
-		"role":            role,
-		"exp":             time.Now().Add(time.Hour).Unix(),
-	}
-	h := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token, err := h.SignedString([]byte(secret))
+	svc := NewJWTService(secret, time.Hour, "civora")
+	token, err := svc.GenerateToken(userID, orgID, role)
 	require.NoError(t, err)
 	return token
 }

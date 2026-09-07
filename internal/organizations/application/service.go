@@ -18,15 +18,21 @@ var (
 	ErrOrgSlugTaken    = errors.New("organization slug already taken")
 )
 
-type OrganizationService struct {
-	repo    domain.OrganizationRepository
-	auditor auditdomain.EventRecorder
+type RoleCreator interface {
+	CreateDefaultRoles(ctx context.Context, orgID uuid.UUID) error
 }
 
-func NewOrganizationService(repo domain.OrganizationRepository, auditor auditdomain.EventRecorder) *OrganizationService {
+type OrganizationService struct {
+	repo        domain.OrganizationRepository
+	roleCreator RoleCreator
+	auditor     auditdomain.EventRecorder
+}
+
+func NewOrganizationService(repo domain.OrganizationRepository, roleCreator RoleCreator, auditor auditdomain.EventRecorder) *OrganizationService {
 	return &OrganizationService{
-		repo:    repo,
-		auditor: auditor,
+		repo:        repo,
+		roleCreator: roleCreator,
+		auditor:     auditor,
 	}
 }
 
@@ -56,6 +62,12 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 
 	if err := s.repo.Save(ctx, org); err != nil {
 		return nil, fmt.Errorf("failed to save organization: %w", err)
+	}
+
+	if s.roleCreator != nil {
+		if err := s.roleCreator.CreateDefaultRoles(ctx, org.ID); err != nil {
+			log.Printf("failed to create default roles: %v", err)
+		}
 	}
 
 	if s.auditor != nil {

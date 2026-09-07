@@ -65,5 +65,8 @@ CREATE TABLE audit_events (
 
 CREATE INDEX idx_audit_org_timestamp ON audit_events (organization_id, timestamp DESC);
 CREATE INDEX idx_audit_hash ON audit_events (hash);
+CREATE INDEX idx_audit_resource_id ON audit_events (resource_id);
 CREATE INDEX idx_cases_org_status ON cases (organization_id, status);
+CREATE INDEX idx_cases_assigned_to ON cases (organization_id, assigned_to);
 CREATE INDEX idx_users_org_email ON users (organization_id, email);
+CREATE INDEX idx_users_role_id ON users (role_id);

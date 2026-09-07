@@ -98,9 +98,31 @@ func (m *mockCaseRepository) Assign(ctx context.Context, orgID, id, userID uuid.
 	return nil
 }
 
+type mockUserChecker struct {
+	members map[uuid.UUID]map[uuid.UUID]bool
+}
+
+func newMockUserChecker() *mockUserChecker {
+	return &mockUserChecker{members: make(map[uuid.UUID]map[uuid.UUID]bool)}
+}
+
+func (m *mockUserChecker) BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error) {
+	if users, ok := m.members[orgID]; ok {
+		return users[userID], nil
+	}
+	return false, nil
+}
+
+func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
+	if m.members[orgID] == nil {
+		m.members[orgID] = make(map[uuid.UUID]bool)
+	}
+	m.members[orgID][userID] = true
+}
+
 func TestCreateCase(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -123,7 +145,7 @@ func TestCreateCase(t *testing.T) {
 
 func TestCaseLifecycle(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -163,7 +185,7 @@ func TestCaseLifecycle(t *testing.T) {
 
 func TestInvalidStateTransition(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -187,7 +209,7 @@ func TestInvalidStateTransition(t *testing.T) {
 
 func TestReopenFromReview(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -226,7 +248,7 @@ func TestReopenFromReview(t *testing.T) {
 
 func TestCaseTenantIsolation(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -246,11 +268,14 @@ func TestCaseTenantIsolation(t *testing.T) {
 
 func TestAssignCase(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	checker := newMockUserChecker()
+	svc := NewCaseService(repo, checker, nil)
 
 	orgID := uuid.New()
 	creator := uuid.New()
 	assignee := uuid.New()
+	checker.addMember(orgID, creator)
+	checker.addMember(orgID, assignee)
 
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
@@ -270,9 +295,38 @@ func TestAssignCase(t *testing.T) {
 	assert.Equal(t, assignee, *updated.AssignedToID)
 }
 
+func TestAssignCase_CrossTenantRejected(t *testing.T) {
+	repo := newMockCaseRepo()
+	checker := newMockUserChecker()
+	svc := NewCaseService(repo, checker, nil)
+
+	org1 := uuid.New()
+	org2 := uuid.New()
+	creator := uuid.New()
+	assignee := uuid.New()
+	checker.addMember(org1, creator)
+	checker.addMember(org2, assignee)
+
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: org1,
+		Title:          "Test Case",
+		CreatedByID:    creator,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.AssignCase(context.Background(), AssignCaseParams{
+		OrganizationID: org1,
+		CaseID:         c.ID,
+		UserID:         assignee,
+		ActorID:        creator,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrCaseTenantViolation)
+}
+
 func TestListCases(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, nil)
+	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()

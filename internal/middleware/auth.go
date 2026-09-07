@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/alrazihi/civora/internal/identity/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
@@ -21,10 +22,36 @@ const (
 
 type JWTService struct {
 	secret []byte
+	expiry time.Duration
+	issuer string
 }
 
-func NewJWTService(secret string) *JWTService {
-	return &JWTService{secret: []byte(secret)}
+func NewJWTService(secret string, expiry time.Duration, issuer string) *JWTService {
+	return &JWTService{
+		secret: []byte(secret),
+		expiry: expiry,
+		issuer: issuer,
+	}
+}
+
+var _ domain.TokenService = (*JWTService)(nil)
+
+func (s *JWTService) GenerateToken(userID, organizationID, role string) (string, error) {
+	now := time.Now()
+	expiresAt := now.Add(s.expiry)
+
+	claims := jwt.MapClaims{
+		"sub":             userID,
+		"organization_id": organizationID,
+		"role":            role,
+		"iss":             s.issuer,
+		"iat":             now.Unix(),
+		"exp":             expiresAt.Unix(),
+		"jti":             uuid.NewString(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(s.secret)
 }
 
 func (s *JWTService) VerifyToken(tokenString string) (userID, organizationID, role string, exp time.Time, err error) {
@@ -97,7 +124,7 @@ func RequireSameTenant(next http.Handler) http.Handler {
 
 		pathOrgID := chi.URLParam(r, "orgId")
 		if pathOrgID == "" {
-			next.ServeHTTP(w, r)
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "organization ID is required")
 			return
 		}
 

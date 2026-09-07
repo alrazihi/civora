@@ -11,6 +11,8 @@ import (
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
 	caseDomain "github.com/alrazihi/civora/internal/cases/domain"
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
+	identityDomain "github.com/alrazihi/civora/internal/identity/domain"
+	identitypostgres "github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
 	orgpostgres "github.com/alrazihi/civora/internal/organizations/infrastructure/postgres"
 	"github.com/alrazihi/civora/test/helpers"
@@ -29,13 +31,16 @@ func setupAppServices(t *testing.T) (
 	helpers.TruncateTables(t, db)
 
 	orgRepo := orgpostgres.NewPostgresOrganizationRepository(db)
+	userRepo := identitypostgres.NewPostgresUserRepository(db)
+	roleRepo := identitypostgres.NewPostgresRoleRepository(db)
 	caseRepo := casepostgres.NewPostgresCaseRepository(db)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db)
 
 	auditService := auditapp.NewAuditService(auditRepo)
 
-	return orgapp.NewOrganizationService(orgRepo, auditService),
-		caseapp.NewCaseService(caseRepo, auditService),
+	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
+	return orgapp.NewOrganizationService(orgRepo, roleCreator, auditService),
+		caseapp.NewCaseService(caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService),
 		db
 }
 

@@ -19,7 +19,6 @@ import (
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
-	identityauth "github.com/alrazihi/civora/internal/identity/infrastructure/auth"
 	identitypostgres "github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	orgapi "github.com/alrazihi/civora/internal/organizations/api"
@@ -53,7 +52,6 @@ func main() {
 
 	userRepo := identitypostgres.NewPostgresUserRepository(db.DB)
 	roleRepo := identitypostgres.NewPostgresRoleRepository(db.DB)
-	tokenSvc := identityauth.NewJWTTokenService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
 	hasher := domain.NewBCryptHasher(cfg.Auth.BCryptCost)
 
 	orgRepo := orgpostgres.NewPostgresOrganizationRepository(db.DB)
@@ -62,21 +60,22 @@ func main() {
 
 	auditService := auditapp.NewAuditService(auditRepo)
 
-	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret)
+	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
 	authMiddleware := intmid.AuthRequired(jwtSvc)
 
-	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, tokenSvc, auditService)
+	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
 	identityHandler := identityapi.NewHandler(identityService)
 
-	orgService := orgapp.NewOrganizationService(orgRepo, auditService)
+	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
+	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 	orgHandler := orgapi.NewHandler(orgService)
 
-	caseService := caseapp.NewCaseService(caseRepo, auditService)
+	caseService := caseapp.NewCaseService(caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	caseHandler := caseapi.NewHandler(caseService)
 
 	auditHandler := auditapi.NewHandler(auditService)
 
-	srv := server.New(cfg)
+	srv := server.New(cfg, db.DB)
 	identityHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	caseHandler.RegisterRoutes(srv.Router(), authMiddleware)

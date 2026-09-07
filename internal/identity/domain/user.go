@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,4 +71,47 @@ func (h *BCryptHasher) Verify(password, hash string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+type DefaultRoleCreator struct {
+	roleRepo RoleRepository
+}
+
+func NewDefaultRoleCreator(roleRepo RoleRepository) *DefaultRoleCreator {
+	return &DefaultRoleCreator{roleRepo: roleRepo}
+}
+
+func (c *DefaultRoleCreator) CreateDefaultRoles(ctx context.Context, orgID uuid.UUID) error {
+	defaultRoles := []struct {
+		name        string
+		description string
+		permissions []string
+	}{
+		{name: "admin", description: "Full access to all organization resources", permissions: []string{"*"}},
+		{name: "staff", description: "Standard user with case and customer access", permissions: []string{"cases:*"}},
+	}
+
+	for _, dr := range defaultRoles {
+		role := NewRole(orgID, dr.name, dr.description, dr.permissions)
+		if err := c.roleRepo.Save(ctx, role); err != nil {
+			return fmt.Errorf("failed to save default role %q: %w", dr.name, err)
+		}
+	}
+	return nil
+}
+
+type OrganizationUserChecker struct {
+	userRepo UserRepository
+}
+
+func NewOrganizationUserChecker(userRepo UserRepository) *OrganizationUserChecker {
+	return &OrganizationUserChecker{userRepo: userRepo}
+}
+
+func (c *OrganizationUserChecker) BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error) {
+	user, err := c.userRepo.FindByID(ctx, orgID, userID)
+	if err != nil {
+		return false, nil
+	}
+	return user.OrganizationID == orgID, nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -18,7 +19,12 @@ var (
 	ErrEmailAlreadyExists = errors.New("email already exists")
 	ErrInvalidEmail       = errors.New("invalid email format")
 	ErrInvalidInput       = errors.New("invalid input")
+	ErrWeakPassword       = errors.New("password must be at least 8 characters and contain at least one letter and one number")
 )
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+const minPasswordLength = 8
 
 type IdentityService struct {
 	userRepo domain.UserRepository
@@ -59,8 +65,8 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 	if strings.TrimSpace(params.Name) == "" {
 		return nil, ErrInvalidInput
 	}
-	if strings.TrimSpace(params.Password) == "" {
-		return nil, ErrInvalidInput
+	if err := validatePassword(params.Password); err != nil {
+		return nil, err
 	}
 
 	existing, _ := s.userRepo.FindByEmail(ctx, params.OrganizationID, params.Email)
@@ -96,7 +102,6 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 			Resource:       "user",
 			ResourceID:     strPtr(user.ID.String()),
 			Outcome:        "success",
-			Metadata:       map[string]interface{}{"email": user.Email},
 		}); err != nil {
 			log.Printf("audit event recording failed: %v", err)
 		}
@@ -179,9 +184,28 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 }
 
 func validateEmail(email string) error {
-	email = strings.TrimSpace(email)
-	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+	if !emailRegex.MatchString(email) {
 		return ErrInvalidEmail
+	}
+	return nil
+}
+
+func validatePassword(password string) error {
+	if len(password) < minPasswordLength {
+		return ErrWeakPassword
+	}
+	hasLetter := false
+	hasNumber := false
+	for _, c := range password {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			hasLetter = true
+		}
+		if c >= '0' && c <= '9' {
+			hasNumber = true
+		}
+	}
+	if !hasLetter || !hasNumber {
+		return ErrWeakPassword
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -21,6 +22,7 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+	CORSOrigins  []string
 }
 
 type DatabaseConfig struct {
@@ -57,6 +59,7 @@ func Load() (*Config, error) {
 			ReadTimeout:  getEnvDuration("CIVORA_SERVER_READ_TIMEOUT", 30*time.Second),
 			WriteTimeout: getEnvDuration("CIVORA_SERVER_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:  getEnvDuration("CIVORA_SERVER_IDLE_TIMEOUT", 120*time.Second),
+			CORSOrigins:  getEnvCSV("CIVORA_SERVER_CORS_ORIGINS", "http://localhost:3000"),
 		},
 		Database: DatabaseConfig{
 			Driver:   getEnv("CIVORA_DB_DRIVER", "pgx"),
@@ -124,4 +127,15 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+func getEnvCSV(key, fallback string) []string {
+	if v := os.Getenv(key); v != "" {
+		parts := strings.Split(v, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
+	}
+	return strings.Split(fallback, ",")
 }

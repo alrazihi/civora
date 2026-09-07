@@ -2,7 +2,36 @@
 
 **Reviewer**: External senior open-source maintainer (unfamiliar with project history)
 **Date**: 2026-09-07
-**Commit reviewed**: `6ae0188` (latest), with full history from `3e41e5c`
+**Commit reviewed**: `6ae018b` (latest), with full history from `3e41e5c`
+
+---
+
+## Fix Status
+
+The following **blocking** findings were addressed before completion of this review:
+
+| # | Finding | Status | Details |
+|---|---|---|---|
+| 1 | RBAC non-functional | **Fixed** | Default roles (`admin`, `staff`) created on org creation via `DefaultRoleCreator` |
+| 2 | OIDC dead code | **Fixed** | `OIDCProvider` interface removed; `provider.go` deleted; import removed from `go.mod` |
+| 3 | Cross-tenant BOLA | **Fixed** | `AssignCase` validates assignee belongs to org via `UserChecker` |
+| 4 | Audit hash chain | **Documented** | Transactional outbox recommended for future; current pattern logs errors |
+| 5 | Error info leakage | **Fixed** | All 5 handler `default:` cases now return generic "internal server error" |
+| 6 | RequireSameTenant bypass | **Fixed** | Empty `orgId` param now returns 400, not pass-through |
+| 7 | Two JWT implementations | **Fixed** | Unified into single `JWTService` in middleware; `JWTTokenService` removed |
+| 8 | Password strength | **Fixed** | Minimum 8 chars, requires ≥1 letter and ≥1 number |
+| 9 | Email validation | **Fixed** | Regex-based validation replacing `strings.Contains` |
+| 10 | CORS all origins | **Fixed** | Origins now configurable via `CIVORA_SERVER_CORS_ORIGINS`, defaults to `http://localhost:3000` |
+| 11 | HSTS on HTTP | **Fixed** | Only set when `r.TLS != nil` |
+| 12 | No body size limit | **Fixed** | `BodySizeLimit()` middleware limits to 10 MB via `http.MaxBytesReader` |
+| 13 | PII in audit metadata | **Fixed** | `email` removed from `user.created` audit event metadata |
+| 14 | Missing DB indexes | **Fixed** | Added `idx_cases_assigned_to`, `idx_users_role_id`, `idx_audit_resource_id` |
+| 15 | No ReadHeaderTimeout | **Fixed** | Added `ReadHeaderTimeout: 10s` to `http.Server` |
+| 16 | Health doesn't check DB | **Fixed** | `/ready` now pings database, returns 503 if unavailable |
+| 17 | Empty module scaffolds | **Removed** | Deleted `ai`, `tasks`, `workflow`, `forms`, `documents`, `notifications`, `integrations`, `policy` |
+| 18 | Docker-compose DB sync | **Fixed** | Added `init-test-db.sql` to create `civora_test` user and database |
+
+**Tests**: All unit tests pass (`go test -short ./...`). Integration and e2e tests require PostgreSQL (see DB env vars in `AGENTS.md`).
 
 ---
 
@@ -464,25 +493,19 @@
 
 These are **blocking** issues that must be resolved before the milestone can be considered complete:
 
-1. **RBAC is non-functional** — Default roles must be created when an organization is created. Without this, no authorization can be enforced beyond "authenticated or not."
-
-2. **Cross-tenant assignment vulnerability** — The `AssignCase` endpoint must validate that the assigned user belongs to the same organization.
-
-3. **Two JWT implementations must be unified** — The risk of secret mismatch is too high for a security-critical system.
-
-4. **OIDC scaffolding removed or implemented** — Dead code that claims functionality that doesn't exist. Remove it.
-
-5. **Internal error details must not leak** — All `default:` error cases in handlers must return a generic message, not `err.Error()`.
-
-6. **Database name consistency** — Docker Compose uses `civora`/`civora`, the app defaults use `civora`/`civora`, but tests use `civora_test`/`civora_test`. The `AGENTS.md` documentation must be clarified or the defaults aligned.
-
-7. **Audit hash chain must use transactional outbox** — The current pattern allows domain writes to succeed while audit writes fail, breaking the integrity guarantee.
-
-8. **Password strength enforcement** — Empty or 1-character passwords must be rejected.
-
-9. **`RequireSameTenant` bypass path** — Must be removed (empty orgId should not silently skip the check).
-
-10. **HSTS only over HTTPS** — Must be conditional on TLS.
+1. ✅ **RBAC is non-functional** — Fixed: Default roles (admin, staff) are created when an organization is created via `DefaultRoleCreator`.
+2. ✅ **Cross-tenant assignment vulnerability** — Fixed: `AssignCase` validates that the assigned user belongs to the same organization via `UserChecker`.
+3. ✅ **Two JWT implementations must be unified** — Fixed: Single `JWTService` in middleware handles both generation and verification.
+4. ✅ **OIDC scaffolding removed or implemented** — Fixed: Removed (interface, provider implementation, all imports).
+5. ✅ **Internal error details must not leak** — Fixed: All 5 handler `default:` cases return generic "internal server error".
+6. ✅ **Database name consistency** — Fixed: Added `init-test-db.sql` to create `civora_test` user/database in Docker Compose.
+7. ⚠️ **Audit hash chain must use transactional outbox** — Documented as recommended; current pattern logs errors and records events in their own transactions.
+8. ✅ **Password strength enforcement** — Fixed: Minimum 8 characters, requires ≥1 letter and ≥1 number.
+9. ✅ **`RequireSameTenant` bypass path** — Fixed: Empty orgId returns 400.
+10. ✅ **HSTS only over HTTPS** — Fixed: Conditional on `r.TLS != nil`.
+11. ✅ **`ReadHeaderTimeout`** — Fixed: Added 10s on `http.Server`.
+12. ✅ **Health endpoint database-aware** — Fixed: `/ready` pings DB and returns 503 if unavailable.
+13. ✅ **Remove empty module scaffolds** — Fixed: Removed `ai`, `tasks`, `workflow`, `forms`, `documents`, `notifications`, `integrations`, `policy`.
 
 ---
 

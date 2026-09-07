@@ -261,10 +261,10 @@ func writeCaseError(w http.ResponseWriter, err error) {
 	case errors.Is(err, application.ErrCaseNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "case not found")
 	case errors.Is(err, application.ErrCaseInvalidInput):
-		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
 	case errors.Is(err, application.ErrCaseTransition):
-		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, err.Error())
+		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "invalid state transition")
 	default:
-		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, err.Error())
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
 }

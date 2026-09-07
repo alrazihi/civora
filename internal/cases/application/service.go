@@ -13,20 +13,28 @@ import (
 )
 
 var (
-	ErrCaseNotFound     = errors.New("case not found")
-	ErrCaseInvalidInput = errors.New("invalid input")
-	ErrCaseTransition   = errors.New("invalid state transition")
+	ErrCaseNotFound        = errors.New("case not found")
+	ErrCaseInvalidInput    = errors.New("invalid input")
+	ErrCaseTransition      = errors.New("invalid state transition")
+	ErrCaseUserNotFound    = errors.New("assignee not found")
+	ErrCaseTenantViolation = errors.New("user does not belong to organization")
 )
 
-type CaseService struct {
-	repo    domain.CaseRepository
-	auditor auditdomain.EventRecorder
+type UserChecker interface {
+	BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error)
 }
 
-func NewCaseService(repo domain.CaseRepository, auditor auditdomain.EventRecorder) *CaseService {
+type CaseService struct {
+	repo        domain.CaseRepository
+	userChecker UserChecker
+	auditor     auditdomain.EventRecorder
+}
+
+func NewCaseService(repo domain.CaseRepository, userChecker UserChecker, auditor auditdomain.EventRecorder) *CaseService {
 	return &CaseService{
-		repo:    repo,
-		auditor: auditor,
+		repo:        repo,
+		userChecker: userChecker,
+		auditor:     auditor,
 	}
 }
 
@@ -119,6 +127,16 @@ func (s *CaseService) AssignCase(ctx context.Context, params AssignCaseParams) (
 	c, err := s.repo.FindByID(ctx, params.OrganizationID, params.CaseID)
 	if err != nil {
 		return nil, ErrCaseNotFound
+	}
+
+	if s.userChecker != nil {
+		valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate assignee: %w", err)
+		}
+		if !valid {
+			return nil, ErrCaseTenantViolation
+		}
 	}
 
 	c.AssignTo(params.UserID)

@@ -9,6 +9,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	RoleAdmin = "admin"
+	RoleStaff = "staff"
+)
+
 var (
 	ErrInvalidOrgName = errors.New("organization name is required")
 	ErrInvalidOrgSlug = errors.New("organization slug is required")
@@ -47,6 +52,6 @@ func (o *Organization) Validate() error {
 
 type OrganizationRepository interface {
 	Save(ctx context.Context, org *Organization) error
-	FindByID(ctx context.Context, id uuid.UUID) (*Organization, error)
 	FindBySlug(ctx context.Context, slug string) (*Organization, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*Organization, error)
 }
