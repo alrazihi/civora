@@ -116,7 +116,7 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: c.OrganizationID,
 				ActorID:        &params.ActorID,
-				Action:         fmt.Sprintf("case.transition"),
+				Action:         "case.transition",
 				Resource:       "case",
 				ResourceID:     strPtr(c.ID.String()),
 				Outcome:        "success",

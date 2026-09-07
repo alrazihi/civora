@@ -75,7 +75,3 @@ func (s *AuditService) FindByOrganization(ctx context.Context, orgID uuid.UUID, 
 func (s *AuditService) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
 	return s.repo.CountByOrganization(ctx, orgID)
 }
-
-func (s *AuditService) DB() *sql.DB {
-	return s.repo.DB()
-}

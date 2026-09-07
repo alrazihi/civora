@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
@@ -74,13 +73,16 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 		return nil, err
 	}
 
-	existing, _ := s.userRepo.FindByEmail(ctx, params.OrganizationID, params.Email)
+	existing, err := s.userRepo.FindByEmail(ctx, params.OrganizationID, params.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing user: %w", err)
+	}
 	if existing != nil {
 		return nil, ErrEmailAlreadyExists
 	}
 
 	var user *domain.User
-	err := database.InTransaction(ctx, s.userRepo.DB(), func(tx *sql.Tx) error {
+	err = database.InTransaction(ctx, s.userRepo.DB(), func(tx *sql.Tx) error {
 		count, err := s.userRepo.CountByOrganizationTx(ctx, tx, params.OrganizationID)
 		if err != nil {
 			return fmt.Errorf("failed to count users: %w", err)
@@ -173,16 +175,14 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 	valid, err := s.hasher.Verify(params.Password, *user.PasswordHash)
 	if err != nil || !valid {
 		if s.auditor != nil {
-			if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 				OrganizationID: params.OrganizationID,
 				Action:         "auth.failed",
 				Resource:       "user",
 				ResourceID:     strPtr(params.Email),
 				Outcome:        "failure",
 				Metadata:       map[string]interface{}{"reason": "invalid_credentials"},
-			}); err != nil {
-				log.Printf("audit event recording failed: %v", err)
-			}
+			})
 		}
 		return nil, ErrInvalidCredentials
 	}
@@ -209,7 +209,7 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 			ResourceID:     strPtr(user.ID.String()),
 			Outcome:        "success",
 		}); err != nil {
-			log.Printf("audit event recording failed: %v", err)
+			return nil, fmt.Errorf("failed to record audit event: %w", err)
 		}
 	}
 

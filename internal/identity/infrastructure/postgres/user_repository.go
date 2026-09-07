@@ -100,7 +100,7 @@ func (r *PostgresUserRepository) scanUser(row interface {
 		&u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("user not found")
+			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to scan user: %w", err)
 	}
