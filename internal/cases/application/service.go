@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
@@ -48,15 +47,18 @@ type CreateCaseParams struct {
 	OrganizationID uuid.UUID
 	Title          string
 	Description    string
+	ServiceType    domain.ServiceType
+	Priority       domain.Priority
+	PersonID       *uuid.UUID
 	CreatedByID    uuid.UUID
 }
 
 func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (*domain.Case, error) {
-	if strings.TrimSpace(params.Title) == "" {
+	if params.Title == "" {
 		return nil, fmt.Errorf("%w: title is required", ErrCaseInvalidInput)
 	}
 
-	c, err := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description)
+	c, err := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCaseInvalidInput, err)
 	}

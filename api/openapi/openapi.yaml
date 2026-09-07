@@ -5,18 +5,23 @@ info:
   description: |
     CIVORA API - open digital infrastructure for public-interest service delivery.
 
-    Version: 0.1.0-foundation
+    Version: 0.2.0-service-delivery
 
-    ## First Vertical Slice: Emergency Assistance Request
+    ## Public-Interest Service Delivery Lifecycle
 
-    This specification covers the minimum API surface for the first
-    end-to-end workflow: Emergency Assistance Request.
+    Full end-to-end workflow for public service delivery:
+    Request → Person registered → Case created (NEW) → OPEN →
+    Eligibility assessed → Evidence collected → IN_REVIEW →
+    Assessment completed → DECISION_PENDING → Decision made →
+    APPROVED/REJECTED → IN_PROGRESS → Assistance provided →
+    FOLLOW_UP → CLOSED
 
-    Flow: Request → Case created → OPEN → Information collected →
-    Evidence submitted → Verification → IN_REVIEW → Assessment →
-    Human review → RESOLVED → CLOSED
-
-  version: "0.1.0"
+    State machine:
+    NEW → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING →
+    APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
+    REJECTED → CLOSED
+    Any state → CLOSED
+  version: "0.2.0"
   contact:
     name: CIVORA
     url: https://github.com/alrazihi/civora
@@ -37,8 +42,22 @@ tags:
     description: User registration and authentication
   - name: Users
     description: User management within an organization
+  - name: People
+    description: Person (client/individual) records
   - name: Cases
     description: Case lifecycle management with state transitions
+  - name: Eligibilities
+    description: Eligibility assessment for service requests
+  - name: Evidence
+    description: Evidence items submitted for service requests
+  - name: Assessments
+    description: Needs assessment and recommendations
+  - name: Decisions
+    description: Human decisions on service requests
+  - name: Assistance
+    description: Assistance actions and services provided
+  - name: FollowUps
+    description: Follow-up scheduling and completion
   - name: Audit
     description: Immutable audit event log
   - name: System
@@ -189,7 +208,7 @@ components:
 
     Case:
       type: object
-      required: [id, organization_id, case_number, title, status, created_by, created_at, updated_at]
+      required: [id, organization_id, case_number, title, status, service_type, priority, created_by, created_at, updated_at]
       properties:
         id:
           type: string
@@ -200,6 +219,10 @@ components:
         case_number:
           type: string
           example: "CAS-20260906-00001234"
+        person_id:
+          type: string
+          format: uuid
+          nullable: true
         title:
           type: string
         description:
@@ -207,7 +230,13 @@ components:
           nullable: true
         status:
           type: string
-          enum: [CREATED, OPEN, IN_REVIEW, RESOLVED, CLOSED]
+          enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
+        service_type:
+          type: string
+          enum: [GENERAL, EMERGENCY, FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT]
+        priority:
+          type: string
+          enum: [LOW, NORMAL, HIGH, URGENT]
         created_by:
           type: string
           format: uuid
@@ -228,7 +257,7 @@ components:
 
     CreateCaseRequest:
       type: object
-      required: [title]
+      required: [title, service_type, priority]
       properties:
         title:
           type: string
@@ -236,6 +265,15 @@ components:
         description:
           type: string
           maxLength: 5000
+        service_type:
+          type: string
+          enum: [GENERAL, EMERGENCY, FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT]
+        priority:
+          type: string
+          enum: [LOW, NORMAL, HIGH, URGENT]
+        person_id:
+          type: string
+          format: uuid
 
     ChangeCaseStatusRequest:
       type: object
@@ -243,7 +281,7 @@ components:
       properties:
         status:
           type: string
-          enum: [CREATED, OPEN, IN_REVIEW, RESOLVED, CLOSED]
+          enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
 
     AssignCaseRequest:
       type: object
@@ -252,6 +290,400 @@ components:
         user_id:
           type: string
           format: uuid
+
+    Person:
+      type: object
+      required: [id, organization_id, first_name, last_name, preferred_language, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        external_reference:
+          type: string
+          nullable: true
+        first_name:
+          type: string
+        last_name:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        preferred_language:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatePersonRequest:
+      type: object
+      required: [first_name, last_name, preferred_language]
+      properties:
+        external_reference:
+          type: string
+          nullable: true
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        date_of_birth:
+          type: string
+          format: date
+          description: "ISO 8601 date (YYYY-MM-DD), nullable"
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          maxLength: 500
+          nullable: true
+        city:
+          type: string
+          maxLength: 100
+          nullable: true
+        preferred_language:
+          type: string
+          maxLength: 10
+
+    UpdatePersonStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    Eligibility:
+      type: object
+      required: [id, organization_id, service_request_id, criteria, result, explanation, assessed_by, assessed_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        criteria:
+          type: object
+          additionalProperties: true
+          description: JSONB object containing eligibility criteria
+        result:
+          type: string
+          enum: [ELIGIBLE, NOT_ELIGIBLE, REQUIRES_MORE_INFORMATION]
+        explanation:
+          type: string
+        assessed_by:
+          type: string
+          format: uuid
+        assessed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CreateEligibilityRequest:
+      type: object
+      required: [service_request_id, criteria, explanation]
+      properties:
+        service_request_id:
+          type: string
+          format: uuid
+        criteria:
+          type: object
+          additionalProperties: true
+        explanation:
+          type: string
+
+    UpdateEligibilityResultRequest:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          enum: [ELIGIBLE, NOT_ELIGIBLE, REQUIRES_MORE_INFORMATION]
+
+    Evidence:
+      type: object
+      required: [id, organization_id, service_request_id, type, description, storage_reference, uploaded_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
+        description:
+          type: string
+        storage_reference:
+          type: string
+        uploaded_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    CreateEvidenceRequest:
+      type: object
+      required: [service_request_id, type, description, storage_reference]
+      properties:
+        service_request_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
+        description:
+          type: string
+        storage_reference:
+          type: string
+
+    Assessment:
+      type: object
+      required: [id, organization_id, service_request_id, findings, recommendation, assessor, assessed_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        findings:
+          type: string
+        needs_identified:
+          type: string
+          nullable: true
+        recommendation:
+          type: string
+        assessor:
+          type: string
+          format: uuid
+        assessed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CreateAssessmentRequest:
+      type: object
+      required: [service_request_id, findings, recommendation]
+      properties:
+        service_request_id:
+          type: string
+          format: uuid
+        findings:
+          type: string
+        needs_identified:
+          type: string
+          nullable: true
+        recommendation:
+          type: string
+
+    Decision:
+      type: object
+      required: [id, organization_id, service_request_id, decision, reason, decision_maker, decided_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: [APPROVED, REJECTED, NEEDS_MORE_INFORMATION]
+        reason:
+          type: string
+        decision_maker:
+          type: string
+          format: uuid
+        decided_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CreateDecisionRequest:
+      type: object
+      required: [service_request_id, decision, reason]
+      properties:
+        service_request_id:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: [APPROVED, REJECTED, NEEDS_MORE_INFORMATION]
+        reason:
+          type: string
+
+    Assistance:
+      type: object
+      required: [id, organization_id, service_request_id, type, description, status, responsible_staff, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT, OTHER]
+        description:
+          type: string
+        status:
+          type: string
+          enum: [PLANNED, IN_PROGRESS, COMPLETED, CANCELLED]
+        responsible_staff:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAssistanceRequest:
+      type: object
+      required: [service_request_id, type, description, responsible_staff]
+      properties:
+        service_request_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT, OTHER]
+        description:
+          type: string
+        responsible_staff:
+          type: string
+          format: uuid
+
+    UpdateAssistanceStatusRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start, complete, cancel]
+
+    FollowUp:
+      type: object
+      required: [id, organization_id, service_request_id, scheduled_date, outcome, notes, performed_by, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        scheduled_date:
+          type: string
+          format: date
+        completed_date:
+          type: string
+          format: date
+          nullable: true
+        outcome:
+          type: string
+        notes:
+          type: string
+        performed_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateFollowUpRequest:
+      type: object
+      required: [service_request_id, scheduled_date, outcome, notes]
+      properties:
+        service_request_id:
+          type: string
+          format: uuid
+        scheduled_date:
+          type: string
+          format: date
+          description: "ISO 8601 date (YYYY-MM-DD)"
+        outcome:
+          type: string
+        notes:
+          type: string
+
+    CompleteFollowUpRequest:
+      type: object
+      required: [completed_date]
+      properties:
+        completed_date:
+          type: string
+          format: date
+          description: "ISO 8601 date (YYYY-MM-DD)"
 
     AuditEvent:
       type: object
@@ -791,3 +1223,943 @@ paths:
                   $ref: '#/components/schemas/AuditEvent'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/people:
+    post:
+      tags: [People]
+      summary: Create a person
+      description: Creates a new person record. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePersonRequest'
+      responses:
+        '201':
+          description: Person created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags: [People]
+      summary: List people
+      description: Lists person records in the organization. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of people with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Person'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/people/{personId}:
+    get:
+      tags: [People]
+      summary: Get a person
+      description: Retrieves a specific person record. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Person details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [People]
+      summary: Update person status
+      description: Updates a person's status. Requires admin or staff role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePersonStatusRequest'
+      responses:
+        '200':
+          description: Updated person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - admin or staff role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/eligibilities:
+    post:
+      tags: [Eligibilities]
+      summary: Create an eligibility assessment
+      description: Creates a new eligibility assessment for a service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEligibilityRequest'
+      responses:
+        '201':
+          description: Eligibility created (result defaults to REQUIRES_MORE_INFORMATION)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eligibility'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags: [Eligibilities]
+      summary: List eligibilities
+      description: Lists eligibility assessments in the organization. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of eligibilities with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Eligibility'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/eligibilities/{eligibilityId}:
+    get:
+      tags: [Eligibilities]
+      summary: Get an eligibility assessment
+      description: Retrieves a specific eligibility assessment. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eligibilityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Eligibility details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eligibility'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/eligibilities/service-request/{serviceRequestId}:
+    get:
+      tags: [Eligibilities]
+      summary: Get eligibility by service request
+      description: Retrieves the eligibility assessment for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Eligibility details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eligibility'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/eligibilities/{eligibilityId}/result:
+    patch:
+      tags: [Eligibilities]
+      summary: Update eligibility result
+      description: Updates the result of an eligibility assessment. Requires admin or staff role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eligibilityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEligibilityResultRequest'
+      responses:
+        '200':
+          description: Updated eligibility
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eligibility'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - admin or staff role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/evidence:
+    post:
+      tags: [Evidence]
+      summary: Add evidence
+      description: Adds an evidence item for a service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEvidenceRequest'
+      responses:
+        '201':
+          description: Evidence created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/evidence/service-request/{serviceRequestId}:
+    get:
+      tags: [Evidence]
+      summary: List evidence by service request
+      description: Lists evidence items for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of evidence items with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evidence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/evidence/{evidenceId}:
+    get:
+      tags: [Evidence]
+      summary: Get evidence
+      description: Retrieves a specific evidence item. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Evidence details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/assessments:
+    post:
+      tags: [Assessments]
+      summary: Create an assessment
+      description: Creates a needs assessment for a service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssessmentRequest'
+      responses:
+        '201':
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assessment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/assessments/service-request/{serviceRequestId}:
+    get:
+      tags: [Assessments]
+      summary: Get assessment by service request
+      description: Retrieves the assessment for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Assessment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assessment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/assessments/{assessmentId}:
+    get:
+      tags: [Assessments]
+      summary: Get an assessment
+      description: Retrieves a specific assessment. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: assessmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Assessment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assessment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+
+  /organizations/{orgId}/decisions:
+    post:
+      tags: [Decisions]
+      summary: Make a decision
+      description: Creates a human decision for a service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDecisionRequest'
+      responses:
+        '201':
+          description: Decision created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/decisions/service-request/{serviceRequestId}:
+    get:
+      tags: [Decisions]
+      summary: Get decision by service request
+      description: Retrieves the decision for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Decision details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/decisions/{decisionId}:
+    get:
+      tags: [Decisions]
+      summary: Get a decision
+      description: Retrieves a specific decision. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Decision details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+
+  /organizations/{orgId}/assistance:
+    post:
+      tags: [Assistance]
+      summary: Create an assistance action
+      description: Creates a new assistance action for a service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssistanceRequest'
+      responses:
+        '201':
+          description: Assistance created (status defaults to PLANNED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/assistance/service-request/{serviceRequestId}:
+    get:
+      tags: [Assistance]
+      summary: List assistance by service request
+      description: Lists assistance actions for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of assistance actions with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assistance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/assistance/{assistanceId}:
+    get:
+      tags: [Assistance]
+      summary: Get assistance
+      description: Retrieves a specific assistance action. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: assistanceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Assistance details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/assistance/{assistanceId}/status:
+    patch:
+      tags: [Assistance]
+      summary: Update assistance status
+      description: Updates the status of an assistance action (start, complete, cancel). Requires admin or staff role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: assistanceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAssistanceStatusRequest'
+      responses:
+        '200':
+          description: Updated assistance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - admin or staff role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/follow-ups:
+    post:
+      tags: [FollowUps]
+      summary: Create a follow-up
+      description: Creates a new follow-up item for a service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFollowUpRequest'
+      responses:
+        '201':
+          description: Follow-up created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUp'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/follow-ups/service-request/{serviceRequestId}:
+    get:
+      tags: [FollowUps]
+      summary: List follow-ups by service request
+      description: Lists follow-up items for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of follow-up items with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FollowUp'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/follow-ups/{followUpId}:
+    get:
+      tags: [FollowUps]
+      summary: Get a follow-up
+      description: Retrieves a specific follow-up item. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: followUpId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Follow-up details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUp'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/follow-ups/{followUpId}/complete:
+    patch:
+      tags: [FollowUps]
+      summary: Complete a follow-up
+      description: Marks a follow-up as completed. Requires admin or staff role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: followUpId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteFollowUpRequest'
+      responses:
+        '200':
+          description: Completed follow-up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowUp'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - admin or staff role required
+          content:
+            application/json:
+              schema:
+                 $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'

@@ -11,11 +11,38 @@ import (
 type CaseStatus string
 
 const (
-	CaseStatusCreated  CaseStatus = "CREATED"
-	CaseStatusOpen     CaseStatus = "OPEN"
-	CaseStatusInReview CaseStatus = "IN_REVIEW"
-	CaseStatusResolved CaseStatus = "RESOLVED"
-	CaseStatusClosed   CaseStatus = "CLOSED"
+	CaseStatusNew             CaseStatus = "NEW"
+	CaseStatusOpen            CaseStatus = "OPEN"
+	CaseStatusInReview        CaseStatus = "IN_REVIEW"
+	CaseStatusAssessment      CaseStatus = "ASSESSMENT"
+	CaseStatusDecisionPending CaseStatus = "DECISION_PENDING"
+	CaseStatusApproved        CaseStatus = "APPROVED"
+	CaseStatusRejected        CaseStatus = "REJECTED"
+	CaseStatusInProgress      CaseStatus = "IN_PROGRESS"
+	CaseStatusFollowUp        CaseStatus = "FOLLOW_UP"
+	CaseStatusClosed          CaseStatus = "CLOSED"
+)
+
+type ServiceType string
+
+const (
+	ServiceTypeGeneral   ServiceType = "GENERAL"
+	ServiceTypeEmergency ServiceType = "EMERGENCY"
+	ServiceTypeFinancial ServiceType = "FINANCIAL"
+	ServiceTypeFood      ServiceType = "FOOD"
+	ServiceTypeShelter   ServiceType = "SHELTER"
+	ServiceTypeMedical   ServiceType = "MEDICAL"
+	ServiceTypeEducation ServiceType = "EDUCATION"
+	ServiceTypeTransport ServiceType = "TRANSPORT"
+)
+
+type Priority string
+
+const (
+	PriorityLow    Priority = "LOW"
+	PriorityNormal Priority = "NORMAL"
+	PriorityHigh   Priority = "HIGH"
+	PriorityUrgent Priority = "URGENT"
 )
 
 var (
@@ -26,17 +53,20 @@ var (
 )
 
 type Case struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organization_id"`
-	CaseNumber     string     `json:"case_number"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	Status         CaseStatus `json:"status"`
-	CreatedByID    uuid.UUID  `json:"created_by"`
-	AssignedToID   *uuid.UUID `json:"assigned_to"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	ClosedAt       *time.Time `json:"closed_at"`
+	ID             uuid.UUID   `json:"id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	CaseNumber     string      `json:"case_number"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Status         CaseStatus  `json:"status"`
+	ServiceType    ServiceType `json:"service_type"`
+	Priority       Priority    `json:"priority"`
+	PersonID       *uuid.UUID  `json:"person_id"`
+	CreatedByID    uuid.UUID   `json:"created_by"`
+	AssignedToID   *uuid.UUID  `json:"assigned_to"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
+	ClosedAt       *time.Time  `json:"closed_at"`
 }
 
 const (
@@ -54,7 +84,7 @@ func validateCaseInput(title, description string) error {
 	return nil
 }
 
-func NewCase(orgID, createdByID uuid.UUID, title, description string) (*Case, error) {
+func NewCase(orgID, createdByID uuid.UUID, title, description string, serviceType ServiceType, priority Priority, personID *uuid.UUID) (*Case, error) {
 	if err := validateCaseInput(title, description); err != nil {
 		return nil, err
 	}
@@ -65,7 +95,10 @@ func NewCase(orgID, createdByID uuid.UUID, title, description string) (*Case, er
 		CaseNumber:     GenerateCaseNumber(now),
 		Title:          title,
 		Description:    description,
-		Status:         CaseStatusCreated,
+		Status:         CaseStatusNew,
+		ServiceType:    serviceType,
+		Priority:       priority,
+		PersonID:       personID,
 		CreatedByID:    createdByID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -98,20 +131,30 @@ func (c *Case) RegenerateCaseNumber() {
 }
 
 var transitionRules = map[CaseStatus][]CaseStatus{
-	CaseStatusCreated:  {CaseStatusOpen},
-	CaseStatusOpen:     {CaseStatusInReview},
-	CaseStatusInReview: {CaseStatusOpen, CaseStatusResolved},
-	CaseStatusResolved: {CaseStatusClosed, CaseStatusInReview},
-	CaseStatusClosed:   {},
+	CaseStatusNew:             {CaseStatusOpen, CaseStatusInReview},
+	CaseStatusOpen:            {CaseStatusInReview},
+	CaseStatusInReview:        {CaseStatusAssessment, CaseStatusOpen},
+	CaseStatusAssessment:      {CaseStatusDecisionPending},
+	CaseStatusDecisionPending: {CaseStatusApproved, CaseStatusRejected},
+	CaseStatusApproved:        {CaseStatusInProgress},
+	CaseStatusRejected:        {CaseStatusClosed},
+	CaseStatusInProgress:      {CaseStatusFollowUp},
+	CaseStatusFollowUp:        {CaseStatusClosed},
+	CaseStatusClosed:          {},
 }
 
 func IsValidTransition(from, to CaseStatus) bool {
 	validStatuses := map[CaseStatus]bool{
-		CaseStatusCreated:  true,
-		CaseStatusOpen:     true,
-		CaseStatusInReview: true,
-		CaseStatusResolved: true,
-		CaseStatusClosed:   true,
+		CaseStatusNew:             true,
+		CaseStatusOpen:            true,
+		CaseStatusInReview:        true,
+		CaseStatusAssessment:      true,
+		CaseStatusDecisionPending: true,
+		CaseStatusApproved:        true,
+		CaseStatusRejected:        true,
+		CaseStatusInProgress:      true,
+		CaseStatusFollowUp:        true,
+		CaseStatusClosed:          true,
 	}
 	if !validStatuses[from] || !validStatuses[to] {
 		return false

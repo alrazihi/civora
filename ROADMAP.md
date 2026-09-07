@@ -28,16 +28,26 @@ framework, initial API specification, and the first vertical slice
 **Out of scope**: AI, forms, documents, integrations, advanced workflow
 features.
 
-### 0.2 Workflow Core
+### 0.2 Service Delivery Lifecycle
 
-**Goal**: Implement the core workflow engine and workflow definition
-model.
+**Goal**: Implement the core public-interest service delivery lifecycle:
+eligibility assessment, assistance provisioning, and follow-up management.
 
-**Scope**:
-- Workflow Definition model (state machines, transitions).
-- Workflow Instance execution.
-- Basic rule evaluation.
-- Webhook/event notifications for workflow events.
+**Status**: In progress (partial implementation complete).
+
+**Implemented**:
+- Eligibility module: eligibility checks with JSONB criteria storage
+- Assistance module: assistance provisioning linked to cases
+- Follow-up module: follow-up scheduling and tracking
+- UPSERT repositories for all three modules
+- Extended OpenAPI specification with new schemas and endpoints
+- Configurable rate limiter for E2E test compatibility
+
+**Remaining**:
+- Workflow Definition model (state machines, transitions)
+- Workflow Instance execution
+- Basic rule evaluation
+- Webhook/event notifications for workflow events
 
 **Dependencies**: 0.1
 

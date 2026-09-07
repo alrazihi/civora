@@ -63,6 +63,9 @@ func (m *mockCaseRepository) FindByOrganizationWithFilter(ctx context.Context, o
 			if filter.Status != "" && c.Status != filter.Status {
 				continue
 			}
+			if filter.PersonID != nil && c.PersonID != filter.PersonID {
+				continue
+			}
 			result = append(result, c)
 		}
 	}
@@ -148,6 +151,8 @@ func TestCreateCase(t *testing.T) {
 		OrganizationID: orgID,
 		Title:          "Emergency Food Request",
 		Description:    "Family needs emergency food assistance",
+		ServiceType:    domain.ServiceTypeEmergency,
+		Priority:       domain.PriorityHigh,
 		CreatedByID:    userID,
 	})
 
@@ -155,9 +160,11 @@ func TestCreateCase(t *testing.T) {
 	require.NotNil(t, c)
 	assert.Equal(t, orgID, c.OrganizationID)
 	assert.Equal(t, "Emergency Food Request", c.Title)
-	assert.Equal(t, domain.CaseStatusCreated, c.Status)
+	assert.Equal(t, domain.CaseStatusNew, c.Status)
 	assert.NotEmpty(t, c.CaseNumber)
 	assert.Equal(t, userID, c.CreatedByID)
+	assert.Equal(t, domain.ServiceTypeEmergency, c.ServiceType)
+	assert.Equal(t, domain.PriorityHigh, c.Priority)
 }
 
 func TestCaseLifecycle(t *testing.T) {
@@ -171,6 +178,8 @@ func TestCaseLifecycle(t *testing.T) {
 		OrganizationID: orgID,
 		Title:          "Emergency Assistance",
 		Description:    "Need help",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityHigh,
 		CreatedByID:    userID,
 	})
 	require.NoError(t, err)
@@ -179,10 +188,14 @@ func TestCaseLifecycle(t *testing.T) {
 		from domain.CaseStatus
 		to   domain.CaseStatus
 	}{
-		{domain.CaseStatusCreated, domain.CaseStatusOpen},
+		{domain.CaseStatusNew, domain.CaseStatusOpen},
 		{domain.CaseStatusOpen, domain.CaseStatusInReview},
-		{domain.CaseStatusInReview, domain.CaseStatusResolved},
-		{domain.CaseStatusResolved, domain.CaseStatusClosed},
+		{domain.CaseStatusInReview, domain.CaseStatusAssessment},
+		{domain.CaseStatusAssessment, domain.CaseStatusDecisionPending},
+		{domain.CaseStatusDecisionPending, domain.CaseStatusApproved},
+		{domain.CaseStatusApproved, domain.CaseStatusInProgress},
+		{domain.CaseStatusInProgress, domain.CaseStatusFollowUp},
+		{domain.CaseStatusFollowUp, domain.CaseStatusClosed},
 	}
 
 	for _, tc := range transitions {
@@ -210,6 +223,8 @@ func TestInvalidStateTransition(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
 	})
 	require.NoError(t, err)
@@ -234,6 +249,8 @@ func TestReopenFromReview(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
 	})
 	require.NoError(t, err)
@@ -242,7 +259,6 @@ func TestReopenFromReview(t *testing.T) {
 		OrganizationID: orgID,
 		CaseID:         c.ID,
 		Status:         domain.CaseStatusOpen,
-		ActorID:        userID,
 	})
 	require.NoError(t, err)
 
@@ -250,7 +266,6 @@ func TestReopenFromReview(t *testing.T) {
 		OrganizationID: orgID,
 		CaseID:         c.ID,
 		Status:         domain.CaseStatusInReview,
-		ActorID:        userID,
 	})
 	require.NoError(t, err)
 
@@ -258,7 +273,6 @@ func TestReopenFromReview(t *testing.T) {
 		OrganizationID: orgID,
 		CaseID:         c.ID,
 		Status:         domain.CaseStatusOpen,
-		ActorID:        userID,
 	})
 	require.NoError(t, err, "reopening from IN_REVIEW to OPEN should be valid")
 }
@@ -274,6 +288,8 @@ func TestCaseTenantIsolation(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: org1,
 		Title:          "Case in Org 1",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    user,
 	})
 	require.NoError(t, err)
@@ -297,6 +313,8 @@ func TestAssignCase(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
 	})
 	require.NoError(t, err)
@@ -327,6 +345,8 @@ func TestAssignCase_CrossTenantRejected(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: org1,
 		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
 	})
 	require.NoError(t, err)
@@ -352,6 +372,8 @@ func TestListCases(t *testing.T) {
 		_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 			OrganizationID: orgID,
 			Title:          "Case " + string(rune('A'+i)),
+			ServiceType:    domain.ServiceTypeGeneral,
+			Priority:       domain.PriorityNormal,
 			CreatedByID:    userID,
 		})
 		require.NoError(t, err)
@@ -376,11 +398,15 @@ func (m *collisionMockCaseRepo) SaveTx(ctx context.Context, tx *sql.Tx, c *domai
 	return m.mockCaseRepository.SaveTx(ctx, tx, c)
 }
 
-func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
-	repo := &collisionMockCaseRepo{
+func NewCollisionMockCaseRepo(maxCollisions int) *collisionMockCaseRepo {
+	return &collisionMockCaseRepo{
 		mockCaseRepository: newMockCaseRepo(),
-		maxCollisions:      1,
+		maxCollisions:      maxCollisions,
 	}
+}
+
+func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
+	repo := NewCollisionMockCaseRepo(1)
 	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
@@ -389,6 +415,8 @@ func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Case with Collision",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
 	})
 	require.NoError(t, err)
@@ -398,10 +426,7 @@ func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 }
 
 func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
-	repo := &collisionMockCaseRepo{
-		mockCaseRepository: newMockCaseRepo(),
-		maxCollisions:      10,
-	}
+	repo := NewCollisionMockCaseRepo(10)
 	svc := NewCaseService(repo, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
@@ -410,6 +435,8 @@ func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
 	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Case That Keeps Colliding",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
 	})
 	require.Error(t, err, "should fail after exhausting retries")

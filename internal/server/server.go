@@ -25,7 +25,7 @@ type Server struct {
 func New(cfg *config.Config, db *sql.DB) *Server {
 	r := chi.NewRouter()
 
-	rl := middleware.NewRateLimiter(100, 20)
+	rl := middleware.NewRateLimiter(cfg.Server.RateLimit, cfg.Server.RateLimitBurst)
 	idemStore := middleware.NewIdempotencyStore(24 * time.Hour)
 
 	r.Use(middleware.SecureHeaders)

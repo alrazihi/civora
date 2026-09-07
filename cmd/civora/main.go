@@ -9,6 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	assessmentapi "github.com/alrazihi/civora/internal/assessment/api"
+	assessmentapp "github.com/alrazihi/civora/internal/assessment/application"
+	assessmentpostgres "github.com/alrazihi/civora/internal/assessment/infrastructure/postgres"
+	assistanceapi "github.com/alrazihi/civora/internal/assistance/api"
+	assistancapp "github.com/alrazihi/civora/internal/assistance/application"
+	assistancepostgres "github.com/alrazihi/civora/internal/assistance/infrastructure/postgres"
 	auditapi "github.com/alrazihi/civora/internal/audit/api"
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
 	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
@@ -17,6 +23,18 @@ import (
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/database"
+	decisionsapi "github.com/alrazihi/civora/internal/decisions/api"
+	decisionsapp "github.com/alrazihi/civora/internal/decisions/application"
+	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
+	eligibilityapi "github.com/alrazihi/civora/internal/eligibility/api"
+	eligibilityapp "github.com/alrazihi/civora/internal/eligibility/application"
+	eligibilitypostgres "github.com/alrazihi/civora/internal/eligibility/infrastructure/postgres"
+	evidenceapi "github.com/alrazihi/civora/internal/evidence/api"
+	evidenceapp "github.com/alrazihi/civora/internal/evidence/application"
+	evidencepostgres "github.com/alrazihi/civora/internal/evidence/infrastructure/postgres"
+	followupapi "github.com/alrazihi/civora/internal/followup/api"
+	followupapp "github.com/alrazihi/civora/internal/followup/application"
+	followuppostgres "github.com/alrazihi/civora/internal/followup/infrastructure/postgres"
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
@@ -25,6 +43,9 @@ import (
 	orgapi "github.com/alrazihi/civora/internal/organizations/api"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
 	orgpostgres "github.com/alrazihi/civora/internal/organizations/infrastructure/postgres"
+	peopleapi "github.com/alrazihi/civora/internal/people/api"
+	peoplapp "github.com/alrazihi/civora/internal/people/application"
+	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/server"
 	"github.com/alrazihi/civora/migrations"
 )
@@ -58,6 +79,13 @@ func main() {
 	orgRepo := orgpostgres.NewPostgresOrganizationRepository(db.DB)
 	caseRepo := casepostgres.NewPostgresCaseRepository(db.DB)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db.DB)
+	personRepo := peoplepostgres.NewPostgresPersonRepository(db.DB)
+	eligibilityRepo := eligibilitypostgres.NewPostgresEligibilityRepository(db.DB)
+	evidenceRepo := evidencepostgres.NewPostgresEvidenceRepository(db.DB)
+	assessmentRepo := assessmentpostgres.NewPostgresAssessmentRepository(db.DB)
+	decisionRepo := decisionspostgres.NewPostgresDecisionRepository(db.DB)
+	assistanceRepo := assistancepostgres.NewPostgresAssistanceRepository(db.DB)
+	followUpRepo := followuppostgres.NewPostgresFollowUpRepository(db.DB)
 
 	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
@@ -76,12 +104,40 @@ func main() {
 	caseService := caseapp.NewCaseService(caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	caseHandler := caseapi.NewHandler(caseService)
 
+	personService := peoplapp.NewPersonService(personRepo, auditService)
+	personHandler := peopleapi.NewHandler(personService)
+
+	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, auditService)
+	eligibilityHandler := eligibilityapi.NewHandler(eligibilityService)
+
+	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, auditService)
+	evidenceHandler := evidenceapi.NewHandler(evidenceService)
+
+	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, auditService)
+	assessmentHandler := assessmentapi.NewHandler(assessmentService)
+
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, auditService)
+	decisionHandler := decisionsapi.NewHandler(decisionService)
+
+	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, auditService)
+	assistanceHandler := assistanceapi.NewHandler(assistanceService)
+
+	followUpService := followupapp.NewFollowUpService(followUpRepo, auditService)
+	followUpHandler := followupapi.NewHandler(followUpService)
+
 	auditHandler := auditapi.NewHandler(auditService)
 
 	srv := server.New(cfg, db.DB)
 	identityHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	caseHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	personHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	eligibilityHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	evidenceHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	assessmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	decisionHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	assistanceHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

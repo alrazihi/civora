@@ -25,7 +25,7 @@ func TestCaseRepository_SaveAndFind(t *testing.T) {
 	orgID := helpers.SeedOrg(db)
 	userID := helpers.SeedUser(db, orgID)
 
-	c, err := domain.NewCase(orgID, userID, "Emergency Food Request", "Family needs emergency food assistance")
+	c, err := domain.NewCase(orgID, userID, "Emergency Food Request", "Family needs emergency food assistance", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	require.NoError(t, err)
 	err = repo.Save(context.Background(), c)
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestCaseRepository_SaveAndFind(t *testing.T) {
 	assert.Equal(t, c.ID, found.ID)
 	assert.Equal(t, c.CaseNumber, found.CaseNumber)
 	assert.Equal(t, "Emergency Food Request", found.Title)
-	assert.Equal(t, domain.CaseStatusCreated, found.Status)
+	assert.Equal(t, domain.CaseStatusNew, found.Status)
 }
 
 func TestCaseRepository_TenantIsolation(t *testing.T) {
@@ -52,7 +52,7 @@ func TestCaseRepository_TenantIsolation(t *testing.T) {
 	user1 := helpers.SeedUser(db, org1)
 	org2 := helpers.SeedOrg(db)
 
-	c, err := domain.NewCase(org1, user1, "Case in Org 1", "Description")
+	c, err := domain.NewCase(org1, user1, "Case in Org 1", "Description", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	require.NoError(t, err)
 	err = repo.Save(context.Background(), c)
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestCaseRepository_UpdateStatus(t *testing.T) {
 	orgID := helpers.SeedOrg(db)
 	userID := helpers.SeedUser(db, orgID)
 
-	c, err := domain.NewCase(orgID, userID, "Test Case", "Description")
+	c, err := domain.NewCase(orgID, userID, "Test Case", "Description", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	require.NoError(t, err)
 	err = repo.Save(context.Background(), c)
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestCaseRepository_FindByOrganization(t *testing.T) {
 	userID := helpers.SeedUser(db, orgID)
 
 	for i := 0; i < 3; i++ {
-		c, err := domain.NewCase(orgID, userID, "Case", "Description")
+		c, err := domain.NewCase(orgID, userID, "Case", "Description", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 		require.NoError(t, err)
 		err = repo.Save(context.Background(), c)
 		require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestCaseRepository_Assign(t *testing.T) {
 	creatorID := helpers.SeedUser(db, orgID)
 	assigneeID := helpers.SeedUser(db, orgID)
 
-	c, err := domain.NewCase(orgID, creatorID, "Test Case", "Description")
+	c, err := domain.NewCase(orgID, creatorID, "Test Case", "Description", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	require.NoError(t, err)
 	err = repo.Save(context.Background(), c)
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestCaseRepository_ForeignKeyConstraint(t *testing.T) {
 	fakeOrgID := uuid.New()
 	fakeUserID := uuid.New()
 
-	c, err := domain.NewCase(fakeOrgID, fakeUserID, "Test Case", "Description")
+	c, err := domain.NewCase(fakeOrgID, fakeUserID, "Test Case", "Description", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	require.NoError(t, err)
 	err = repo.Save(context.Background(), c)
 	require.Error(t, err, "should fail due to foreign key constraint")
@@ -174,13 +174,14 @@ func TestCaseRepository_CaseNumberCollisionRetries(t *testing.T) {
 
 	existing := domain.GenerateCaseNumber(time.Now().UTC())
 
-	directQuery := `INSERT INTO cases (id, organization_id, case_number, title, description, status, created_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	directQuery := `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, assigned_to, created_at, updated_at, closed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 	_, err := db.ExecContext(context.Background(), directQuery,
 		uuid.New(), orgID, existing, "Existing Case", "Desc",
-		domain.CaseStatusCreated, userID, time.Now().UTC(), time.Now().UTC())
+		domain.CaseStatusNew, domain.ServiceTypeGeneral, domain.PriorityNormal, nil, userID, nil,
+		time.Now().UTC(), time.Now().UTC(), nil)
 	require.NoError(t, err)
 
-	c, err := domain.NewCase(orgID, userID, "Collision Case", "Description")
+	c, err := domain.NewCase(orgID, userID, "Collision Case", "Description", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	require.NoError(t, err)
 	c.CaseNumber = existing
 

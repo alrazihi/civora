@@ -18,11 +18,13 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
-	CORSOrigins  []string
+	Port           string
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	IdleTimeout    time.Duration
+	CORSOrigins    []string
+	RateLimit      int
+	RateLimitBurst int
 }
 
 type DatabaseConfig struct {
@@ -54,11 +56,13 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		Server: ServerConfig{
-			Port:         getEnv("CIVORA_SERVER_PORT", "8080"),
-			ReadTimeout:  getEnvDuration("CIVORA_SERVER_READ_TIMEOUT", 30*time.Second),
-			WriteTimeout: getEnvDuration("CIVORA_SERVER_WRITE_TIMEOUT", 30*time.Second),
-			IdleTimeout:  getEnvDuration("CIVORA_SERVER_IDLE_TIMEOUT", 120*time.Second),
-			CORSOrigins:  getEnvCSV("CIVORA_SERVER_CORS_ORIGINS", "http://localhost:3000"),
+			Port:           getEnv("CIVORA_SERVER_PORT", "8080"),
+			ReadTimeout:    getEnvDuration("CIVORA_SERVER_READ_TIMEOUT", 30*time.Second),
+			WriteTimeout:   getEnvDuration("CIVORA_SERVER_WRITE_TIMEOUT", 30*time.Second),
+			IdleTimeout:    getEnvDuration("CIVORA_SERVER_IDLE_TIMEOUT", 120*time.Second),
+			CORSOrigins:    getEnvCSV("CIVORA_SERVER_CORS_ORIGINS", "http://localhost:3000"),
+			RateLimit:      getEnvInt("CIVORA_SERVER_RATE_LIMIT", 100),
+			RateLimitBurst: getEnvInt("CIVORA_SERVER_RATE_LIMIT_BURST", 20),
 		},
 		Database: DatabaseConfig{
 			Driver:   getEnv("CIVORA_DB_DRIVER", "pgx"),

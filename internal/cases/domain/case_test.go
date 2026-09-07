@@ -17,14 +17,20 @@ func TestIsValidTransition(t *testing.T) {
 		to   CaseStatus
 		want bool
 	}{
-		{"Created to Open", CaseStatusCreated, CaseStatusOpen, true},
+		{"New to Open", CaseStatusNew, CaseStatusOpen, true},
+		{"New to InReview", CaseStatusNew, CaseStatusInReview, true},
 		{"Open to InReview", CaseStatusOpen, CaseStatusInReview, true},
-		{"InReview to Resolved", CaseStatusInReview, CaseStatusResolved, true},
-		{"Resolved to Closed", CaseStatusResolved, CaseStatusClosed, true},
+		{"InReview to Assessment", CaseStatusInReview, CaseStatusAssessment, true},
 		{"InReview back to Open", CaseStatusInReview, CaseStatusOpen, true},
-		{"Resolved back to InReview", CaseStatusResolved, CaseStatusInReview, true},
-		{"Created to Closed (invalid)", CaseStatusCreated, CaseStatusClosed, false},
-		{"Open to Resolved (invalid)", CaseStatusOpen, CaseStatusResolved, false},
+		{"Assessment to DecisionPending", CaseStatusAssessment, CaseStatusDecisionPending, true},
+		{"DecisionPending to Approved", CaseStatusDecisionPending, CaseStatusApproved, true},
+		{"DecisionPending to Rejected", CaseStatusDecisionPending, CaseStatusRejected, true},
+		{"Approved to InProgress", CaseStatusApproved, CaseStatusInProgress, true},
+		{"Rejected to Closed", CaseStatusRejected, CaseStatusClosed, true},
+		{"InProgress to FollowUp", CaseStatusInProgress, CaseStatusFollowUp, true},
+		{"FollowUp to Closed", CaseStatusFollowUp, CaseStatusClosed, true},
+		{"New to Closed (invalid)", CaseStatusNew, CaseStatusClosed, false},
+		{"Open to Approved (invalid)", CaseStatusOpen, CaseStatusApproved, false},
 		{"Closed to anything (invalid)", CaseStatusClosed, CaseStatusOpen, false},
 		{"Same status (invalid)", CaseStatusOpen, CaseStatusOpen, false},
 	}
@@ -42,10 +48,15 @@ func TestValidTransitionsFrom(t *testing.T) {
 		status   CaseStatus
 		expected []CaseStatus
 	}{
-		{CaseStatusCreated, []CaseStatus{CaseStatusOpen}},
+		{CaseStatusNew, []CaseStatus{CaseStatusOpen, CaseStatusInReview}},
 		{CaseStatusOpen, []CaseStatus{CaseStatusInReview}},
-		{CaseStatusInReview, []CaseStatus{CaseStatusOpen, CaseStatusResolved}},
-		{CaseStatusResolved, []CaseStatus{CaseStatusClosed, CaseStatusInReview}},
+		{CaseStatusInReview, []CaseStatus{CaseStatusAssessment, CaseStatusOpen}},
+		{CaseStatusAssessment, []CaseStatus{CaseStatusDecisionPending}},
+		{CaseStatusDecisionPending, []CaseStatus{CaseStatusApproved, CaseStatusRejected}},
+		{CaseStatusApproved, []CaseStatus{CaseStatusInProgress}},
+		{CaseStatusRejected, []CaseStatus{CaseStatusClosed}},
+		{CaseStatusInProgress, []CaseStatus{CaseStatusFollowUp}},
+		{CaseStatusFollowUp, []CaseStatus{CaseStatusClosed}},
 		{CaseStatusClosed, []CaseStatus{}},
 	}
 
@@ -59,7 +70,7 @@ func TestValidTransitionsFrom(t *testing.T) {
 
 func TestCase_TransitionTo(t *testing.T) {
 	t.Run("valid transition", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
 		require.NoError(t, err)
 		err = c.TransitionTo(CaseStatusOpen)
 		require.NoError(t, err)
@@ -67,7 +78,7 @@ func TestCase_TransitionTo(t *testing.T) {
 	})
 
 	t.Run("invalid transition", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
 		require.NoError(t, err)
 		err = c.TransitionTo(CaseStatusClosed)
 		assert.Error(t, err)
@@ -75,9 +86,9 @@ func TestCase_TransitionTo(t *testing.T) {
 	})
 
 	t.Run("closed sets closed_at", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityUrgent, nil)
 		require.NoError(t, err)
-		c.Status = CaseStatusResolved
+		c.Status = CaseStatusFollowUp
 		err = c.TransitionTo(CaseStatusClosed)
 		require.NoError(t, err)
 		assert.NotNil(t, c.ClosedAt)
@@ -85,7 +96,7 @@ func TestCase_TransitionTo(t *testing.T) {
 }
 
 func TestCase_AssignTo(t *testing.T) {
-	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
 	require.NoError(t, err)
 	user := uuid.New()
 	c.AssignTo(user)
@@ -94,7 +105,7 @@ func TestCase_AssignTo(t *testing.T) {
 }
 
 func TestGenerateCaseNumber(t *testing.T) {
-	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, c.CaseNumber)
 	assert.Contains(t, c.CaseNumber, "CAS-")
@@ -111,7 +122,7 @@ func TestCaseNumberCollision_Uniqueness(t *testing.T) {
 }
 
 func TestCase_RegenerateCaseNumber(t *testing.T) {
-	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description")
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
 	require.NoError(t, err)
 	original := c.CaseNumber
 	c.RegenerateCaseNumber()
@@ -123,20 +134,31 @@ func TestCase_RegenerateCaseNumber(t *testing.T) {
 func TestNewCase_InputValidation(t *testing.T) {
 	t.Run("title too long", func(t *testing.T) {
 		longTitle := strings.Repeat("x", maxTitleLength+1)
-		_, err := NewCase(uuid.New(), uuid.New(), longTitle, "description")
+		_, err := NewCase(uuid.New(), uuid.New(), longTitle, "description", ServiceTypeGeneral, PriorityNormal, nil)
 		assert.ErrorIs(t, err, ErrCaseInvalidInput)
 	})
 
 	t.Run("description too long", func(t *testing.T) {
 		longDesc := strings.Repeat("x", maxDescriptionLength+1)
-		_, err := NewCase(uuid.New(), uuid.New(), "title", longDesc)
+		_, err := NewCase(uuid.New(), uuid.New(), "title", longDesc, ServiceTypeGeneral, PriorityNormal, nil)
 		assert.ErrorIs(t, err, ErrCaseInvalidInput)
 	})
 
 	t.Run("valid input", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Valid Title", "Valid description")
+		c, err := NewCase(uuid.New(), uuid.New(), "Valid Title", "Valid description", ServiceTypeEmergency, PriorityHigh, nil)
 		require.NoError(t, err)
 		assert.NotEmpty(t, c.CaseNumber)
+		assert.Equal(t, ServiceTypeEmergency, c.ServiceType)
+		assert.Equal(t, PriorityHigh, c.Priority)
+		assert.Equal(t, CaseStatusNew, c.Status)
+	})
+
+	t.Run("with person", func(t *testing.T) {
+		personID := uuid.New()
+		c, err := NewCase(uuid.New(), uuid.New(), "Title", "Desc", ServiceTypeGeneral, PriorityNormal, &personID)
+		require.NoError(t, err)
+		assert.NotNil(t, c.PersonID)
+		assert.Equal(t, personID, *c.PersonID)
 	})
 }
 

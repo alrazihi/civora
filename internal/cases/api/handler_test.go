@@ -21,7 +21,11 @@ import (
 )
 
 type mockCaseService struct {
-	createCaseFn func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
+	createCaseFn   func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
+	changeStatusFn func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
+	assignCaseFn   func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
+	getCaseFn      func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
+	listCasesFn    func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
 }
 
 func (m *mockCaseService) CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
@@ -32,18 +36,30 @@ func (m *mockCaseService) CreateCase(ctx context.Context, params application.Cre
 }
 
 func (m *mockCaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error) {
+	if m.listCasesFn != nil {
+		return m.listCasesFn(ctx, orgID, limit, offset, filter)
+	}
 	return nil, 0, nil
 }
 
 func (m *mockCaseService) GetCase(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {
+	if m.getCaseFn != nil {
+		return m.getCaseFn(ctx, orgID, id)
+	}
 	return nil, nil
 }
 
 func (m *mockCaseService) ChangeStatus(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error) {
+	if m.changeStatusFn != nil {
+		return m.changeStatusFn(ctx, params)
+	}
 	return nil, nil
 }
 
 func (m *mockCaseService) AssignCase(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error) {
+	if m.assignCaseFn != nil {
+		return m.assignCaseFn(ctx, params)
+	}
 	return nil, nil
 }
 
@@ -55,6 +71,13 @@ func setupCaseRouter(svc CaseService) http.Handler {
 		r.Use(middleware.AuthRequired(jwtSvc))
 		r.Use(middleware.RequireSameTenant)
 		r.Post("/", h.CreateCase)
+		r.Get("/", h.ListCases)
+		r.Get("/{caseId}", h.GetCase)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)
+			r.Post("/{caseId}/assign", h.AssignCase)
+		})
 	})
 	return r
 }
@@ -79,15 +102,16 @@ func TestCreateCase_ValidRequest(t *testing.T) {
 	userID := uuid.New()
 	svc := &mockCaseService{
 		createCaseFn: func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
-			return domain.NewCase(orgID, userID, params.Title, params.Description)
+			return domain.NewCase(orgID, userID, params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 		},
 	}
 	r := setupCaseRouter(svc)
 
 	token := generateTestJWT(t, "test-secret", userID.String(), orgID.String(), "admin")
-	body := `{"title":"Emergency Request","description":"Need help"}`
+	body := `{"title":"Emergency Request","description":"Need help","service_type":"EMERGENCY","priority":"HIGH"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -113,7 +137,7 @@ func TestCreateCase_InvalidJSON(t *testing.T) {
 func TestCreateCase_TitleTooLong(t *testing.T) {
 	svc := &mockCaseService{
 		createCaseFn: func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
-			return domain.NewCase(uuid.New(), uuid.New(), params.Title, params.Description)
+			return domain.NewCase(uuid.New(), uuid.New(), params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 		},
 	}
 	r := setupCaseRouter(svc)
@@ -134,7 +158,7 @@ func TestCreateCase_TitleTooLong(t *testing.T) {
 func TestCreateCase_DescriptionTooLong(t *testing.T) {
 	svc := &mockCaseService{
 		createCaseFn: func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
-			return domain.NewCase(uuid.New(), uuid.New(), params.Title, params.Description)
+			return domain.NewCase(uuid.New(), uuid.New(), params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 		},
 	}
 	r := setupCaseRouter(svc)
@@ -157,7 +181,7 @@ func TestCreateCase_EmptyTitle(t *testing.T) {
 			if strings.TrimSpace(params.Title) == "" {
 				return nil, application.ErrCaseInvalidInput
 			}
-			return domain.NewCase(uuid.New(), uuid.New(), params.Title, params.Description)
+			return domain.NewCase(uuid.New(), uuid.New(), params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 		},
 	}
 	r := setupCaseRouter(svc)

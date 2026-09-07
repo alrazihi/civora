@@ -40,7 +40,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Get("/{caseId}", h.GetCase)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
-			r.Post("/{caseId}/transitions", h.ChangeStatus)
+			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)
 			r.Post("/{caseId}/assign", h.AssignCase)
 		})
 	})
@@ -60,18 +60,41 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
+		Title       string  `json:"title"`
+		Description string  `json:"description"`
+		ServiceType string  `json:"service_type"`
+		Priority    string  `json:"priority"`
+		PersonID    *string `json:"person_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
 		return
 	}
 
+	if req.ServiceType == "" {
+		req.ServiceType = "GENERAL"
+	}
+	if req.Priority == "" {
+		req.Priority = "NORMAL"
+	}
+
+	var personID *uuid.UUID
+	if req.PersonID != nil && *req.PersonID != "" {
+		pid, err := uuid.Parse(*req.PersonID)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid person ID")
+			return
+		}
+		personID = &pid
+	}
+
 	c, err := h.svc.CreateCase(r.Context(), application.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          req.Title,
 		Description:    req.Description,
+		ServiceType:    domain.ServiceType(req.ServiceType),
+		Priority:       domain.Priority(req.Priority),
+		PersonID:       personID,
 		CreatedByID:    actorID,
 	})
 	if err != nil {
@@ -128,6 +151,11 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
 		filter.Status = domain.CaseStatus(statusStr)
 	}
+	if personIDStr := r.URL.Query().Get("person_id"); personIDStr != "" {
+		if pid, err := uuid.Parse(personIDStr); err == nil {
+			filter.PersonID = &pid
+		}
+	}
 
 	cases, total, err := h.svc.ListCases(r.Context(), orgID, perPage, offset, filter)
 	if err != nil {
@@ -143,7 +171,7 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
 }
 
-func (h *Handler) ChangeStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ChangeCaseStatus(w http.ResponseWriter, r *http.Request) {
 	orgID, ok := parseUUID(r, "orgId")
 	if !ok {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
@@ -253,19 +281,27 @@ func getUserID(r *http.Request) uuid.UUID {
 }
 
 func serializeCase(c *domain.Case) map[string]interface{} {
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"id":              c.ID,
 		"organization_id": c.OrganizationID,
 		"case_number":     c.CaseNumber,
 		"title":           c.Title,
 		"description":     c.Description,
 		"status":          c.Status,
+		"service_type":    c.ServiceType,
+		"priority":        c.Priority,
 		"created_by":      c.CreatedByID,
 		"assigned_to":     c.AssignedToID,
 		"created_at":      c.CreatedAt,
 		"updated_at":      c.UpdatedAt,
 		"closed_at":       c.ClosedAt,
 	}
+	if c.PersonID != nil {
+		result["person_id"] = c.PersonID
+	} else {
+		result["person_id"] = nil
+	}
+	return result
 }
 
 func writeCaseError(w http.ResponseWriter, err error) {

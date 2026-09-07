@@ -22,6 +22,9 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
+Current focus: **Milestone 0.2** — Service delivery lifecycle (eligibility,
+assistance, follow-up modules).
+
 ## Documentation
 
 | Topic | Location |
@@ -31,7 +34,9 @@ contribute.
 | Architecture overview | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Architecture decision records | [docs/decisions](./docs/decisions) |
 | Threat model | [docs/threat-model.md](./docs/threat-model.md) |
+| Hostile review | [docs/hostile-review.md](./docs/hostile-review.md) |
 | Development roadmap | [ROADMAP.md](./ROADMAP.md) |
+| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Contribution guide | [CONTRIBUTING.md](./CONTRIBUTING.md) |
 | Governance model | [GOVERNANCE.md](./GOVERNANCE.md) |
 | Security policy | [SECURITY.md](./SECURITY.md) |

@@ -40,14 +40,17 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 	query := `
 		INSERT INTO cases (
 			id, organization_id, case_number, title, description,
-			status, created_by, assigned_to, created_at, updated_at, closed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			status, service_type, priority, person_id, created_by, assigned_to,
+			created_at, updated_at, closed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	const maxRetries = 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		_, err := e.ExecContext(ctx, query,
 			c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
-			c.Status, c.CreatedByID, c.AssignedToID, c.CreatedAt, c.UpdatedAt, c.ClosedAt)
+			c.Status, c.ServiceType, c.Priority, c.PersonID, c.CreatedByID, c.AssignedToID,
+			c.CreatedAt, c.UpdatedAt, c.ClosedAt,
+		)
 		if err == nil {
 			return nil
 		}
@@ -64,7 +67,8 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {
 	query := `
 		SELECT id, organization_id, case_number, title, description,
-			   status, created_by, assigned_to, created_at, updated_at, closed_at
+			   status, service_type, priority, person_id, created_by, assigned_to,
+			   created_at, updated_at, closed_at
 		FROM cases
 		WHERE organization_id = $1 AND id = $2
 	`
@@ -78,7 +82,8 @@ func (r *PostgresCaseRepository) FindByOrganization(ctx context.Context, orgID u
 func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, error) {
 	query := `
 		SELECT id, organization_id, case_number, title, description,
-			   status, created_by, assigned_to, created_at, updated_at, closed_at
+			   status, service_type, priority, person_id, created_by, assigned_to,
+			   created_at, updated_at, closed_at
 		FROM cases
 		WHERE organization_id = $1
 	`
@@ -88,6 +93,12 @@ func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Contex
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argPos)
 		args = append(args, string(filter.Status))
+		argPos++
+	}
+
+	if filter.PersonID != nil {
+		query += fmt.Sprintf(" AND person_id = $%d", argPos)
+		args = append(args, *filter.PersonID)
 		argPos++
 	}
 
@@ -119,6 +130,13 @@ func (r *PostgresCaseRepository) CountByOrganization(ctx context.Context, orgID 
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argPos)
 		args = append(args, string(filter.Status))
+		argPos++
+	}
+
+	if filter.PersonID != nil {
+		query += fmt.Sprintf(" AND person_id = $%d", argPos)
+		args = append(args, *filter.PersonID)
+		argPos++
 	}
 
 	var total int
@@ -185,7 +203,8 @@ func (r *PostgresCaseRepository) scanCase(row interface {
 	var c domain.Case
 	if err := row.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
-		&c.Status, &c.CreatedByID, &c.AssignedToID, &c.CreatedAt, &c.UpdatedAt, &c.ClosedAt,
+		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}
@@ -196,7 +215,8 @@ func (r *PostgresCaseRepository) scanCaseFromRows(rows *sql.Rows) (*domain.Case,
 	var c domain.Case
 	if err := rows.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
-		&c.Status, &c.CreatedByID, &c.AssignedToID, &c.CreatedAt, &c.UpdatedAt, &c.ClosedAt,
+		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}

@@ -260,5 +260,34 @@ This threat model is reviewed:
 - When a new integration or external dependency is added.
 - After any security incident.
 
-Last reviewed: 2026-09-06.
-Next review due: Before milestone 0.2.
+Last reviewed: 2026-09-07.
+Next review due: Before milestone 0.3.
+
+## 6. v0.2 additions
+
+The following threats apply specifically to the service delivery lifecycle
+modules added in v0.2 (eligibility, assistance, follow-up):
+
+### T-14: JSONB injection in eligibility criteria
+
+**Description**: Malicious JSONB content injected into eligibility criteria
+fields could exploit the JSON unmarshal path or cause panics.
+**Affected assets**: Eligibility data, case data.
+**Mitigation strategies**:
+- JSONB fields are scanned using `json.Unmarshal` from `[]byte`, not
+  directly into Go types.
+- Input validation on eligibility criteria before storage.
+- Case number collision retry logic prevents DB-level injection.
+**Severity**: Medium
+
+### T-15: UPSERT race conditions in assistance/follow-up
+
+**Description**: Concurrent UPSERT operations on assistance or follow-up
+records could lead to lost updates or inconsistent state.
+**Affected assets**: Assistance records, follow-up records.
+**Mitigation strategies**:
+- PostgreSQL `ON CONFLICT DO UPDATE` ensures atomic upserts.
+- `SELECT ... FOR UPDATE` used in audit hash chain to prevent concurrent
+  modification.
+- Service layer uses `SaveTx` with explicit transaction boundaries.
+**Severity**: Low

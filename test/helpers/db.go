@@ -74,7 +74,20 @@ func TruncateTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	_, err := db.Exec(`
-		TRUNCATE TABLE audit_events, cases, users, roles, organizations RESTART IDENTITY CASCADE;
+		TRUNCATE TABLE
+			follow_ups,
+			assistance,
+			decisions,
+			assessments,
+			evidence,
+			eligibilities,
+			people,
+			audit_events,
+			cases,
+			users,
+			roles,
+			organizations
+		RESTART IDENTITY CASCADE;
 	`)
 	if err != nil {
 		t.Fatalf("failed to truncate tables: %v", err)
@@ -109,6 +122,18 @@ func SeedUser(db *sql.DB, orgID uuid.UUID) uuid.UUID {
 		panic(fmt.Sprintf("failed to seed user: %v", err))
 	}
 	return userID
+}
+
+func SeedPerson(db *sql.DB, orgID uuid.UUID) uuid.UUID {
+	personID := uuid.New()
+	_, err := db.Exec(
+		"INSERT INTO people (id, organization_id, first_name, last_name, preferred_language, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())",
+		personID, orgID, "Jane", "Doe", "en", "ACTIVE",
+	)
+	if err != nil {
+		panic(fmt.Sprintf("failed to seed person: %v", err))
+	}
+	return personID
 }
 
 func SeedDefaultRoles(db *sql.DB, orgID uuid.UUID) {
