@@ -35,8 +35,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/follow-ups", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
-		r.Post("/", h.CreateFollowUp)
-		r.Get("/service-request/{serviceRequestId}", h.ListFollowUps)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Post("/", h.CreateFollowUp)
+			r.Get("/service-request/{serviceRequestId}", h.ListFollowUps)
+		})
 		r.Get("/{followUpId}", h.GetFollowUp)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))

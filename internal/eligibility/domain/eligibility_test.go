@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -35,6 +36,11 @@ func TestNewEligibility(t *testing.T) {
 
 	t.Run("empty explanation", func(t *testing.T) {
 		_, err := NewEligibility(uuid.New(), uuid.New(), uuid.New(), map[string]interface{}{}, "")
+		assert.ErrorIs(t, err, ErrEligibilityInvalidInput)
+	})
+
+	t.Run("explanation too long", func(t *testing.T) {
+		_, err := NewEligibility(uuid.New(), uuid.New(), uuid.New(), map[string]interface{}{}, strings.Repeat("x", 5001))
 		assert.ErrorIs(t, err, ErrEligibilityInvalidInput)
 	})
 }

@@ -37,6 +37,9 @@ func NewEligibility(orgID, serviceRequestID, assessedBy uuid.UUID, criteria map[
 	if criteria == nil {
 		return nil, fmt.Errorf("%w: criteria are required", ErrEligibilityInvalidInput)
 	}
+	if len(explanation) > 5000 {
+		return nil, fmt.Errorf("%w: explanation exceeds maximum length of 5000 characters", ErrEligibilityInvalidInput)
+	}
 	if explanation == "" {
 		return nil, fmt.Errorf("%w: explanation is required", ErrEligibilityInvalidInput)
 	}

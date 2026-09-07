@@ -63,6 +63,10 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]map[string]interface{}, len(events))
 	for i, ev := range events {
+		integrityValid := true
+		if ev != nil {
+			integrityValid = ev.VerifyIntegrity()
+		}
 		result[i] = map[string]interface{}{
 			"id":              ev.ID,
 			"organization_id": ev.OrganizationID,
@@ -75,6 +79,7 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 			"timestamp":       ev.Timestamp,
 			"hash":            ev.Hash,
 			"previous_hash":   ev.PreviousHash,
+			"integrity_valid": integrityValid,
 		}
 	}
 

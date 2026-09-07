@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,16 @@ func TestNewFollowUp(t *testing.T) {
 		_, err := NewFollowUp(uuid.New(), uuid.New(), uuid.New(), time.Now(), "outcome", "")
 		assert.ErrorIs(t, err, ErrFollowUpInvalidInput)
 	})
+
+	t.Run("outcome too long", func(t *testing.T) {
+		_, err := NewFollowUp(uuid.New(), uuid.New(), uuid.New(), time.Now(), strings.Repeat("x", 501), "notes")
+		assert.ErrorIs(t, err, ErrFollowUpInvalidInput)
+	})
+
+	t.Run("notes too long", func(t *testing.T) {
+		_, err := NewFollowUp(uuid.New(), uuid.New(), uuid.New(), time.Now(), "outcome", strings.Repeat("x", 5001))
+		assert.ErrorIs(t, err, ErrFollowUpInvalidInput)
+	})
 }
 
 func TestFollowUpComplete(t *testing.T) {
@@ -48,4 +59,27 @@ func TestFollowUpComplete(t *testing.T) {
 
 	require.NotNil(t, f.CompletedDate)
 	assert.Equal(t, completed, *f.CompletedDate)
+}
+
+func TestIsValidCaseStatusForFollowUp(t *testing.T) {
+	tests := []struct {
+		status string
+		want   bool
+	}{
+		{"APPROVED", true},
+		{"IN_PROGRESS", true},
+		{"FOLLOW_UP", true},
+		{"NEW", false},
+		{"OPEN", false},
+		{"CLOSED", false},
+		{"REJECTED", false},
+		{"DECISION_PENDING", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.status, func(t *testing.T) {
+			got := IsValidCaseStatusForFollowUp(tt.status)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

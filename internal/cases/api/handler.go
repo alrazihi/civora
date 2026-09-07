@@ -149,6 +149,10 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 
 	filter := domain.CaseFilter{}
 	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
+		if !domain.IsValidStatus(statusStr) {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid status value")
+			return
+		}
 		filter.Status = domain.CaseStatus(statusStr)
 	}
 	if personIDStr := r.URL.Query().Get("person_id"); personIDStr != "" {
@@ -294,12 +298,17 @@ func serializeCase(c *domain.Case) map[string]interface{} {
 		"assigned_to":     c.AssignedToID,
 		"created_at":      c.CreatedAt,
 		"updated_at":      c.UpdatedAt,
-		"closed_at":       c.ClosedAt,
+		"version":         c.Version,
 	}
 	if c.PersonID != nil {
 		result["person_id"] = c.PersonID
 	} else {
 		result["person_id"] = nil
+	}
+	if c.ClosedAt != nil {
+		result["closed_at"] = c.ClosedAt
+	} else {
+		result["closed_at"] = nil
 	}
 	return result
 }

@@ -184,7 +184,7 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 				OrganizationID: params.OrganizationID,
 				Action:         "auth.failed",
 				Resource:       "user",
-				ResourceID:     strPtr(params.Email),
+				ResourceID:     strPtr(user.ID.String()),
 				Outcome:        "failure",
 				Metadata:       map[string]interface{}{"reason": "invalid_credentials"},
 				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),

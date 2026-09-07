@@ -11,6 +11,7 @@ import (
 	"github.com/alrazihi/civora/internal/database"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	peopledomain "github.com/alrazihi/civora/internal/people/domain"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
@@ -23,10 +24,6 @@ var (
 type PersonService struct {
 	repo    peopledomain.PersonRepository
 	auditor auditdomain.EventRecorder
-}
-
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
 }
 
 func NewPersonService(repo peopledomain.PersonRepository, auditor auditdomain.EventRecorder) *PersonService {
@@ -70,14 +67,14 @@ func (s *PersonService) CreatePerson(ctx context.Context, params CreatePersonPar
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: p.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "person.created",
 				Resource:       "person",
-				ResourceID:     strPtr(p.ID.String()),
+				ResourceID:     shared.StrPtr(p.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 			}); err != nil {
 				return fmt.Errorf("failed to record audit event: %w", err)
 			}
@@ -148,14 +145,14 @@ func (s *PersonService) UpdatePersonStatus(ctx context.Context, orgID, id uuid.U
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: p.OrganizationID,
 				ActorID:        &actorID,
 				Action:         "person.status_updated",
 				Resource:       "person",
-				ResourceID:     strPtr(p.ID.String()),
+				ResourceID:     shared.StrPtr(p.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"new_status": string(status),
 				},
@@ -172,15 +169,4 @@ func (s *PersonService) UpdatePersonStatus(ctx context.Context, orgID, id uuid.U
 	}
 
 	return result, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -31,6 +32,16 @@ func TestNewEvidence(t *testing.T) {
 
 	t.Run("empty storage reference", func(t *testing.T) {
 		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, "Note", "")
+		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
+	})
+
+	t.Run("description too long", func(t *testing.T) {
+		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, strings.Repeat("x", 5001), "ref")
+		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
+	})
+
+	t.Run("storage reference too long", func(t *testing.T) {
+		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, "Note", strings.Repeat("x", 501))
 		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
 	})
 }

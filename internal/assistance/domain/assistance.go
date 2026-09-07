@@ -49,6 +49,9 @@ type Assistance struct {
 }
 
 func NewAssistance(orgID, serviceRequestID, responsibleStaff uuid.UUID, assistanceType AssistanceType, description string) (*Assistance, error) {
+	if len(description) > 5000 {
+		return nil, fmt.Errorf("%w: description exceeds maximum length of 5000 characters", ErrAssistanceInvalidInput)
+	}
 	if description == "" {
 		return nil, fmt.Errorf("%w: description is required", ErrAssistanceInvalidInput)
 	}
@@ -83,4 +86,17 @@ func (a *Assistance) Complete() {
 func (a *Assistance) Cancel() {
 	a.Status = AssistanceStatusCancelled
 	a.UpdatedAt = time.Now().UTC()
+}
+
+func IsValidStatusTransition(from AssistanceStatus, action string) bool {
+	switch from {
+	case AssistanceStatusPlanned:
+		return action == "start" || action == "cancel"
+	case AssistanceStatusInProgress:
+		return action == "complete" || action == "cancel"
+	case AssistanceStatusCompleted, AssistanceStatusCancelled:
+		return false
+	default:
+		return false
+	}
 }

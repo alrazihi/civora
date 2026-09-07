@@ -34,8 +34,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/assistance", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
-		r.Post("/", h.CreateAssistance)
-		r.Get("/service-request/{serviceRequestId}", h.ListAssistances)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Post("/", h.CreateAssistance)
+			r.Get("/service-request/{serviceRequestId}", h.ListAssistances)
+		})
 		r.Get("/{assistanceId}", h.GetAssistance)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))

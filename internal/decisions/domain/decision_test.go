@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -36,6 +37,11 @@ func TestNewDecision(t *testing.T) {
 
 	t.Run("empty reason", func(t *testing.T) {
 		_, err := NewDecision(uuid.New(), uuid.New(), uuid.New(), DecisionTypeApproved, "")
+		assert.ErrorIs(t, err, ErrDecisionInvalidInput)
+	})
+
+	t.Run("reason too long", func(t *testing.T) {
+		_, err := NewDecision(uuid.New(), uuid.New(), uuid.New(), DecisionTypeApproved, strings.Repeat("x", 5001))
 		assert.ErrorIs(t, err, ErrDecisionInvalidInput)
 	})
 }

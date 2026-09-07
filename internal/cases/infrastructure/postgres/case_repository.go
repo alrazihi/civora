@@ -41,15 +41,15 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 		INSERT INTO cases (
 			id, organization_id, case_number, title, description,
 			status, service_type, priority, person_id, created_by, assigned_to,
-			created_at, updated_at, closed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			created_at, updated_at, closed_at, version
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	const maxRetries = 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		_, err := e.ExecContext(ctx, query,
 			c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
 			c.Status, c.ServiceType, c.Priority, c.PersonID, c.CreatedByID, c.AssignedToID,
-			c.CreatedAt, c.UpdatedAt, c.ClosedAt,
+			c.CreatedAt, c.UpdatedAt, c.ClosedAt, c.Version,
 		)
 		if err == nil {
 			return nil
@@ -68,7 +68,7 @@ func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UU
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at
+			   created_at, updated_at, closed_at, version
 		FROM cases
 		WHERE organization_id = $1 AND id = $2
 	`
@@ -83,7 +83,7 @@ func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Contex
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at
+			   created_at, updated_at, closed_at, version
 		FROM cases
 		WHERE organization_id = $1
 	`
@@ -147,27 +147,27 @@ func (r *PostgresCaseRepository) CountByOrganization(ctx context.Context, orgID 
 	return total, nil
 }
 
-func (r *PostgresCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus) error {
-	return r.updateStatus(ctx, r.db, orgID, id, status)
+func (r *PostgresCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
+	return r.updateStatus(ctx, r.db, orgID, id, status, version)
 }
 
-func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus) error {
-	return r.updateStatus(ctx, tx, orgID, id, status)
+func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
+	return r.updateStatus(ctx, tx, orgID, id, status, version)
 }
 
-func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, orgID, id uuid.UUID, status domain.CaseStatus) error {
+func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
 	query := `
 		UPDATE cases
-		SET status = $1, updated_at = now()
-		WHERE organization_id = $2 AND id = $3
+		SET status = $1, version = version + 1, updated_at = now()
+		WHERE organization_id = $2 AND id = $3 AND version = $4
 	`
-	result, err := e.ExecContext(ctx, query, status, orgID, id)
+	result, err := e.ExecContext(ctx, query, status, orgID, id, version)
 	if err != nil {
 		return fmt.Errorf("failed to update case status: %w", err)
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("no rows affected")
+		return fmt.Errorf("concurrent modification detected")
 	}
 	return nil
 }
@@ -204,7 +204,7 @@ func (r *PostgresCaseRepository) scanCase(row interface {
 	if err := row.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
 		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
-		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}
@@ -216,7 +216,7 @@ func (r *PostgresCaseRepository) scanCaseFromRows(rows *sql.Rows) (*domain.Case,
 	if err := rows.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
 		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
-		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}

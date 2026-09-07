@@ -66,6 +66,23 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.userRateLimiter != nil && req.Email != "" {
+		if locked, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); locked {
+			retrySeconds := int(retryAfter.Seconds()) + 1
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error": map[string]string{
+					"code":    "RATE_LIMITED",
+					"message": fmt.Sprintf("Too many registration attempts for this email. Try again in %d seconds.", retrySeconds),
+				},
+			})
+			return
+		}
+	}
+
 	user, err := h.svc.CreateUser(r.Context(), application.CreateUserParams{
 		OrganizationID: orgID,
 		Email:          req.Email,

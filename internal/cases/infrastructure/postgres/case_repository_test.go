@@ -79,7 +79,7 @@ func TestCaseRepository_UpdateStatus(t *testing.T) {
 	err = repo.Save(context.Background(), c)
 	require.NoError(t, err)
 
-	err = repo.UpdateStatus(context.Background(), orgID, c.ID, domain.CaseStatusOpen)
+	err = repo.UpdateStatus(context.Background(), orgID, c.ID, domain.CaseStatusOpen, c.Version)
 	require.NoError(t, err)
 
 	found, err := repo.FindByID(context.Background(), orgID, c.ID)

@@ -35,8 +35,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/eligibilities", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
-		r.Post("/", h.CreateEligibility)
-		r.Get("/", h.ListEligibilities)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Post("/", h.CreateEligibility)
+			r.Get("/", h.ListEligibilities)
+		})
 		r.Get("/{eligibilityId}", h.GetEligibility)
 		r.Get("/service-request/{serviceRequestId}", h.GetByServiceRequest)
 		r.Group(func(r chi.Router) {

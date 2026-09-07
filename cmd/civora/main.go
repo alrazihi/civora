@@ -89,6 +89,12 @@ func main() {
 
 	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
+	if cfg.Audit.RetentionDays > 0 {
+		if _, err := auditService.PurgeOld(context.Background()); err != nil {
+			log.Printf("warning: failed to purge old audit events: %v", err)
+		}
+	}
+
 	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
 	authMiddleware := intmid.AuthRequired(jwtSvc)
 
@@ -101,28 +107,28 @@ func main() {
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 	orgHandler := orgapi.NewHandler(orgService)
 
-	caseService := caseapp.NewCaseService(caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	caseHandler := caseapi.NewHandler(caseService)
 
 	personService := peoplapp.NewPersonService(personRepo, auditService)
 	personHandler := peopleapi.NewHandler(personService)
 
-	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, auditService)
+	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	eligibilityHandler := eligibilityapi.NewHandler(eligibilityService)
 
-	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, auditService)
+	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	evidenceHandler := evidenceapi.NewHandler(evidenceService)
 
-	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, auditService)
+	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assessmentHandler := assessmentapi.NewHandler(assessmentService)
 
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, auditService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	decisionHandler := decisionsapi.NewHandler(decisionService)
 
-	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, auditService)
+	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assistanceHandler := assistanceapi.NewHandler(assistanceService)
 
-	followUpService := followupapp.NewFollowUpService(followUpRepo, auditService)
+	followUpService := followupapp.NewFollowUpService(followUpRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	followUpHandler := followupapi.NewHandler(followUpService)
 
 	auditHandler := auditapi.NewHandler(auditService)

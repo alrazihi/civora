@@ -50,6 +50,7 @@ var (
 	ErrCaseNotFound           = errors.New("case not found")
 	ErrCaseInvalidInput       = errors.New("invalid case input")
 	ErrCaseNumberConflict     = errors.New("case number conflict")
+	ErrCaseTenantViolation    = errors.New("person does not belong to organization")
 )
 
 type Case struct {
@@ -67,6 +68,7 @@ type Case struct {
 	CreatedAt      time.Time   `json:"created_at"`
 	UpdatedAt      time.Time   `json:"updated_at"`
 	ClosedAt       *time.Time  `json:"closed_at"`
+	Version        int         `json:"version"`
 }
 
 const (
@@ -102,6 +104,7 @@ func NewCase(orgID, createdByID uuid.UUID, title, description string, serviceTyp
 		CreatedByID:    createdByID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
+		Version:        1,
 	}, nil
 }
 
@@ -176,6 +179,18 @@ func IsValidTransition(from, to CaseStatus) bool {
 
 func ValidTransitionsFrom(status CaseStatus) []CaseStatus {
 	return transitionRules[status]
+}
+
+func IsValidStatus(status string) bool {
+	switch status {
+	case string(CaseStatusNew), string(CaseStatusOpen), string(CaseStatusInReview),
+		string(CaseStatusAssessment), string(CaseStatusDecisionPending),
+		string(CaseStatusApproved), string(CaseStatusRejected),
+		string(CaseStatusInProgress), string(CaseStatusFollowUp), string(CaseStatusClosed):
+		return true
+	default:
+		return false
+	}
 }
 
 func GenerateCaseNumber(t time.Time) string {

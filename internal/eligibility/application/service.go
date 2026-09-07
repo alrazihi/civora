@@ -10,25 +10,26 @@ import (
 	"github.com/alrazihi/civora/internal/database"
 	eligibilitydomain "github.com/alrazihi/civora/internal/eligibility/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
 	ErrEligibilityNotFound = errors.New("eligibility not found")
-	ErrEligibilityInput    = errors.New("invalid input")
+	ErrEligibilityInput    = errors.New("invalid eligibility input")
+	ErrCaseNotFound        = errors.New("case not found")
+	ErrUserNotFound        = errors.New("user not found")
 )
 
 type EligibilityService struct {
-	repo    eligibilitydomain.EligibilityRepository
-	auditor auditdomain.EventRecorder
+	repo        eligibilitydomain.EligibilityRepository
+	caseRepo    shared.CaseFinder
+	userChecker shared.UserChecker
+	auditor     auditdomain.EventRecorder
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
-func NewEligibilityService(repo eligibilitydomain.EligibilityRepository, auditor auditdomain.EventRecorder) *EligibilityService {
-	return &EligibilityService{repo: repo, auditor: auditor}
+func NewEligibilityService(repo eligibilitydomain.EligibilityRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *EligibilityService {
+	return &EligibilityService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
 }
 
 type CreateEligibilityParams struct {
@@ -40,6 +41,27 @@ type CreateEligibilityParams struct {
 }
 
 func (s *EligibilityService) CreateEligibility(ctx context.Context, params CreateEligibilityParams) (*eligibilitydomain.Eligibility, error) {
+	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	existing, err := s.repo.FindByServiceRequest(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err == nil && existing != nil {
+		return nil, fmt.Errorf("%w: eligibility already exists for this service request", ErrEligibilityInput)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
 	e, err := eligibilitydomain.NewEligibility(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Criteria, params.Explanation)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrEligibilityInput, err)
@@ -52,14 +74,14 @@ func (s *EligibilityService) CreateEligibility(ctx context.Context, params Creat
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: e.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "eligibility.assessed",
 				Resource:       "eligibility",
-				ResourceID:     strPtr(e.ID.String()),
+				ResourceID:     shared.StrPtr(e.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": e.ServiceRequestID.String(),
 					"result":             string(e.Result),
@@ -125,6 +147,14 @@ func (s *EligibilityService) UpdateEligibilityResult(ctx context.Context, orgID,
 		return nil, ErrEligibilityNotFound
 	}
 
+	c, err := s.caseRepo.FindByID(ctx, orgID, e.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != orgID {
+		return nil, ErrCaseNotFound
+	}
+
 	e.SetResult(result)
 
 	var updated *eligibilitydomain.Eligibility
@@ -134,14 +164,14 @@ func (s *EligibilityService) UpdateEligibilityResult(ctx context.Context, orgID,
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: e.OrganizationID,
 				ActorID:        &actorID,
 				Action:         "eligibility.result_updated",
 				Resource:       "eligibility",
-				ResourceID:     strPtr(e.ID.String()),
+				ResourceID:     shared.StrPtr(e.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": e.ServiceRequestID.String(),
 					"result":             string(result),
@@ -159,15 +189,4 @@ func (s *EligibilityService) UpdateEligibilityResult(ctx context.Context, orgID,
 	}
 
 	return updated, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

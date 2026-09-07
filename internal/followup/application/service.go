@@ -11,25 +11,26 @@ import (
 	"github.com/alrazihi/civora/internal/database"
 	followupdomain "github.com/alrazihi/civora/internal/followup/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
 	ErrFollowUpNotFound = errors.New("follow-up not found")
 	ErrFollowUpInput    = errors.New("invalid follow-up input")
+	ErrCaseNotFound     = errors.New("case not found")
+	ErrUserNotFound     = errors.New("user not found")
 )
 
 type FollowUpService struct {
-	repo    followupdomain.FollowUpRepository
-	auditor auditdomain.EventRecorder
+	repo        followupdomain.FollowUpRepository
+	caseRepo    shared.CaseFinder
+	userChecker shared.UserChecker
+	auditor     auditdomain.EventRecorder
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
-func NewFollowUpService(repo followupdomain.FollowUpRepository, auditor auditdomain.EventRecorder) *FollowUpService {
-	return &FollowUpService{repo: repo, auditor: auditor}
+func NewFollowUpService(repo followupdomain.FollowUpRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *FollowUpService {
+	return &FollowUpService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
 }
 
 type CreateFollowUpParams struct {
@@ -42,6 +43,26 @@ type CreateFollowUpParams struct {
 }
 
 func (s *FollowUpService) CreateFollowUp(ctx context.Context, params CreateFollowUpParams) (*followupdomain.FollowUp, error) {
+	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	if !followupdomain.IsValidCaseStatusForFollowUp(string(c.Status)) {
+		return nil, fmt.Errorf("%w: case status %s does not allow follow-up", ErrFollowUpInput, c.Status)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
 	f, err := followupdomain.NewFollowUp(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.ScheduledDate, params.Outcome, params.Notes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFollowUpInput, err)
@@ -54,14 +75,14 @@ func (s *FollowUpService) CreateFollowUp(ctx context.Context, params CreateFollo
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: f.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "follow_up.scheduled",
 				Resource:       "follow_up",
-				ResourceID:     strPtr(f.ID.String()),
+				ResourceID:     shared.StrPtr(f.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": f.ServiceRequestID.String(),
 				},
@@ -94,14 +115,14 @@ func (s *FollowUpService) CompleteFollowUp(ctx context.Context, orgID, id uuid.U
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: f.OrganizationID,
 				ActorID:        &actorID,
 				Action:         "follow_up.completed",
 				Resource:       "follow_up",
-				ResourceID:     strPtr(f.ID.String()),
+				ResourceID:     shared.StrPtr(f.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": f.ServiceRequestID.String(),
 				},
@@ -148,15 +169,4 @@ func (s *FollowUpService) ListFollowUps(ctx context.Context, orgID, serviceReque
 	}
 
 	return items, total, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

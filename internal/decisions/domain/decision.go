@@ -33,6 +33,9 @@ type Decision struct {
 }
 
 func NewDecision(orgID, serviceRequestID, decisionMaker uuid.UUID, decision DecisionType, reason string) (*Decision, error) {
+	if len(reason) > 5000 {
+		return nil, fmt.Errorf("%w: reason exceeds maximum length of 5000 characters", ErrDecisionInvalidInput)
+	}
 	if reason == "" {
 		return nil, fmt.Errorf("%w: reason is required", ErrDecisionInvalidInput)
 	}

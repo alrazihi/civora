@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -32,6 +33,21 @@ func TestNewAssessment(t *testing.T) {
 
 	t.Run("empty recommendation", func(t *testing.T) {
 		_, err := NewAssessment(uuid.New(), uuid.New(), uuid.New(), "findings", "need", "")
+		assert.ErrorIs(t, err, ErrAssessmentInvalidInput)
+	})
+
+	t.Run("findings too long", func(t *testing.T) {
+		_, err := NewAssessment(uuid.New(), uuid.New(), uuid.New(), strings.Repeat("x", 10001), "need", "recommend")
+		assert.ErrorIs(t, err, ErrAssessmentInvalidInput)
+	})
+
+	t.Run("needs identified too long", func(t *testing.T) {
+		_, err := NewAssessment(uuid.New(), uuid.New(), uuid.New(), "findings", strings.Repeat("x", 5001), "recommend")
+		assert.ErrorIs(t, err, ErrAssessmentInvalidInput)
+	})
+
+	t.Run("recommendation too long", func(t *testing.T) {
+		_, err := NewAssessment(uuid.New(), uuid.New(), uuid.New(), "findings", "need", strings.Repeat("x", 5001))
 		assert.ErrorIs(t, err, ErrAssessmentInvalidInput)
 	})
 }

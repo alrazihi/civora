@@ -20,7 +20,6 @@ info:
     NEW → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING →
     APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
     REJECTED → CLOSED
-    Any state → CLOSED
   version: "0.2.0"
   contact:
     name: CIVORA
@@ -31,7 +30,7 @@ info:
 
 servers:
   - url: http://localhost:8080
-    description: Local development server
+    description: Local development server. Override with CIVORA_API_URL in production.
 
 security: []
 
@@ -757,6 +756,7 @@ components:
 paths:
   /health:
     get:
+      operationId: getHealth
       tags: [System]
       summary: Health check
       description: Returns OK if the server is running.
@@ -767,9 +767,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          description: Server is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Server is starting up or shutting down
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /ready:
     get:
+      operationId: listready
       tags: [System]
       summary: Readiness check
       description: Returns OK if the server is ready to serve requests (database connected, etc.).
@@ -780,9 +795,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReadinessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          description: Server is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /organizations:
     post:
+      operationId: createOrganizations
       tags: [Organizations]
       summary: Create a new organization
       description: Creates a new organization (tenant). No authentication required.
@@ -810,6 +834,7 @@ paths:
 
   /organizations/{orgId}:
     get:
+      operationId: getOrg
       tags: [Organizations]
       summary: Get organization details
       description: Retrieves organization configuration. Requires authentication.
@@ -836,6 +861,7 @@ paths:
 
   /organizations/{orgId}/auth/register:
     post:
+      operationId: createOrgauthregister
       tags: [Authentication]
       summary: Register a new user
       description: Creates a new user within the specified organization. No prior authentication required.
@@ -870,6 +896,7 @@ paths:
 
   /organizations/{orgId}/auth/login:
     post:
+      operationId: createOrgauthlogin
       tags: [Authentication]
       summary: Authenticate user and get token
       description: Authenticates a user and returns a JWT bearer token.
@@ -900,6 +927,7 @@ paths:
 
   /organizations/{orgId}/users:
     get:
+      operationId: getOrgusers
       tags: [Users]
       summary: List users
       description: Lists all users in the organization. Requires authentication.
@@ -939,6 +967,7 @@ paths:
 
   /organizations/{orgId}/users/{userId}:
     get:
+      operationId: getOrgusersUser
       tags: [Users]
       summary: Get user
       description: Retrieves a specific user. Requires authentication.
@@ -971,6 +1000,7 @@ paths:
 
   /organizations/{orgId}/cases:
     post:
+      operationId: createOrgcases
       tags: [Cases]
       summary: Create a case
       description: Creates a new case (service request) within the organization. Requires authentication.
@@ -1010,6 +1040,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
     get:
+      operationId: getOrgcases
       tags: [Cases]
       summary: List cases
       description: Lists cases in the organization. Requires authentication.
@@ -1039,7 +1070,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [CREATED, OPEN, IN_REVIEW, RESOLVED, CLOSED]
+            enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
           description: Filter cases by status
       responses:
         '200':
@@ -1058,6 +1089,7 @@ paths:
 
   /organizations/{orgId}/cases/{caseId}:
     get:
+      operationId: getOrgcasesCase
       tags: [Cases]
       summary: Get a case
       description: Retrieves a specific case. Requires authentication.
@@ -1092,18 +1124,25 @@ paths:
 
   /organizations/{orgId}/cases/{caseId}/transitions:
     post:
+      operationId: createOrgcasesCasetransitions
       tags: [Cases]
       summary: Change case status
       description: |
         Transitions a case to a new status. Invalid transitions are rejected.
 
         Valid transitions:
-        - CREATED → OPEN
+        - NEW → OPEN
+        - NEW → IN_REVIEW
         - OPEN → IN_REVIEW
-        - IN_REVIEW → RESOLVED
-        - RESOLVED → CLOSED
+        - IN_REVIEW → ASSESSMENT
         - IN_REVIEW → OPEN (reopen)
-        - RESOLVED → IN_REVIEW (reopen)
+        - ASSESSMENT → DECISION_PENDING
+        - DECISION_PENDING → APPROVED
+        - DECISION_PENDING → REJECTED
+        - APPROVED → IN_PROGRESS
+        - REJECTED → CLOSED
+        - IN_PROGRESS → FOLLOW_UP
+        - FOLLOW_UP → CLOSED
       security:
         - BearerAuth: []
       parameters:
@@ -1147,6 +1186,7 @@ paths:
 
   /organizations/{orgId}/cases/{caseId}/assign:
     post:
+      operationId: createOrgcasesCaseassign
       tags: [Cases]
       summary: Assign case to a user
       description: Assigns a case to a user. Requires authentication.
@@ -1187,6 +1227,7 @@ paths:
 
   /organizations/{orgId}/audit:
     get:
+      operationId: getOrgaudit
       tags: [Audit]
       summary: List audit events
       description: Lists audit events for the organization. Requires authentication.
@@ -1226,6 +1267,7 @@ paths:
 
   /organizations/{orgId}/people:
     post:
+      operationId: createOrgpeople
       tags: [People]
       summary: Create a person
       description: Creates a new person record. Requires authentication.
@@ -1257,6 +1299,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
     get:
+      operationId: getOrgpeople
       tags: [People]
       summary: List people
       description: Lists person records in the organization. Requires authentication.
@@ -1294,8 +1337,43 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /organizations/{orgId}/people/external/{externalRef}:
+    get:
+      operationId: getOrgpeopleexternalExternalRef
+      tags: [People]
+      summary: Find person by external reference
+      description: Finds a person by their external reference ID. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: externalRef
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Person details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /organizations/{orgId}/people/{personId}:
     get:
+      operationId: getOrganizationPeoplePersonId
       tags: [People]
       summary: Get a person
       description: Retrieves a specific person record. Requires authentication.
@@ -1327,6 +1405,7 @@ paths:
           $ref: '#/components/responses/NotFound'
 
     patch:
+      operationId: updateOrganizationPeoplePersonId
       tags: [People]
       summary: Update person status
       description: Updates a person's status. Requires admin or staff role.
@@ -1373,6 +1452,7 @@ paths:
 
   /organizations/{orgId}/eligibilities:
     post:
+      operationId: createOrgeligibilities
       tags: [Eligibilities]
       summary: Create an eligibility assessment
       description: Creates a new eligibility assessment for a service request. Requires authentication.
@@ -1404,6 +1484,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
     get:
+      operationId: getOrgeligibilities
       tags: [Eligibilities]
       summary: List eligibilities
       description: Lists eligibility assessments in the organization. Requires authentication.
@@ -1443,6 +1524,7 @@ paths:
 
   /organizations/{orgId}/eligibilities/{eligibilityId}:
     get:
+      operationId: getOrgeligibilitiesEligibility
       tags: [Eligibilities]
       summary: Get an eligibility assessment
       description: Retrieves a specific eligibility assessment. Requires authentication.
@@ -1475,6 +1557,7 @@ paths:
 
   /organizations/{orgId}/eligibilities/service-request/{serviceRequestId}:
     get:
+      operationId: getOrgeligibilitiesservicerequestServiceRequest
       tags: [Eligibilities]
       summary: Get eligibility by service request
       description: Retrieves the eligibility assessment for a specific service request. Requires authentication.
@@ -1507,6 +1590,7 @@ paths:
 
   /organizations/{orgId}/eligibilities/{eligibilityId}/result:
     patch:
+      operationId: updateOrgeligibilitiesEligibilityresult
       tags: [Eligibilities]
       summary: Update eligibility result
       description: Updates the result of an eligibility assessment. Requires admin or staff role.
@@ -1553,6 +1637,7 @@ paths:
 
   /organizations/{orgId}/evidence:
     post:
+      operationId: createOrgevidence
       tags: [Evidence]
       summary: Add evidence
       description: Adds an evidence item for a service request. Requires authentication.
@@ -1585,6 +1670,7 @@ paths:
 
   /organizations/{orgId}/evidence/service-request/{serviceRequestId}:
     get:
+      operationId: getOrgevidenceservicerequestServiceRequest
       tags: [Evidence]
       summary: List evidence by service request
       description: Lists evidence items for a specific service request. Requires authentication.
@@ -1630,6 +1716,7 @@ paths:
 
   /organizations/{orgId}/evidence/{evidenceId}:
     get:
+      operationId: getOrgevidenceEvidence
       tags: [Evidence]
       summary: Get evidence
       description: Retrieves a specific evidence item. Requires authentication.
@@ -1662,6 +1749,7 @@ paths:
 
   /organizations/{orgId}/assessments:
     post:
+      operationId: createOrgassessments
       tags: [Assessments]
       summary: Create an assessment
       description: Creates a needs assessment for a service request. Requires authentication.
@@ -1694,6 +1782,7 @@ paths:
 
   /organizations/{orgId}/assessments/service-request/{serviceRequestId}:
     get:
+      operationId: getOrgassessmentsservicerequestServiceRequest
       tags: [Assessments]
       summary: Get assessment by service request
       description: Retrieves the assessment for a specific service request. Requires authentication.
@@ -1726,6 +1815,7 @@ paths:
 
   /organizations/{orgId}/assessments/{assessmentId}:
     get:
+      operationId: getOrgassessmentsAssessment
       tags: [Assessments]
       summary: Get an assessment
       description: Retrieves a specific assessment. Requires authentication.
@@ -1759,6 +1849,7 @@ paths:
 
   /organizations/{orgId}/decisions:
     post:
+      operationId: createOrgdecisions
       tags: [Decisions]
       summary: Make a decision
       description: Creates a human decision for a service request. Requires authentication.
@@ -1791,6 +1882,7 @@ paths:
 
   /organizations/{orgId}/decisions/service-request/{serviceRequestId}:
     get:
+      operationId: getOrgdecisionsservicerequestServiceRequest
       tags: [Decisions]
       summary: Get decision by service request
       description: Retrieves the decision for a specific service request. Requires authentication.
@@ -1823,6 +1915,7 @@ paths:
 
   /organizations/{orgId}/decisions/{decisionId}:
     get:
+      operationId: getOrgdecisionsDecision
       tags: [Decisions]
       summary: Get a decision
       description: Retrieves a specific decision. Requires authentication.
@@ -1856,6 +1949,7 @@ paths:
 
   /organizations/{orgId}/assistance:
     post:
+      operationId: createOrgassistance
       tags: [Assistance]
       summary: Create an assistance action
       description: Creates a new assistance action for a service request. Requires authentication.
@@ -1888,6 +1982,7 @@ paths:
 
   /organizations/{orgId}/assistance/service-request/{serviceRequestId}:
     get:
+      operationId: getOrgassistanceservicerequestServiceRequest
       tags: [Assistance]
       summary: List assistance by service request
       description: Lists assistance actions for a specific service request. Requires authentication.
@@ -1933,6 +2028,7 @@ paths:
 
   /organizations/{orgId}/assistance/{assistanceId}:
     get:
+      operationId: getOrgassistanceAssistance
       tags: [Assistance]
       summary: Get assistance
       description: Retrieves a specific assistance action. Requires authentication.
@@ -1965,6 +2061,7 @@ paths:
 
   /organizations/{orgId}/assistance/{assistanceId}/status:
     patch:
+      operationId: updateOrgassistanceAssistancestatus
       tags: [Assistance]
       summary: Update assistance status
       description: Updates the status of an assistance action (start, complete, cancel). Requires admin or staff role.
@@ -2011,6 +2108,7 @@ paths:
 
   /organizations/{orgId}/follow-ups:
     post:
+      operationId: createOrgfollowups
       tags: [FollowUps]
       summary: Create a follow-up
       description: Creates a new follow-up item for a service request. Requires authentication.
@@ -2043,6 +2141,7 @@ paths:
 
   /organizations/{orgId}/follow-ups/service-request/{serviceRequestId}:
     get:
+      operationId: getOrgfollowupsservicerequestServiceRequest
       tags: [FollowUps]
       summary: List follow-ups by service request
       description: Lists follow-up items for a specific service request. Requires authentication.
@@ -2088,6 +2187,7 @@ paths:
 
   /organizations/{orgId}/follow-ups/{followUpId}:
     get:
+      operationId: getOrgfollowupsFollowUp
       tags: [FollowUps]
       summary: Get a follow-up
       description: Retrieves a specific follow-up item. Requires authentication.
@@ -2120,6 +2220,7 @@ paths:
 
   /organizations/{orgId}/follow-ups/{followUpId}/complete:
     patch:
+      operationId: updateOrgfollowupsFollowUpcomplete
       tags: [FollowUps]
       summary: Complete a follow-up
       description: Marks a follow-up as completed. Requires admin or staff role.

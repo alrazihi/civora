@@ -9,10 +9,31 @@ import (
 	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
+	peopleDomain "github.com/alrazihi/civora/internal/people/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type mockPersonFinder struct {
+	persons map[uuid.UUID]*peopleDomain.Person
+}
+
+func newMockPersonFinder() *mockPersonFinder {
+	return &mockPersonFinder{persons: make(map[uuid.UUID]*peopleDomain.Person)}
+}
+
+func (m *mockPersonFinder) FindByID(ctx context.Context, orgID, id uuid.UUID) (*peopleDomain.Person, error) {
+	p, ok := m.persons[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return p, nil
+}
+
+func (m *mockPersonFinder) addPerson(p *peopleDomain.Person) {
+	m.persons[p.ID] = p
+}
 
 type mockCaseRepository struct {
 	mu    sync.RWMutex
@@ -87,11 +108,11 @@ func (m *mockCaseRepository) CountByOrganization(ctx context.Context, orgID uuid
 	return count, nil
 }
 
-func (m *mockCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus) error {
-	return m.UpdateStatusTx(ctx, nil, orgID, id, status)
+func (m *mockCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
+	return m.UpdateStatusTx(ctx, nil, orgID, id, status, version)
 }
 
-func (m *mockCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus) error {
+func (m *mockCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c, ok := m.cases[id]
@@ -142,7 +163,7 @@ func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
 
 func TestCreateCase(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -169,7 +190,7 @@ func TestCreateCase(t *testing.T) {
 
 func TestCaseLifecycle(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -215,7 +236,7 @@ func TestCaseLifecycle(t *testing.T) {
 
 func TestInvalidStateTransition(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -241,7 +262,7 @@ func TestInvalidStateTransition(t *testing.T) {
 
 func TestReopenFromReview(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -277,9 +298,34 @@ func TestReopenFromReview(t *testing.T) {
 	require.NoError(t, err, "reopening from IN_REVIEW to OPEN should be valid")
 }
 
+func TestCasePersonTenantIsolation(t *testing.T) {
+	repo := newMockCaseRepo()
+	personFinder := newMockPersonFinder()
+	svc := NewCaseService(repo, personFinder, newMockUserChecker(), nil)
+
+	org1 := uuid.New()
+	org2 := uuid.New()
+	userID := uuid.New()
+
+	person, _ := peopleDomain.NewPerson(org1, "John", "Doe", "en")
+	personFinder.addPerson(person)
+
+	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: org2,
+		Title:          "Case with cross-tenant person",
+		Description:    "Desc",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		PersonID:       &person.ID,
+		CreatedByID:    userID,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrPersonTenantViolation)
+}
+
 func TestCaseTenantIsolation(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -302,7 +348,7 @@ func TestCaseTenantIsolation(t *testing.T) {
 func TestAssignCase(t *testing.T) {
 	repo := newMockCaseRepo()
 	checker := newMockUserChecker()
-	svc := NewCaseService(repo, checker, nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), checker, nil)
 
 	orgID := uuid.New()
 	creator := uuid.New()
@@ -333,7 +379,7 @@ func TestAssignCase(t *testing.T) {
 func TestAssignCase_CrossTenantRejected(t *testing.T) {
 	repo := newMockCaseRepo()
 	checker := newMockUserChecker()
-	svc := NewCaseService(repo, checker, nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), checker, nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -363,7 +409,7 @@ func TestAssignCase_CrossTenantRejected(t *testing.T) {
 
 func TestListCases(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -407,7 +453,7 @@ func NewCollisionMockCaseRepo(maxCollisions int) *collisionMockCaseRepo {
 
 func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 	repo := NewCollisionMockCaseRepo(1)
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -427,7 +473,7 @@ func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 
 func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
 	repo := NewCollisionMockCaseRepo(10)
-	svc := NewCaseService(repo, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()

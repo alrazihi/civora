@@ -27,8 +27,14 @@ type FollowUp struct {
 }
 
 func NewFollowUp(orgID, serviceRequestID, performedBy uuid.UUID, scheduledDate time.Time, outcome, notes string) (*FollowUp, error) {
+	if len(outcome) > 500 {
+		return nil, fmt.Errorf("%w: outcome exceeds maximum length of 500 characters", ErrFollowUpInvalidInput)
+	}
 	if outcome == "" {
 		return nil, fmt.Errorf("%w: outcome is required", ErrFollowUpInvalidInput)
+	}
+	if len(notes) > 5000 {
+		return nil, fmt.Errorf("%w: notes exceed maximum length of 5000 characters", ErrFollowUpInvalidInput)
 	}
 	if notes == "" {
 		return nil, fmt.Errorf("%w: notes are required", ErrFollowUpInvalidInput)
@@ -50,4 +56,13 @@ func NewFollowUp(orgID, serviceRequestID, performedBy uuid.UUID, scheduledDate t
 func (f *FollowUp) Complete(completedDate time.Time) {
 	f.CompletedDate = &completedDate
 	f.UpdatedAt = time.Now().UTC()
+}
+
+func IsValidCaseStatusForFollowUp(status string) bool {
+	switch status {
+	case "APPROVED", "IN_PROGRESS", "FOLLOW_UP":
+		return true
+	default:
+		return false
+	}
 }

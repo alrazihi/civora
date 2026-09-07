@@ -36,8 +36,14 @@ type Evidence struct {
 }
 
 func NewEvidence(orgID, serviceRequestID, uploadedBy uuid.UUID, evidenceType EvidenceType, description, storageReference string) (*Evidence, error) {
+	if len(description) > 5000 {
+		return nil, fmt.Errorf("%w: description exceeds maximum length of 5000 characters", ErrEvidenceInvalidInput)
+	}
 	if description == "" {
 		return nil, fmt.Errorf("%w: description is required", ErrEvidenceInvalidInput)
+	}
+	if len(storageReference) > 500 {
+		return nil, fmt.Errorf("%w: storage reference exceeds maximum length of 500 characters", ErrEvidenceInvalidInput)
 	}
 	if storageReference == "" {
 		return nil, fmt.Errorf("%w: storage reference is required", ErrEvidenceInvalidInput)

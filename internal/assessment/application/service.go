@@ -10,25 +10,26 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
 	ErrAssessmentNotFound = errors.New("assessment not found")
 	ErrAssessmentInput    = errors.New("invalid assessment input")
+	ErrCaseNotFound       = errors.New("case not found")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type AssessmentService struct {
-	repo    assessmentdomain.AssessmentRepository
-	auditor auditdomain.EventRecorder
+	repo        assessmentdomain.AssessmentRepository
+	caseRepo    shared.CaseFinder
+	userChecker shared.UserChecker
+	auditor     auditdomain.EventRecorder
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
-func NewAssessmentService(repo assessmentdomain.AssessmentRepository, auditor auditdomain.EventRecorder) *AssessmentService {
-	return &AssessmentService{repo: repo, auditor: auditor}
+func NewAssessmentService(repo assessmentdomain.AssessmentRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *AssessmentService {
+	return &AssessmentService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
 }
 
 type CreateAssessmentParams struct {
@@ -41,6 +42,27 @@ type CreateAssessmentParams struct {
 }
 
 func (s *AssessmentService) CreateAssessment(ctx context.Context, params CreateAssessmentParams) (*assessmentdomain.Assessment, error) {
+	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	existing, err := s.repo.FindByServiceRequest(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err == nil && existing != nil {
+		return nil, fmt.Errorf("%w: assessment already exists for this service request", ErrAssessmentInput)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
 	a, err := assessmentdomain.NewAssessment(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Findings, params.NeedsIdentified, params.Recommendation)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrAssessmentInput, err)
@@ -53,14 +75,14 @@ func (s *AssessmentService) CreateAssessment(ctx context.Context, params CreateA
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: a.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "assessment.completed",
 				Resource:       "assessment",
-				ResourceID:     strPtr(a.ID.String()),
+				ResourceID:     shared.StrPtr(a.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": a.ServiceRequestID.String(),
 				},
@@ -117,15 +139,4 @@ func (s *AssessmentService) ListAssessments(ctx context.Context, orgID uuid.UUID
 	}
 
 	return items, total, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

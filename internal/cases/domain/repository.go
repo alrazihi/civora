@@ -15,8 +15,8 @@ type CaseRepository interface {
 	FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*Case, error)
 	FindByOrganizationWithFilter(ctx context.Context, orgID uuid.UUID, limit, offset int, filter CaseFilter) ([]*Case, error)
 	CountByOrganization(ctx context.Context, orgID uuid.UUID, filter CaseFilter) (int, error)
-	UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status CaseStatus) error
-	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status CaseStatus) error
+	UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status CaseStatus, version int) error
+	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status CaseStatus, version int) error
 	Assign(ctx context.Context, orgID, id, userID uuid.UUID) error
 	AssignTx(ctx context.Context, tx *sql.Tx, orgID, id, userID uuid.UUID) error
 }

@@ -151,6 +151,7 @@ func TestNewCase_InputValidation(t *testing.T) {
 		assert.Equal(t, ServiceTypeEmergency, c.ServiceType)
 		assert.Equal(t, PriorityHigh, c.Priority)
 		assert.Equal(t, CaseStatusNew, c.Status)
+		assert.Equal(t, 1, c.Version)
 	})
 
 	t.Run("with person", func(t *testing.T) {

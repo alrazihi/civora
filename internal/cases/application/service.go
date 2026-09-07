@@ -10,15 +10,18 @@ import (
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrCaseNotFound        = errors.New("case not found")
-	ErrCaseInvalidInput    = errors.New("invalid input")
-	ErrCaseTransition      = errors.New("invalid state transition")
-	ErrCaseUserNotFound    = errors.New("assignee not found")
-	ErrCaseTenantViolation = errors.New("user does not belong to organization")
+	ErrCaseNotFound          = errors.New("case not found")
+	ErrCaseInvalidInput      = errors.New("invalid input")
+	ErrCaseTransition        = errors.New("invalid state transition")
+	ErrCaseUserNotFound      = errors.New("assignee not found")
+	ErrCaseTenantViolation   = errors.New("user does not belong to organization")
+	ErrPersonNotFound        = errors.New("person not found")
+	ErrPersonTenantViolation = errors.New("person does not belong to organization")
 )
 
 type UserChecker interface {
@@ -30,16 +33,18 @@ type txEventRecorder interface {
 }
 
 type CaseService struct {
-	repo        domain.CaseRepository
-	userChecker UserChecker
-	auditor     auditdomain.EventRecorder
+	repo         domain.CaseRepository
+	personFinder shared.PersonFinder
+	userChecker  UserChecker
+	auditor      auditdomain.EventRecorder
 }
 
-func NewCaseService(repo domain.CaseRepository, userChecker UserChecker, auditor auditdomain.EventRecorder) *CaseService {
+func NewCaseService(repo domain.CaseRepository, personFinder shared.PersonFinder, userChecker UserChecker, auditor auditdomain.EventRecorder) *CaseService {
 	return &CaseService{
-		repo:        repo,
-		userChecker: userChecker,
-		auditor:     auditor,
+		repo:         repo,
+		personFinder: personFinder,
+		userChecker:  userChecker,
+		auditor:      auditor,
 	}
 }
 
@@ -56,6 +61,16 @@ type CreateCaseParams struct {
 func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (*domain.Case, error) {
 	if params.Title == "" {
 		return nil, fmt.Errorf("%w: title is required", ErrCaseInvalidInput)
+	}
+
+	if params.PersonID != nil {
+		p, err := s.personFinder.FindByID(ctx, params.OrganizationID, *params.PersonID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrPersonNotFound, err)
+		}
+		if p.OrganizationID != params.OrganizationID {
+			return nil, ErrPersonTenantViolation
+		}
 	}
 
 	c, err := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
@@ -76,14 +91,14 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 			}
 
 			if s.auditor != nil {
-				if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 					OrganizationID: c.OrganizationID,
 					ActorID:        &c.CreatedByID,
 					Action:         "case.created",
 					Resource:       "case",
-					ResourceID:     strPtr(c.ID.String()),
+					ResourceID:     shared.StrPtr(c.ID.String()),
 					Outcome:        "success",
-					RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+					RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				}); err != nil {
 					return fmt.Errorf("failed to record audit event: %w", err)
 				}
@@ -122,19 +137,19 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 
 	var result *domain.Case
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, params.CaseID, params.Status); err != nil {
+		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, params.CaseID, params.Status, c.Version); err != nil {
 			return fmt.Errorf("failed to update case status: %w", err)
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: c.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "case.transition",
 				Resource:       "case",
-				ResourceID:     strPtr(c.ID.String()),
+				ResourceID:     shared.StrPtr(c.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"from": string(c.Status),
 					"to":   string(params.Status),
@@ -186,14 +201,14 @@ func (s *CaseService) AssignCase(ctx context.Context, params AssignCaseParams) (
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: c.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "case.assigned",
 				Resource:       "case",
-				ResourceID:     strPtr(c.ID.String()),
+				ResourceID:     shared.StrPtr(c.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"assigned_to": params.UserID.String(),
 				},
@@ -242,15 +257,4 @@ func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, off
 	}
 
 	return cases, total, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

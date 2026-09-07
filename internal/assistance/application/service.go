@@ -10,25 +10,26 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
 	ErrAssistanceNotFound = errors.New("assistance not found")
 	ErrAssistanceInput    = errors.New("invalid assistance input")
+	ErrCaseNotFound       = errors.New("case not found")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type AssistanceService struct {
-	repo    assistancedomain.AssistanceRepository
-	auditor auditdomain.EventRecorder
+	repo        assistancedomain.AssistanceRepository
+	caseRepo    shared.CaseFinder
+	userChecker shared.UserChecker
+	auditor     auditdomain.EventRecorder
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
-func NewAssistanceService(repo assistancedomain.AssistanceRepository, auditor auditdomain.EventRecorder) *AssistanceService {
-	return &AssistanceService{repo: repo, auditor: auditor}
+func NewAssistanceService(repo assistancedomain.AssistanceRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *AssistanceService {
+	return &AssistanceService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
 }
 
 type CreateAssistanceParams struct {
@@ -41,6 +42,22 @@ type CreateAssistanceParams struct {
 }
 
 func (s *AssistanceService) CreateAssistance(ctx context.Context, params CreateAssistanceParams) (*assistancedomain.Assistance, error) {
+	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ResponsibleStaff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate responsible staff: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
 	a, err := assistancedomain.NewAssistance(params.OrganizationID, params.ServiceRequestID, params.ResponsibleStaff, params.Type, params.Description)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrAssistanceInput, err)
@@ -53,14 +70,14 @@ func (s *AssistanceService) CreateAssistance(ctx context.Context, params CreateA
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: a.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "assistance.created",
 				Resource:       "assistance",
-				ResourceID:     strPtr(a.ID.String()),
+				ResourceID:     shared.StrPtr(a.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": a.ServiceRequestID.String(),
 					"assistance_type":    string(a.Type),
@@ -118,6 +135,10 @@ func (s *AssistanceService) UpdateAssistanceStatus(ctx context.Context, orgID, i
 		return nil, ErrAssistanceNotFound
 	}
 
+	if !assistancedomain.IsValidStatusTransition(a.Status, action) {
+		return nil, fmt.Errorf("%w: invalid action %s for status %s", ErrAssistanceInput, action, a.Status)
+	}
+
 	switch action {
 	case "start":
 		a.Start()
@@ -136,14 +157,14 @@ func (s *AssistanceService) UpdateAssistanceStatus(ctx context.Context, orgID, i
 
 		if s.auditor != nil {
 			auditAction := "assistance." + action + "ed"
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: a.OrganizationID,
 				ActorID:        &actorID,
 				Action:         auditAction,
 				Resource:       "assistance",
-				ResourceID:     strPtr(a.ID.String()),
+				ResourceID:     shared.StrPtr(a.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": a.ServiceRequestID.String(),
 					"status":             string(a.Status),
@@ -159,15 +180,4 @@ func (s *AssistanceService) UpdateAssistanceStatus(ctx context.Context, orgID, i
 	}
 
 	return a, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

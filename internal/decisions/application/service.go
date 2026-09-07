@@ -8,27 +8,30 @@ import (
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
+	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrDecisionNotFound = errors.New("decision not found")
-	ErrDecisionInput    = errors.New("invalid decision input")
+	ErrDecisionNotFound    = errors.New("decision not found")
+	ErrDecisionInput       = errors.New("invalid decision input")
+	ErrCaseNotFound        = errors.New("case not found")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrInvalidCaseStatus   = errors.New("case is not in DECISION_PENDING status")
 )
 
 type DecisionService struct {
-	repo    decisionsdomain.DecisionRepository
-	auditor auditdomain.EventRecorder
+	repo        decisionsdomain.DecisionRepository
+	caseRepo    shared.CaseFinder
+	userChecker shared.UserChecker
+	auditor     auditdomain.EventRecorder
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
-func NewDecisionService(repo decisionsdomain.DecisionRepository, auditor auditdomain.EventRecorder) *DecisionService {
-	return &DecisionService{repo: repo, auditor: auditor}
+func NewDecisionService(repo decisionsdomain.DecisionRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *DecisionService {
+	return &DecisionService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
 }
 
 type MakeDecisionParams struct {
@@ -40,6 +43,31 @@ type MakeDecisionParams struct {
 }
 
 func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionParams) (*decisionsdomain.Decision, error) {
+	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	existing, err := s.repo.FindByServiceRequest(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err == nil && existing != nil {
+		return nil, fmt.Errorf("%w: decision already exists for this service request", ErrDecisionInput)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
+	if c.Status != casesdomain.CaseStatusDecisionPending {
+		return nil, ErrInvalidCaseStatus
+	}
+
 	d, err := decisionsdomain.NewDecision(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Decision, params.Reason)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrDecisionInput, err)
@@ -52,14 +80,14 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: d.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "decision.made",
 				Resource:       "decision",
-				ResourceID:     strPtr(d.ID.String()),
+				ResourceID:     shared.StrPtr(d.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": d.ServiceRequestID.String(),
 					"decision":           string(d.Decision),
@@ -117,15 +145,4 @@ func (s *DecisionService) ListDecisions(ctx context.Context, orgID uuid.UUID, li
 	}
 
 	return items, total, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

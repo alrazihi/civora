@@ -10,25 +10,26 @@ import (
 	"github.com/alrazihi/civora/internal/database"
 	evidencedomain "github.com/alrazihi/civora/internal/evidence/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
 
 var (
 	ErrEvidenceNotFound = errors.New("evidence not found")
 	ErrEvidenceInput    = errors.New("invalid evidence input")
+	ErrCaseNotFound     = errors.New("case not found")
+	ErrUserNotFound     = errors.New("user not found")
 )
 
 type EvidenceService struct {
-	repo    evidencedomain.EvidenceRepository
-	auditor auditdomain.EventRecorder
+	repo        evidencedomain.EvidenceRepository
+	caseRepo    shared.CaseFinder
+	userChecker shared.UserChecker
+	auditor     auditdomain.EventRecorder
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
-func NewEvidenceService(repo evidencedomain.EvidenceRepository, auditor auditdomain.EventRecorder) *EvidenceService {
-	return &EvidenceService{repo: repo, auditor: auditor}
+func NewEvidenceService(repo evidencedomain.EvidenceRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *EvidenceService {
+	return &EvidenceService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
 }
 
 type AddEvidenceParams struct {
@@ -41,6 +42,22 @@ type AddEvidenceParams struct {
 }
 
 func (s *EvidenceService) AddEvidence(ctx context.Context, params AddEvidenceParams) (*evidencedomain.Evidence, error) {
+	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
 	e, err := evidencedomain.NewEvidence(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Type, params.Description, params.StorageReference)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrEvidenceInput, err)
@@ -53,14 +70,14 @@ func (s *EvidenceService) AddEvidence(ctx context.Context, params AddEvidencePar
 		}
 
 		if s.auditor != nil {
-			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: e.OrganizationID,
 				ActorID:        &params.ActorID,
 				Action:         "evidence.added",
 				Resource:       "evidence",
-				ResourceID:     strPtr(e.ID.String()),
+				ResourceID:     shared.StrPtr(e.ID.String()),
 				Outcome:        "success",
-				RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": e.ServiceRequestID.String(),
 					"evidence_type":      string(e.Type),
@@ -110,15 +127,4 @@ func (s *EvidenceService) ListEvidence(ctx context.Context, orgID, serviceReques
 	}
 
 	return items, total, nil
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
-	if txRecorder, ok := auditor.(txEventRecorder); ok {
-		return txRecorder.RecordEventInTx(ctx, tx, params)
-	}
-	return auditor.RecordEvent(ctx, params)
 }

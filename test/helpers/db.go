@@ -44,21 +44,6 @@ func TestDB(t *testing.T) *sql.DB {
 }
 
 func ensureSchema(db *sql.DB) error {
-	var exists bool
-	err := db.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM information_schema.tables
-			WHERE table_schema = 'public' AND table_name = 'organizations'
-		)
-	`).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check schema: %w", err)
-	}
-
-	if exists {
-		return nil
-	}
-
 	migrator := database.NewMigrator(db, migrations.FS)
 	if err := migrator.LoadMigrations(); err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
@@ -66,7 +51,6 @@ func ensureSchema(db *sql.DB) error {
 	if err := migrator.Migrate(context.Background()); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
-
 	return nil
 }
 

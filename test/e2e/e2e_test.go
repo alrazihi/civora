@@ -101,11 +101,9 @@ func SetupTestServer(t *testing.T) *TestServer {
 	db, err := database.NewDatabase(dsn, cfg.Database.Driver)
 	require.NoError(t, err)
 
-	if !tablesExist(db.DB) {
-		migrator := database.NewMigrator(db.DB, migrations.FS)
-		require.NoError(t, migrator.LoadMigrations())
-		require.NoError(t, migrator.Migrate(context.Background()))
-	}
+	migrator := database.NewMigrator(db.DB, migrations.FS)
+	require.NoError(t, migrator.LoadMigrations())
+	require.NoError(t, migrator.Migrate(context.Background()))
 
 	_, err = db.DB.Exec(`
 		TRUNCATE TABLE
@@ -136,14 +134,14 @@ func SetupTestServer(t *testing.T) *TestServer {
 	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
 	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
-	caseService := caseapp.NewCaseService(caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	personService := peoplapp.NewPersonService(personRepo, auditService)
-	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, auditService)
-	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, auditService)
-	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, auditService)
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, auditService)
-	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, auditService)
-	followUpService := followupapp.NewFollowUpService(followUpRepo, auditService)
+	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	followUpService := followupapp.NewFollowUpService(followUpRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 
 	authMiddleware := intmid.AuthRequired(jwtSvc)
 
