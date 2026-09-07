@@ -27,6 +27,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/users", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
+		r.Use(middleware.RequireAnyRole("admin", "staff"))
 		r.Get("/", h.ListUsers)
 		r.Get("/{userId}", h.GetUser)
 	})
@@ -43,7 +44,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Name     string `json:"name"`
 		Password string `json:"password"`
-		Role     string `json:"role_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
@@ -55,7 +55,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Email:          req.Email,
 		Name:           req.Name,
 		Password:       req.Password,
-		RoleName:       req.Role,
 	})
 	if err != nil {
 		writeDomainError(w, err)

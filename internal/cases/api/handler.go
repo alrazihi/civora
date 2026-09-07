@@ -29,8 +29,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Post("/", h.CreateCase)
 		r.Get("/", h.ListCases)
 		r.Get("/{caseId}", h.GetCase)
-		r.Post("/{caseId}/transitions", h.ChangeStatus)
-		r.Post("/{caseId}/assign", h.AssignCase)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Post("/{caseId}/transitions", h.ChangeStatus)
+			r.Post("/{caseId}/assign", h.AssignCase)
+		})
 	})
 }
 

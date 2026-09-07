@@ -152,7 +152,7 @@ direct writes. Examples:
 
 ### External integrations
 
-- Identity providers (OIDC, SAML, LDAP)
+- Identity providers (future: OIDC, SAML, LDAP)
 - Document verification services
 - Payment systems
 - Email/SMS providers

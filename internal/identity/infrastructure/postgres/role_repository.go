@@ -14,16 +14,32 @@ type PostgresRoleRepository struct {
 	db *sql.DB
 }
 
+type sqlExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 func NewPostgresRoleRepository(db *sql.DB) *PostgresRoleRepository {
 	return &PostgresRoleRepository{db: db}
 }
 
+func (r *PostgresRoleRepository) DB() *sql.DB {
+	return r.db
+}
+
 func (r *PostgresRoleRepository) Save(ctx context.Context, role *domain.Role) error {
+	return r.saveRole(ctx, r.db, role)
+}
+
+func (r *PostgresRoleRepository) SaveTx(ctx context.Context, tx *sql.Tx, role *domain.Role) error {
+	return r.saveRole(ctx, tx, role)
+}
+
+func (r *PostgresRoleRepository) saveRole(ctx context.Context, e sqlExecer, role *domain.Role) error {
 	query := `
 		INSERT INTO roles (id, organization_id, name, description, permissions, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err := r.db.ExecContext(
+	_, err := e.ExecContext(
 		ctx, query,
 		role.ID, role.OrganizationID, role.Name, role.Description,
 		role.Permissions, role.CreatedAt,

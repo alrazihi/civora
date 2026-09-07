@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"time"
@@ -51,7 +52,9 @@ func (o *Organization) Validate() error {
 }
 
 type OrganizationRepository interface {
+	DB() *sql.DB
 	Save(ctx context.Context, org *Organization) error
+	SaveTx(ctx context.Context, tx *sql.Tx, org *Organization) error
 	FindBySlug(ctx context.Context, slug string) (*Organization, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*Organization, error)
 }

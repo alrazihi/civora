@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"sync"
 	"testing"
@@ -24,7 +25,15 @@ func newMockCaseRepo() *mockCaseRepository {
 	}
 }
 
+func (m *mockCaseRepository) DB() *sql.DB {
+	return nil
+}
+
 func (m *mockCaseRepository) Save(ctx context.Context, c *domain.Case) error {
+	return m.SaveTx(ctx, nil, c)
+}
+
+func (m *mockCaseRepository) SaveTx(ctx context.Context, tx *sql.Tx, c *domain.Case) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cases[c.ID] = c
@@ -76,6 +85,10 @@ func (m *mockCaseRepository) CountByOrganization(ctx context.Context, orgID uuid
 }
 
 func (m *mockCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus) error {
+	return m.UpdateStatusTx(ctx, nil, orgID, id, status)
+}
+
+func (m *mockCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c, ok := m.cases[id]
@@ -88,6 +101,10 @@ func (m *mockCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UU
 }
 
 func (m *mockCaseRepository) Assign(ctx context.Context, orgID, id, userID uuid.UUID) error {
+	return m.AssignTx(ctx, nil, orgID, id, userID)
+}
+
+func (m *mockCaseRepository) AssignTx(ctx context.Context, tx *sql.Tx, orgID, id, userID uuid.UUID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c, ok := m.cases[id]

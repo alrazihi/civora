@@ -3,10 +3,12 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
+	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
 	caseDomain "github.com/alrazihi/civora/internal/cases/domain"
@@ -274,4 +276,137 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 	err = db.QueryRowContext(ctx, "SELECT hash FROM audit_events WHERE organization_id = $1 ORDER BY timestamp ASC, id ASC LIMIT 1", org.ID).Scan(&firstHash)
 	require.NoError(t, err)
 	require.NotNil(t, firstHash, "first audit event should have a hash")
+}
+
+type failingAuditRepo struct {
+	auditpostgres.PostgresAuditRepository
+}
+
+func (f *failingAuditRepo) RecordEventTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *auditdomain.AuditEvent) error {
+	return errors.New("simulated audit write failure")
+}
+
+func (f *failingAuditRepo) RecordEvent(ctx context.Context, orgID uuid.UUID, event *auditdomain.AuditEvent) error {
+	return errors.New("simulated audit write failure")
+}
+
+func TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	userRepo := identitypostgres.NewPostgresUserRepository(db)
+	caseRepo := casepostgres.NewPostgresCaseRepository(db)
+
+	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
+	auditService := auditapp.NewAuditService(auditRepo)
+
+	caseSvc := caseapp.NewCaseService(caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
+
+	ctx := context.Background()
+	orgID := helpers.SeedOrg(db)
+	helpers.SeedDefaultRoles(db, orgID)
+
+	actorID := helpers.SeedUser(db, orgID)
+
+	_, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Test Case for Atomicity",
+		Description:    "Should not persist if audit fails",
+		CreatedByID:    actorID,
+	})
+	require.Error(t, err, "CreateCase should fail when audit recording fails")
+
+	var caseCount int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM cases WHERE organization_id = $1", orgID).Scan(&caseCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, caseCount, "case should be rolled back when audit fails")
+
+	var auditCount int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events WHERE organization_id = $1 AND resource = $2", orgID, "case").Scan(&auditCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, auditCount, "no audit events should exist for the failed case creation")
+}
+
+func TestAuditAtomicity_StatusChangeRollsBackOnAuditFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	userRepo := identitypostgres.NewPostgresUserRepository(db)
+	caseRepo := casepostgres.NewPostgresCaseRepository(db)
+
+	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
+	auditService := auditapp.NewAuditService(auditRepo)
+
+	caseSvc := caseapp.NewCaseService(caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
+
+	ctx := context.Background()
+	orgID := helpers.SeedOrg(db)
+	helpers.SeedDefaultRoles(db, orgID)
+
+	actorID := helpers.SeedUser(db, orgID)
+
+	caseID := uuid.New()
+	_, err := db.ExecContext(ctx,
+		"INSERT INTO cases (id, organization_id, case_number, title, description, status, created_by, assigned_to, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())",
+		caseID, orgID, "CASE-001", "Pre-existing Case", "", "CREATED", actorID, nil,
+	)
+	require.NoError(t, err)
+
+	_, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		Status:         caseDomain.CaseStatusOpen,
+		ActorID:        actorID,
+	})
+	require.Error(t, err, "ChangeStatus should fail when audit recording fails")
+
+	var statusVal string
+	err = db.QueryRowContext(ctx, "SELECT status FROM cases WHERE id = $1", caseID).Scan(&statusVal)
+	require.NoError(t, err)
+	assert.Equal(t, "CREATED", statusVal, "case status should remain unchanged when audit fails")
+}
+
+func TestAuditAtomicity_OrgCreationRollsBackOnAuditFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	orgRepo := orgpostgres.NewPostgresOrganizationRepository(db)
+	roleRepo := identitypostgres.NewPostgresRoleRepository(db)
+
+	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
+	auditService := auditapp.NewAuditService(auditRepo)
+
+	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
+	orgSvc := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
+
+	ctx := context.Background()
+	slug := "atomic-org-" + uuid.NewString()[:8]
+	_, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
+		Name:        "Atomic Org Creation",
+		Description: "",
+		Slug:        slug,
+	})
+	require.Error(t, err, "CreateOrganization should fail when audit recording fails")
+
+	var orgCount int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM organizations WHERE slug = $1", slug).Scan(&orgCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, orgCount, "organization should be rolled back when audit fails")
+
+	var roleCount int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM roles WHERE organization_id IN (SELECT id FROM organizations WHERE slug = $1)", slug).Scan(&roleCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, roleCount, "default roles should be rolled back when audit fails")
 }

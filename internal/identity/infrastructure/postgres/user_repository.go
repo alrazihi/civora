@@ -19,15 +19,27 @@ func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
 	return &PostgresUserRepository{db: db}
 }
 
+func (r *PostgresUserRepository) DB() *sql.DB {
+	return r.db
+}
+
 func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User) error {
+	return r.saveUser(ctx, r.db, user)
+}
+
+func (r *PostgresUserRepository) SaveTx(ctx context.Context, tx *sql.Tx, user *domain.User) error {
+	return r.saveUser(ctx, tx, user)
+}
+
+func (r *PostgresUserRepository) saveUser(ctx context.Context, e sqlExecer, user *domain.User) error {
 	query := `
-		INSERT INTO users (id, organization_id, email, name, role_id, password_hash, is_oidc_user, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO users (id, organization_id, email, name, role_id, password_hash, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
-	_, err := r.db.ExecContext(
+	_, err := e.ExecContext(
 		ctx, query,
 		user.ID, user.OrganizationID, user.Email, user.Name,
-		user.RoleID, user.PasswordHash, user.IsOIDCUser,
+		user.RoleID, user.PasswordHash,
 		user.CreatedAt, user.UpdatedAt,
 	)
 	if err != nil {
@@ -38,7 +50,7 @@ func (r *PostgresUserRepository) Save(ctx context.Context, user *domain.User) er
 
 func (r *PostgresUserRepository) FindByEmail(ctx context.Context, orgID uuid.UUID, email string) (*domain.User, error) {
 	query := `
-		SELECT id, organization_id, email, name, role_id, password_hash, is_oidc_user, created_at, updated_at
+		SELECT id, organization_id, email, name, role_id, password_hash, created_at, updated_at
 		FROM users
 		WHERE organization_id = $1 AND email = $2
 	`
@@ -47,7 +59,7 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, orgID uuid.UUI
 
 func (r *PostgresUserRepository) FindByID(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error) {
 	query := `
-		SELECT id, organization_id, email, name, role_id, password_hash, is_oidc_user, created_at, updated_at
+		SELECT id, organization_id, email, name, role_id, password_hash, created_at, updated_at
 		FROM users
 		WHERE organization_id = $1 AND id = $2
 	`
@@ -56,7 +68,7 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, orgID, userID uui
 
 func (r *PostgresUserRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*domain.User, error) {
 	query := `
-		SELECT id, organization_id, email, name, role_id, password_hash, is_oidc_user, created_at, updated_at
+		SELECT id, organization_id, email, name, role_id, password_hash, created_at, updated_at
 		FROM users
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
@@ -69,15 +81,11 @@ func (r *PostgresUserRepository) FindByOrganization(ctx context.Context, orgID u
 
 	var users []*domain.User
 	for rows.Next() {
-		var u domain.User
-		if err := rows.Scan(
-			&u.ID, &u.OrganizationID, &u.Email, &u.Name,
-			&u.RoleID, &u.PasswordHash, &u.IsOIDCUser,
-			&u.CreatedAt, &u.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan user: %w", err)
+		u, err := r.scanUserFromRows(rows)
+		if err != nil {
+			return nil, err
 		}
-		users = append(users, &u)
+		users = append(users, u)
 	}
 	return users, nil
 }
@@ -88,7 +96,7 @@ func (r *PostgresUserRepository) scanUser(row interface {
 	var u domain.User
 	if err := row.Scan(
 		&u.ID, &u.OrganizationID, &u.Email, &u.Name,
-		&u.RoleID, &u.PasswordHash, &u.IsOIDCUser,
+		&u.RoleID, &u.PasswordHash,
 		&u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -97,6 +105,38 @@ func (r *PostgresUserRepository) scanUser(row interface {
 		return nil, fmt.Errorf("failed to scan user: %w", err)
 	}
 	return &u, nil
+}
+
+func (r *PostgresUserRepository) scanUserFromRows(rows *sql.Rows) (*domain.User, error) {
+	var u domain.User
+	if err := rows.Scan(
+		&u.ID, &u.OrganizationID, &u.Email, &u.Name,
+		&u.RoleID, &u.PasswordHash,
+		&u.CreatedAt, &u.UpdatedAt,
+	); err != nil {
+		return nil, fmt.Errorf("failed to scan user: %w", err)
+	}
+	return &u, nil
+}
+
+func (r *PostgresUserRepository) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
+	return r.countByOrganization(ctx, r.db, orgID)
+}
+
+func (r *PostgresUserRepository) CountByOrganizationTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) (int, error) {
+	return r.countByOrganization(ctx, tx, orgID)
+}
+
+func (r *PostgresUserRepository) countByOrganization(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}, orgID uuid.UUID) (int, error) {
+	var count int
+	err := q.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM users WHERE organization_id = $1", orgID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count users: %w", err)
+	}
+	return count, nil
 }
 
 func (r *PostgresUserRepository) ScanRolePermissions(ctx context.Context, roleID uuid.UUID) ([]string, error) {

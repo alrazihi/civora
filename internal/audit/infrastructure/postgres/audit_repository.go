@@ -19,6 +19,10 @@ func NewPostgresAuditRepository(db *sql.DB) *PostgresAuditRepository {
 	return &PostgresAuditRepository{db: db}
 }
 
+func (r *PostgresAuditRepository) DB() *sql.DB {
+	return r.db
+}
+
 func (r *PostgresAuditRepository) RecordEvent(ctx context.Context, orgID uuid.UUID, event *domain.AuditEvent) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -26,8 +30,23 @@ func (r *PostgresAuditRepository) RecordEvent(ctx context.Context, orgID uuid.UU
 	}
 	defer tx.Rollback()
 
+	if err := r.writeEvent(ctx, tx, orgID, event); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit audit transaction: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresAuditRepository) RecordEventTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *domain.AuditEvent) error {
+	return r.writeEvent(ctx, tx, orgID, event)
+}
+
+func (r *PostgresAuditRepository) writeEvent(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *domain.AuditEvent) error {
 	var lastHash *string
-	err = tx.QueryRowContext(ctx, `
+	err := tx.QueryRowContext(ctx, `
 		SELECT hash FROM audit_events
 		WHERE organization_id = $1
 		ORDER BY timestamp DESC, id DESC
@@ -71,11 +90,6 @@ func (r *PostgresAuditRepository) RecordEvent(ctx context.Context, orgID uuid.UU
 	if err != nil {
 		return fmt.Errorf("failed to insert audit event: %w", err)
 	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit audit transaction: %w", err)
-	}
-
 	return nil
 }
 

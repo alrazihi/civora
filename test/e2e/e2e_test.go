@@ -314,3 +314,103 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, resp.Code,
 		"user from org1 should not access org2 path; body: %s", resp.Body.String())
 }
+
+func TestRBAC_RoleAssignmentOnRegistration(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "rbac-test", "RBAC Test Org")
+
+	ts.registerUser(t, orgID, "first@example.com", "First User", "password123")
+	ts.registerUser(t, orgID, "second@example.com", "Second User", "password123")
+
+	firstToken := ts.login(t, orgID, "first@example.com", "password123")
+	secondToken := ts.login(t, orgID, "second@example.com", "password123")
+
+	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/users", firstToken, nil)
+	require.Equal(t, http.StatusOK, resp.Code, "admin should list users; body: %s", resp.Body.String())
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/users", secondToken, nil)
+	require.Equal(t, http.StatusOK, resp.Code, "staff should list users; body: %s", resp.Body.String())
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/audit", firstToken, nil)
+	require.Equal(t, http.StatusOK, resp.Code, "admin should access audit; body: %s", resp.Body.String())
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/audit", secondToken, nil)
+	require.Equal(t, http.StatusOK, resp.Code, "staff should access audit; body: %s", resp.Body.String())
+}
+
+func TestRBAC_RegistrationIgnoresRoleName(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "rbac-role-injection", "RBAC Role Injection Org")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/auth/register", "", map[string]interface{}{
+		"email":     "attacker@example.com",
+		"name":      "Attacker",
+		"password":  "password123",
+		"role_name": "admin",
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "registration should succeed; body: %s", resp.Body.String())
+
+	token := ts.login(t, orgID, "attacker@example.com", "password123")
+	require.NotEmpty(t, token)
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/audit", token, nil)
+	require.Equal(t, http.StatusOK, resp.Code, "registered user (first=staff) should access audit; body: %s", resp.Body.String())
+}
+
+func TestRBAC_ProtectedRoutesRequireAuth(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "rbac-noauth", "RBAC No Auth Org")
+	ts.registerUser(t, orgID, "user@example.com", "Test User", "password123")
+
+	tests := []struct {
+		method string
+		path   string
+	}{
+		{"POST", "/api/v1/organizations/" + orgID.String() + "/cases"},
+		{"POST", "/api/v1/organizations/" + orgID.String() + "/cases/" + uuid.New().String() + "/transitions"},
+		{"POST", "/api/v1/organizations/" + orgID.String() + "/cases/" + uuid.New().String() + "/assign"},
+		{"GET", "/api/v1/organizations/" + orgID.String() + "/users"},
+		{"GET", "/api/v1/organizations/" + orgID.String() + "/audit"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			resp := ts.makeRequest(t, tc.method, tc.path, "", nil)
+			require.Equal(t, http.StatusUnauthorized, resp.Code,
+				"unauthenticated request should be rejected; body: %s", resp.Body.String())
+		})
+	}
+}
+
+func TestRBAC_CaseTransitionsAllowAdminAndStaff(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "rbac-transitions", "RBAC Transitions Org")
+	ts.registerUser(t, orgID, "first@example.com", "First User", "password123")
+	ts.registerUser(t, orgID, "second@example.com", "Second User", "password123")
+
+	adminToken := ts.login(t, orgID, "first@example.com", "password123")
+	staffToken := ts.login(t, orgID, "second@example.com", "password123")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", adminToken, map[string]interface{}{
+		"title": "RBAC Case",
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "admin should create case; body: %s", resp.Body.String())
+
+	var createResp struct {
+		Data struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &createResp)
+	caseID := createResp.Data.ID
+
+	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/transitions", staffToken, map[string]interface{}{
+		"status": "OPEN",
+	})
+	require.Equal(t, http.StatusOK, resp.Code, "staff should be able to transition; body: %s", resp.Body.String())
+}

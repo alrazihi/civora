@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	"github.com/alrazihi/civora/internal/database"
 	"github.com/alrazihi/civora/internal/identity/domain"
 	"github.com/google/uuid"
 )
@@ -55,7 +57,10 @@ type CreateUserParams struct {
 	Email          string
 	Name           string
 	Password       string
-	RoleName       string
+}
+
+type txEventRecorder interface {
+	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
 }
 
 func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParams) (*domain.User, error) {
@@ -74,37 +79,68 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 		return nil, ErrEmailAlreadyExists
 	}
 
-	var roleID *uuid.UUID
-	if params.RoleName != "" {
-		role, err := s.roleRepo.FindByName(ctx, params.OrganizationID, params.RoleName)
-		if err == nil {
-			roleID = &role.ID
+	var user *domain.User
+	err := database.InTransaction(ctx, s.userRepo.DB(), func(tx *sql.Tx) error {
+		count, err := s.userRepo.CountByOrganizationTx(ctx, tx, params.OrganizationID)
+		if err != nil {
+			return fmt.Errorf("failed to count users: %w", err)
 		}
-	}
 
-	user := domain.NewUser(params.OrganizationID, params.Email, params.Name, roleID)
+		var roleID *uuid.UUID
+		if count == 0 {
+			role, err := s.roleRepo.FindByName(ctx, params.OrganizationID, domain.RoleAdmin)
+			if err == nil {
+				roleID = &role.ID
+			}
+		} else {
+			role, err := s.roleRepo.FindByName(ctx, params.OrganizationID, domain.RoleStaff)
+			if err == nil {
+				roleID = &role.ID
+			}
+		}
 
-	hash, err := s.hasher.Hash(params.Password)
+		user = domain.NewUser(params.OrganizationID, params.Email, params.Name, roleID)
+
+		hash, err := s.hasher.Hash(params.Password)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %w", err)
+		}
+		user.PasswordHash = &hash
+
+		if err := s.userRepo.SaveTx(ctx, tx, user); err != nil {
+			return fmt.Errorf("failed to save user: %w", err)
+		}
+
+		if s.auditor != nil {
+			if txRecorder, ok := s.auditor.(txEventRecorder); ok {
+				if err := txRecorder.RecordEventInTx(ctx, tx, auditdomain.RecordEventParams{
+					OrganizationID: user.OrganizationID,
+					ActorID:        &user.ID,
+					Action:         "user.created",
+					Resource:       "user",
+					ResourceID:     strPtr(user.ID.String()),
+					Outcome:        "success",
+				}); err != nil {
+					return fmt.Errorf("failed to record audit event: %w", err)
+				}
+			} else {
+				if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+					OrganizationID: user.OrganizationID,
+					ActorID:        &user.ID,
+					Action:         "user.created",
+					Resource:       "user",
+					ResourceID:     strPtr(user.ID.String()),
+					Outcome:        "success",
+				}); err != nil {
+					return fmt.Errorf("failed to record audit event: %w", err)
+				}
+			}
+		}
+
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-	user.PasswordHash = &hash
-
-	if err := s.userRepo.Save(ctx, user); err != nil {
-		return nil, fmt.Errorf("failed to save user: %w", err)
-	}
-
-	if s.auditor != nil {
-		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
-			OrganizationID: user.OrganizationID,
-			ActorID:        &user.ID,
-			Action:         "user.created",
-			Resource:       "user",
-			ResourceID:     strPtr(user.ID.String()),
-			Outcome:        "success",
-		}); err != nil {
-			log.Printf("audit event recording failed: %v", err)
-		}
+		return nil, err
 	}
 
 	return user, nil

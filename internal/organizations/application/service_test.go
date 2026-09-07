@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/alrazihi/civora/internal/organizations/domain"
@@ -19,7 +20,15 @@ func newMockOrgRepo() *mockOrgRepo {
 }
 
 func (m *mockOrgRepo) Save(ctx context.Context, org *domain.Organization) error {
+	return m.SaveTx(ctx, nil, org)
+}
+
+func (m *mockOrgRepo) SaveTx(ctx context.Context, tx *sql.Tx, org *domain.Organization) error {
 	m.orgs[org.ID] = org
+	return nil
+}
+
+func (m *mockOrgRepo) DB() *sql.DB {
 	return nil
 }
 
@@ -46,6 +55,10 @@ type mockRoleCreator struct {
 }
 
 func (m *mockRoleCreator) CreateDefaultRoles(ctx context.Context, orgID uuid.UUID) error {
+	return m.CreateDefaultRolesTx(ctx, nil, orgID)
+}
+
+func (m *mockRoleCreator) CreateDefaultRolesTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) error {
 	m.called = true
 	m.createdRoles = append(m.createdRoles, "admin", "staff")
 	return nil

@@ -56,6 +56,10 @@ func BuildDSN(host, port, user, password, dbName, sslMode string) string {
 }
 
 func InTransaction(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
+	if db == nil {
+		return fn(nil)
+	}
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)

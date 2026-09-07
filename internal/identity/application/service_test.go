@@ -2,8 +2,11 @@ package application
 
 import (
 	"context"
+	"database/sql"
+	"reflect"
 	"testing"
 
+	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/identity/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -69,14 +72,30 @@ type mockRoleRepo struct {
 	roles []*domain.Role
 }
 
+func (m *mockRoleRepo) DB() *sql.DB {
+	return nil
+}
+
 func (m *mockRoleRepo) Save(ctx context.Context, role *domain.Role) error {
 	m.roles = append(m.roles, role)
 	return nil
 }
+
+func (m *mockRoleRepo) SaveTx(ctx context.Context, tx *sql.Tx, role *domain.Role) error {
+	m.roles = append(m.roles, role)
+	return nil
+}
+
 func (m *mockRoleRepo) FindByID(ctx context.Context, orgID, roleID uuid.UUID) (*domain.Role, error) {
 	return nil, nil
 }
+
 func (m *mockRoleRepo) FindByName(ctx context.Context, orgID uuid.UUID, name string) (*domain.Role, error) {
+	for _, r := range m.roles {
+		if r.Name == name {
+			return r, nil
+		}
+	}
 	return nil, nil
 }
 func (m *mockRoleRepo) FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*domain.Role, error) {
@@ -137,18 +156,38 @@ type mockUserRepo struct {
 	users []*domain.User
 }
 
+func (m *mockUserRepo) DB() *sql.DB {
+	return nil
+}
+
 func (m *mockUserRepo) Save(ctx context.Context, u *domain.User) error {
 	m.users = append(m.users, u)
 	return nil
 }
+
+func (m *mockUserRepo) SaveTx(ctx context.Context, tx *sql.Tx, u *domain.User) error {
+	m.users = append(m.users, u)
+	return nil
+}
+
 func (m *mockUserRepo) FindByEmail(ctx context.Context, orgID uuid.UUID, email string) (*domain.User, error) {
 	return nil, nil
 }
+
 func (m *mockUserRepo) FindByID(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error) {
 	return nil, nil
 }
+
 func (m *mockUserRepo) FindByOrganization(ctx context.Context, orgID uuid.UUID) ([]*domain.User, error) {
 	return nil, nil
+}
+
+func (m *mockUserRepo) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
+	return len(m.users), nil
+}
+
+func (m *mockUserRepo) CountByOrganizationTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) (int, error) {
+	return len(m.users), nil
 }
 
 type mockHasher struct{}
@@ -158,4 +197,57 @@ func (m *mockHasher) Hash(password string) (string, error) {
 }
 func (m *mockHasher) Verify(password, hash string) (bool, error) {
 	return true, nil
+}
+
+func TestCreateUser_AutoAssignsAdminRoleForFirstUser(t *testing.T) {
+	roleRepo := &mockRoleRepo{}
+	roleRepo.roles = append(roleRepo.roles,
+		domain.NewRole(uuid.New(), "admin", "Admin role", []string{"*"}),
+		domain.NewRole(uuid.New(), "staff", "Staff role", []string{"cases:*"}),
+	)
+
+	svc := &IdentityService{
+		userRepo: &mockUserRepo{},
+		roleRepo: roleRepo,
+		hasher:   &mockHasher{},
+	}
+
+	user, err := svc.CreateUser(context.Background(), CreateUserParams{
+		OrganizationID: uuid.New(),
+		Email:          "first@example.com",
+		Name:           "First User",
+		Password:       "password123",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.NotNil(t, user.RoleID, "first user should get a role")
+}
+
+func TestCreateUser_RoleFieldsRemovedFromParams(t *testing.T) {
+	paramsType := reflect.TypeOf(CreateUserParams{})
+	fieldNames := make([]string, 0, paramsType.NumField())
+	for i := 0; i < paramsType.NumField(); i++ {
+		fieldNames = append(fieldNames, paramsType.Field(i).Name)
+	}
+	assert.NotContains(t, fieldNames, "RoleName", "RoleName should be removed from CreateUserParams for RBAC safety")
+}
+
+func TestOIDCConfigFieldsRemoved(t *testing.T) {
+	authType := reflect.TypeOf(config.AuthConfig{})
+	_, exists := authType.FieldByName("OIDCIssuer")
+	assert.False(t, exists, "OIDCIssuer field must be removed from AuthConfig")
+
+	_, hasClientID := authType.FieldByName("OIDCClientID")
+	assert.False(t, hasClientID, "OIDCClientID field must be removed from AuthConfig")
+
+	_, hasRedirectURL := authType.FieldByName("OIDCRedirectURL")
+	assert.False(t, hasRedirectURL, "OIDCRedirectURL field must be removed from AuthConfig")
+}
+
+func TestPasswordPolicy_RejectsWeakPasswords(t *testing.T) {
+	weakPasswords := []string{"short", "12345678", "abcdefgh", ""}
+	for _, pw := range weakPasswords {
+		err := validatePassword(pw)
+		assert.ErrorIs(t, err, ErrWeakPassword, "password %q should be rejected", pw)
+	}
 }

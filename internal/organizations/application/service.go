@@ -2,12 +2,13 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	"github.com/alrazihi/civora/internal/database"
 	"github.com/alrazihi/civora/internal/organizations/domain"
 	"github.com/google/uuid"
 )
@@ -20,6 +21,7 @@ var (
 
 type RoleCreator interface {
 	CreateDefaultRoles(ctx context.Context, orgID uuid.UUID) error
+	CreateDefaultRolesTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) error
 }
 
 type OrganizationService struct {
@@ -42,6 +44,10 @@ type CreateOrganizationParams struct {
 	Slug        string
 }
 
+type txEventRecorder interface {
+	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
+}
+
 func (s *OrganizationService) CreateOrganization(ctx context.Context, params CreateOrganizationParams) (*domain.Organization, error) {
 	if strings.TrimSpace(params.Name) == "" {
 		return nil, ErrOrgInvalidInput
@@ -60,29 +66,38 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 		return nil, err
 	}
 
-	if err := s.repo.Save(ctx, org); err != nil {
-		return nil, fmt.Errorf("failed to save organization: %w", err)
-	}
-
-	if s.roleCreator != nil {
-		if err := s.roleCreator.CreateDefaultRoles(ctx, org.ID); err != nil {
-			log.Printf("failed to create default roles: %v", err)
+	var result *domain.Organization
+	err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.SaveTx(ctx, tx, org); err != nil {
+			return fmt.Errorf("failed to save organization: %w", err)
 		}
-	}
 
-	if s.auditor != nil {
-		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
-			OrganizationID: org.ID,
-			Action:         "organization.created",
-			Resource:       "organization",
-			ResourceID:     strPtr(org.ID.String()),
-			Outcome:        "success",
-		}); err != nil {
-			log.Printf("audit event recording failed: %v", err)
+		if s.roleCreator != nil {
+			if err := s.roleCreator.CreateDefaultRolesTx(ctx, tx, org.ID); err != nil {
+				return fmt.Errorf("failed to create default roles: %w", err)
+			}
 		}
+
+		if s.auditor != nil {
+			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: org.ID,
+				Action:         "organization.created",
+				Resource:       "organization",
+				ResourceID:     strPtr(org.ID.String()),
+				Outcome:        "success",
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		result = org
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return org, nil
+	return result, nil
 }
 
 func (s *OrganizationService) GetOrganization(ctx context.Context, id uuid.UUID) (*domain.Organization, error) {
@@ -103,4 +118,11 @@ func (s *OrganizationService) GetBySlug(ctx context.Context, slug string) (*doma
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
+	if txRecorder, ok := auditor.(txEventRecorder); ok {
+		return txRecorder.RecordEventInTx(ctx, tx, params)
+	}
+	return auditor.RecordEvent(ctx, params)
 }

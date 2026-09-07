@@ -6,6 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	RoleAdmin = "admin"
+	RoleStaff = "staff"
+)
+
 type Role struct {
 	ID             uuid.UUID `json:"id"`
 	OrganizationID uuid.UUID `json:"organization_id"`

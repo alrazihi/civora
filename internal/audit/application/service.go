@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -20,6 +21,14 @@ func NewAuditService(repo domain.AuditRepository) *AuditService {
 var _ domain.EventRecorder = (*AuditService)(nil)
 
 func (s *AuditService) RecordEvent(ctx context.Context, params domain.RecordEventParams) error {
+	return s.recordEvent(ctx, nil, params)
+}
+
+func (s *AuditService) RecordEventInTx(ctx context.Context, tx *sql.Tx, params domain.RecordEventParams) error {
+	return s.recordEvent(ctx, tx, params)
+}
+
+func (s *AuditService) recordEvent(ctx context.Context, tx *sql.Tx, params domain.RecordEventParams) error {
 	if !domain.IsValidOutcome(params.Outcome) {
 		return fmt.Errorf("invalid outcome: %s", params.Outcome)
 	}
@@ -42,7 +51,17 @@ func (s *AuditService) RecordEvent(ctx context.Context, params domain.RecordEven
 		Timestamp:      time.Now().UTC(),
 	}
 
-	if err := s.repo.RecordEvent(ctx, params.OrganizationID, event); err != nil {
+	if actorID == uuid.Nil {
+		event.ActorID = nil
+	}
+
+	var err error
+	if tx != nil {
+		err = s.repo.RecordEventTx(ctx, tx, params.OrganizationID, event)
+	} else {
+		err = s.repo.RecordEvent(ctx, params.OrganizationID, event)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to record audit event: %w", err)
 	}
 
@@ -55,4 +74,8 @@ func (s *AuditService) FindByOrganization(ctx context.Context, orgID uuid.UUID, 
 
 func (s *AuditService) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
 	return s.repo.CountByOrganization(ctx, orgID)
+}
+
+func (s *AuditService) DB() *sql.DB {
+	return s.repo.DB()
 }

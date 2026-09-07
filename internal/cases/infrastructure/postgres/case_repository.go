@@ -13,18 +13,34 @@ type PostgresCaseRepository struct {
 	db *sql.DB
 }
 
+type sqlExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 func NewPostgresCaseRepository(db *sql.DB) *PostgresCaseRepository {
 	return &PostgresCaseRepository{db: db}
 }
 
+func (r *PostgresCaseRepository) DB() *sql.DB {
+	return r.db
+}
+
 func (r *PostgresCaseRepository) Save(ctx context.Context, c *domain.Case) error {
+	return r.saveCase(ctx, r.db, c)
+}
+
+func (r *PostgresCaseRepository) SaveTx(ctx context.Context, tx *sql.Tx, c *domain.Case) error {
+	return r.saveCase(ctx, tx, c)
+}
+
+func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *domain.Case) error {
 	query := `
 		INSERT INTO cases (
 			id, organization_id, case_number, title, description,
 			status, created_by, assigned_to, created_at, updated_at, closed_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := e.ExecContext(ctx, query,
 		c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
 		c.Status, c.CreatedByID, c.AssignedToID, c.CreatedAt, c.UpdatedAt, c.ClosedAt)
 	if err != nil {
@@ -102,12 +118,20 @@ func (r *PostgresCaseRepository) CountByOrganization(ctx context.Context, orgID 
 }
 
 func (r *PostgresCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus) error {
+	return r.updateStatus(ctx, r.db, orgID, id, status)
+}
+
+func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus) error {
+	return r.updateStatus(ctx, tx, orgID, id, status)
+}
+
+func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, orgID, id uuid.UUID, status domain.CaseStatus) error {
 	query := `
 		UPDATE cases
 		SET status = $1, updated_at = now()
 		WHERE organization_id = $2 AND id = $3
 	`
-	result, err := r.db.ExecContext(ctx, query, status, orgID, id)
+	result, err := e.ExecContext(ctx, query, status, orgID, id)
 	if err != nil {
 		return fmt.Errorf("failed to update case status: %w", err)
 	}
@@ -119,12 +143,20 @@ func (r *PostgresCaseRepository) UpdateStatus(ctx context.Context, orgID, id uui
 }
 
 func (r *PostgresCaseRepository) Assign(ctx context.Context, orgID, id, userID uuid.UUID) error {
+	return r.assign(ctx, r.db, orgID, id, userID)
+}
+
+func (r *PostgresCaseRepository) AssignTx(ctx context.Context, tx *sql.Tx, orgID, id, userID uuid.UUID) error {
+	return r.assign(ctx, tx, orgID, id, userID)
+}
+
+func (r *PostgresCaseRepository) assign(ctx context.Context, e sqlExecer, orgID, id, userID uuid.UUID) error {
 	query := `
 		UPDATE cases
 		SET assigned_to = $1, updated_at = now()
 		WHERE organization_id = $2 AND id = $3
 	`
-	result, err := r.db.ExecContext(ctx, query, userID, orgID, id)
+	result, err := e.ExecContext(ctx, query, userID, orgID, id)
 	if err != nil {
 		return fmt.Errorf("failed to assign case: %w", err)
 	}

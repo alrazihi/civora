@@ -13,16 +13,32 @@ type PostgresOrganizationRepository struct {
 	db *sql.DB
 }
 
+type sqlExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 func NewPostgresOrganizationRepository(db *sql.DB) *PostgresOrganizationRepository {
 	return &PostgresOrganizationRepository{db: db}
 }
 
+func (r *PostgresOrganizationRepository) DB() *sql.DB {
+	return r.db
+}
+
 func (r *PostgresOrganizationRepository) Save(ctx context.Context, org *domain.Organization) error {
+	return r.saveOrganization(ctx, r.db, org)
+}
+
+func (r *PostgresOrganizationRepository) SaveTx(ctx context.Context, tx *sql.Tx, org *domain.Organization) error {
+	return r.saveOrganization(ctx, tx, org)
+}
+
+func (r *PostgresOrganizationRepository) saveOrganization(ctx context.Context, e sqlExecer, org *domain.Organization) error {
 	query := `
 		INSERT INTO organizations (id, name, description, slug, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := e.ExecContext(ctx, query,
 		org.ID, org.Name, org.Description, org.Slug, org.CreatedAt, org.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert organization: %w", err)

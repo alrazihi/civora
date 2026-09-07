@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/audit", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
+		r.Use(middleware.RequireAnyRole("admin", "staff"))
 		r.Get("/", h.ListEvents)
 	})
 }

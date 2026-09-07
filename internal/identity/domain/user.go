@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -17,7 +18,6 @@ type User struct {
 	Name           string     `json:"name"`
 	RoleID         *uuid.UUID `json:"role_id"`
 	PasswordHash   *string    `json:"-"`
-	IsOIDCUser     bool       `json:"is_oidc_user"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
@@ -82,6 +82,14 @@ func NewDefaultRoleCreator(roleRepo RoleRepository) *DefaultRoleCreator {
 }
 
 func (c *DefaultRoleCreator) CreateDefaultRoles(ctx context.Context, orgID uuid.UUID) error {
+	return c.createDefaultRoles(ctx, nil, orgID)
+}
+
+func (c *DefaultRoleCreator) CreateDefaultRolesTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) error {
+	return c.createDefaultRoles(ctx, tx, orgID)
+}
+
+func (c *DefaultRoleCreator) createDefaultRoles(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) error {
 	defaultRoles := []struct {
 		name        string
 		description string
@@ -93,8 +101,14 @@ func (c *DefaultRoleCreator) CreateDefaultRoles(ctx context.Context, orgID uuid.
 
 	for _, dr := range defaultRoles {
 		role := NewRole(orgID, dr.name, dr.description, dr.permissions)
-		if err := c.roleRepo.Save(ctx, role); err != nil {
-			return fmt.Errorf("failed to save default role %q: %w", dr.name, err)
+		if tx != nil {
+			if err := c.roleRepo.SaveTx(ctx, tx, role); err != nil {
+				return fmt.Errorf("failed to save default role %q: %w", dr.name, err)
+			}
+		} else {
+			if err := c.roleRepo.Save(ctx, role); err != nil {
+				return fmt.Errorf("failed to save default role %q: %w", dr.name, err)
+			}
 		}
 	}
 	return nil

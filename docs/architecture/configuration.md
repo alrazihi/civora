@@ -34,9 +34,6 @@ automatically from the project root).
 | `CIVORA_AUTH_JWT_SECRET` | `dev-secret-change-me` | JWT signing secret (min 32 chars in production) |
 | `CIVORA_AUTH_JWT_EXPIRY` | `24h` | JWT token expiry |
 | `CIVORA_AUTH_BCRYPT_COST` | `12` | BCrypt hashing cost |
-| `CIVORA_AUTH_OIDC_ISSUER` | `""` | OIDC issuer URL (empty = local auth only) |
-| `CIVORA_AUTH_OIDC_CLIENT_ID` | `""` | OIDC client ID |
-| `CIVORA_AUTH_OIDC_REDIRECT_URL` | `""` | OIDC callback URL |
 
 ### Audit
 

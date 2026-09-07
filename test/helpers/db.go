@@ -102,13 +102,33 @@ func SeedOrg(db *sql.DB) uuid.UUID {
 func SeedUser(db *sql.DB, orgID uuid.UUID) uuid.UUID {
 	userID := uuid.New()
 	_, err := db.Exec(
-		"INSERT INTO users (id, organization_id, email, name, role_id, password_hash, is_oidc_user, created_at, updated_at) VALUES ($1, $2, $3, $4, NULL, NULL, FALSE, NOW(), NOW())",
+		"INSERT INTO users (id, organization_id, email, name, role_id, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, NULL, NULL, NOW(), NOW())",
 		userID, orgID, "user-"+uuid.NewString()[:8]+"@example.com", "Test User",
 	)
 	if err != nil {
 		panic(fmt.Sprintf("failed to seed user: %v", err))
 	}
 	return userID
+}
+
+func SeedDefaultRoles(db *sql.DB, orgID uuid.UUID) {
+	roles := []struct {
+		name        string
+		description string
+		permissions string
+	}{
+		{"admin", "Full access to all organization resources", `["*"]`},
+		{"staff", "Standard user with case and customer access", `["cases:*"]`},
+	}
+	for _, r := range roles {
+		_, err := db.Exec(
+			"INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1, $2, $3, $4, $5, NOW())",
+			uuid.New(), orgID, r.name, r.description, r.permissions,
+		)
+		if err != nil {
+			panic(fmt.Sprintf("failed to seed role %s: %v", r.name, err))
+		}
+	}
 }
 
 func getEnv(key, fallback string) string {

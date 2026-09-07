@@ -2,13 +2,14 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -22,6 +23,10 @@ var (
 
 type UserChecker interface {
 	BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error)
+}
+
+type txEventRecorder interface {
+	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
 }
 
 type CaseService struct {
@@ -52,24 +57,33 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 
 	c := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description)
 
-	if err := s.repo.Save(ctx, c); err != nil {
-		return nil, fmt.Errorf("failed to save case: %w", err)
-	}
-
-	if s.auditor != nil {
-		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
-			OrganizationID: c.OrganizationID,
-			ActorID:        &c.CreatedByID,
-			Action:         "case.created",
-			Resource:       "case",
-			ResourceID:     strPtr(c.ID.String()),
-			Outcome:        "success",
-		}); err != nil {
-			log.Printf("audit event recording failed: %v", err)
+	var result *domain.Case
+	err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.SaveTx(ctx, tx, c); err != nil {
+			return fmt.Errorf("failed to save case: %w", err)
 		}
+
+		if s.auditor != nil {
+			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: c.OrganizationID,
+				ActorID:        &c.CreatedByID,
+				Action:         "case.created",
+				Resource:       "case",
+				ResourceID:     strPtr(c.ID.String()),
+				Outcome:        "success",
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		result = c
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return c, nil
+	return result, nil
 }
 
 type ChangeCaseStatusParams struct {
@@ -92,28 +106,37 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 		return nil, err
 	}
 
-	if err := s.repo.UpdateStatus(ctx, params.OrganizationID, params.CaseID, params.Status); err != nil {
-		return nil, fmt.Errorf("failed to update case status: %w", err)
-	}
-
-	if s.auditor != nil {
-		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
-			OrganizationID: c.OrganizationID,
-			ActorID:        &params.ActorID,
-			Action:         fmt.Sprintf("case.transition"),
-			Resource:       "case",
-			ResourceID:     strPtr(c.ID.String()),
-			Outcome:        "success",
-			Metadata: map[string]interface{}{
-				"from": string(c.Status),
-				"to":   string(params.Status),
-			},
-		}); err != nil {
-			log.Printf("audit event recording failed: %v", err)
+	var result *domain.Case
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, params.CaseID, params.Status); err != nil {
+			return fmt.Errorf("failed to update case status: %w", err)
 		}
+
+		if s.auditor != nil {
+			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: c.OrganizationID,
+				ActorID:        &params.ActorID,
+				Action:         fmt.Sprintf("case.transition"),
+				Resource:       "case",
+				ResourceID:     strPtr(c.ID.String()),
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"from": string(c.Status),
+					"to":   string(params.Status),
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		result = c
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return c, nil
+	return result, nil
 }
 
 type AssignCaseParams struct {
@@ -141,27 +164,36 @@ func (s *CaseService) AssignCase(ctx context.Context, params AssignCaseParams) (
 
 	c.AssignTo(params.UserID)
 
-	if err := s.repo.Assign(ctx, params.OrganizationID, params.CaseID, params.UserID); err != nil {
-		return nil, fmt.Errorf("failed to assign case: %w", err)
-	}
-
-	if s.auditor != nil {
-		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
-			OrganizationID: c.OrganizationID,
-			ActorID:        &params.ActorID,
-			Action:         "case.assigned",
-			Resource:       "case",
-			ResourceID:     strPtr(c.ID.String()),
-			Outcome:        "success",
-			Metadata: map[string]interface{}{
-				"assigned_to": params.UserID.String(),
-			},
-		}); err != nil {
-			log.Printf("audit event recording failed: %v", err)
+	var result *domain.Case
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.AssignTx(ctx, tx, params.OrganizationID, params.CaseID, params.UserID); err != nil {
+			return fmt.Errorf("failed to assign case: %w", err)
 		}
+
+		if s.auditor != nil {
+			if err := recordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: c.OrganizationID,
+				ActorID:        &params.ActorID,
+				Action:         "case.assigned",
+				Resource:       "case",
+				ResourceID:     strPtr(c.ID.String()),
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"assigned_to": params.UserID.String(),
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		result = c
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return c, nil
+	return result, nil
 }
 
 func (s *CaseService) GetCase(ctx context.Context, orgID, caseID uuid.UUID) (*domain.Case, error) {
@@ -198,4 +230,11 @@ func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, off
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func recordAuditEventInTx(ctx context.Context, tx *sql.Tx, auditor auditdomain.EventRecorder, params auditdomain.RecordEventParams) error {
+	if txRecorder, ok := auditor.(txEventRecorder); ok {
+		return txRecorder.RecordEventInTx(ctx, tx, params)
+	}
+	return auditor.RecordEvent(ctx, params)
 }
