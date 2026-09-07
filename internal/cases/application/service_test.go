@@ -42,15 +42,37 @@ func (m *mockCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) 
 }
 
 func (m *mockCaseRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Case, error) {
+	return m.FindByOrganizationWithFilter(ctx, orgID, limit, offset, domain.CaseFilter{})
+}
+
+func (m *mockCaseRepository) FindByOrganizationWithFilter(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var result []*domain.Case
 	for _, c := range m.cases {
 		if c.OrganizationID == orgID {
+			if filter.Status != "" && c.Status != filter.Status {
+				continue
+			}
 			result = append(result, c)
 		}
 	}
 	return result, nil
+}
+
+func (m *mockCaseRepository) CountByOrganization(ctx context.Context, orgID uuid.UUID, filter domain.CaseFilter) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	count := 0
+	for _, c := range m.cases {
+		if c.OrganizationID == orgID {
+			if filter.Status != "" && c.Status != filter.Status {
+				continue
+			}
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (m *mockCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus) error {
@@ -264,7 +286,7 @@ func TestListCases(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	cases, err := svc.ListCases(context.Background(), orgID, 20, 0)
+	cases, _, err := svc.ListCases(context.Background(), orgID, 20, 0, domain.CaseFilter{})
 	require.NoError(t, err)
 	assert.Len(t, cases, 5)
 }

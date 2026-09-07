@@ -310,4 +310,8 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+org2.String()+"/cases/"+caseID, token2, nil)
 	require.Equal(t, http.StatusNotFound, resp.Code,
 		"user from org2 should not see case from org1; body: %s", resp.Body.String())
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+org2.String()+"/cases", token1, nil)
+	require.Equal(t, http.StatusForbidden, resp.Code,
+		"user from org1 should not access org2 path; body: %s", resp.Body.String())
 }

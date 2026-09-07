@@ -44,15 +44,29 @@ func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UU
 }
 
 func (r *PostgresCaseRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Case, error) {
+	return r.FindByOrganizationWithFilter(ctx, orgID, limit, offset, domain.CaseFilter{})
+}
+
+func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, error) {
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, created_by, assigned_to, created_at, updated_at, closed_at
 		FROM cases
 		WHERE organization_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.QueryContext(ctx, query, orgID, limit, offset)
+	args := []interface{}{orgID}
+	argPos := 2
+
+	if filter.Status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argPos)
+		args = append(args, string(filter.Status))
+		argPos++
+	}
+
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argPos, argPos+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cases: %w", err)
 	}
@@ -67,6 +81,24 @@ func (r *PostgresCaseRepository) FindByOrganization(ctx context.Context, orgID u
 		cases = append(cases, c)
 	}
 	return cases, nil
+}
+
+func (r *PostgresCaseRepository) CountByOrganization(ctx context.Context, orgID uuid.UUID, filter domain.CaseFilter) (int, error) {
+	query := `SELECT COUNT(*) FROM cases WHERE organization_id = $1`
+	args := []interface{}{orgID}
+	argPos := 2
+
+	if filter.Status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argPos)
+		args = append(args, string(filter.Status))
+	}
+
+	var total int
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count cases: %w", err)
+	}
+	return total, nil
 }
 
 func (r *PostgresCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus) error {
