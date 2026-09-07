@@ -112,7 +112,12 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * perPage
 
-	cases, err := h.svc.ListCases(r.Context(), orgID, perPage, offset)
+	filter := domain.CaseFilter{}
+	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
+		filter.Status = domain.CaseStatus(statusStr)
+	}
+
+	cases, total, err := h.svc.ListCases(r.Context(), orgID, perPage, offset, filter)
 	if err != nil {
 		writeCaseError(w, err)
 		return
@@ -123,11 +128,7 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 		result[i] = serializeCase(c)
 	}
 
-	shared.WriteSuccess(w, http.StatusOK, result, &shared.PaginationMeta{
-		Page:    page,
-		PerPage: perPage,
-		Total:   len(result),
-	})
+	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
 }
 
 func (h *Handler) ChangeStatus(w http.ResponseWriter, r *http.Request) {

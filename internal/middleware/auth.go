@@ -129,6 +129,27 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
+func RequireAnyRole(roles ...string) func(http.Handler) http.Handler {
+	allowed := make(map[string]bool, len(roles))
+	for _, r := range roles {
+		allowed[r] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role := GetUserRole(r)
+			if role == "" {
+				shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+				return
+			}
+			if !allowed[role] {
+				shared.WriteError(w, http.StatusForbidden, "FORBIDDEN", "insufficient role")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func GetTenantID(r *http.Request) string {
 	return getStringValue(r.Context().Value(tenantKey))
 }

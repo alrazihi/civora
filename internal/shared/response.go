@@ -48,3 +48,26 @@ func WriteSuccess(w http.ResponseWriter, statusCode int, data any, meta *Paginat
 		Meta:    meta,
 	})
 }
+
+func WritePaginatedSuccess(w http.ResponseWriter, statusCode int, data any, page, perPage, total int) {
+	WriteSuccess(w, statusCode, data, &PaginationMeta{
+		Page:       page,
+		PerPage:    perPage,
+		Total:      total,
+		TotalPages: paginate(page, perPage, total),
+	})
+}
+
+func paginate(page, perPage, total int) int {
+	if perPage <= 0 {
+		return 0
+	}
+	if total == 0 {
+		return 0
+	}
+	pages := total / perPage
+	if total%perPage > 0 {
+		pages++
+	}
+	return pages
+}

@@ -21,14 +21,15 @@ type Server struct {
 func New(cfg *config.Config) *Server {
 	r := chi.NewRouter()
 
-	idemStore := middleware.NewIdempotencyStore(24 * time.Hour)
+	rl := middleware.NewRateLimiter(100, 20)
 
 	r.Use(middleware.SecureHeaders)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logging)
 	r.Use(middleware.Recover)
 	r.Use(middleware.CORSHandler())
-	r.Use(middleware.IdempotencyKey(idemStore))
+	r.Use(middleware.RateLimit(rl))
+	r.Use(middleware.IdempotencyKey(middleware.NewIdempotencyStore(24 * time.Hour)))
 
 	r.Get("/health", healthHandler)
 	r.Get("/ready", readinessHandler)

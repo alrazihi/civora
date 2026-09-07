@@ -54,6 +54,12 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	total, err := h.svc.CountByOrganization(r.Context(), orgID)
+	if err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to count audit events")
+		return
+	}
+
 	result := make([]map[string]interface{}, len(events))
 	for i, ev := range events {
 		result[i] = map[string]interface{}{
@@ -71,9 +77,5 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	shared.WriteSuccess(w, http.StatusOK, result, &shared.PaginationMeta{
-		Page:    page,
-		PerPage: perPage,
-		Total:   len(result),
-	})
+	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
 }
