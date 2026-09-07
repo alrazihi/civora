@@ -640,7 +640,13 @@ Last reviewed: 2026-09-07
 
 ## Post-Review Fix Results
 
-All 10 P0 blockers have been remediated. Verification:
+All 10 P0 blockers have been remediated across two commits:
+
+- **04b983e**: Structural fixes — transactional org creation with default roles, audit event atomicity (CaseService, OrganizationService), OIDC config removal, RBAC enforcement on protected routes, scanUser nil-nil for not-found.
+
+- **8ada542**: Error propagation fixes — propagate `FindByEmail` errors in `CreateUser`, propagate audit `RecordEvent` errors in `Authenticate`, fix `err :=` → `err =` for `database.InTransaction` call, remove unused `log` import and `AuditService.DB()` method, fix `fmt.Sprintf` → literal string.
+
+Verification:
 
 ```
 $ go build ./...                          # OK
