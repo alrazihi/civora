@@ -108,4 +108,8 @@ used to generate server stubs in alternative technologies if needed.
 
 - [ADR-0001: Initial Architecture — Modular Monolith](0001-initial-architecture.md)
 - [OpenAPI 3.0 Specification](https://swagger.io/specification/)
-- [REST architectural style](https://roy.gerrardbrayfieldfield.com/papers/rest-apis-have-no-future-3571ea8e1b96)
+- [RESTful Web Services](https://www.oreilly.com/library/view/restful-web-services/9780596529276/) by Leonard Richardson and Sam Ruby
+
+---
+
+*Note: The original reference URL (roy.gerrardbrayfieldfield.com) was broken during a site migration. It has been replaced with the canonical O'Reilly book reference.*

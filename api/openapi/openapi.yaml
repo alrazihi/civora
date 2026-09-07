@@ -50,6 +50,17 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        JWT bearer token. The token must include `organization_id` claim.
+        The API validates that the token's organization matches the `{orgId}`
+        path parameter on all tenant-scoped endpoints.
+
+  headers:
+    X-Request-ID:
+      schema:
+        type: string
+        format: uuid
+      description: Correlation ID for the request. Generated if not provided by the client.
 
   schemas:
     Error:
@@ -565,6 +576,14 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: Idempotency-Key
+          in: header
+          description: |
+            Idempotency key for safe retries. Guarantees at-most-once execution
+            for the same key within the same organization.
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -609,9 +628,18 @@ paths:
             minimum: 1
             maximum: 200
             default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [CREATED, OPEN, IN_REVIEW, RESOLVED, CLOSED]
+          description: Filter cases by status
       responses:
         '200':
           description: List of cases with pagination
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
           content:
             application/json:
               schema:
