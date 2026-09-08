@@ -156,17 +156,20 @@ func (s *AssistanceService) UpdateAssistanceStatus(ctx context.Context, orgID, i
 		}
 
 		if s.auditor != nil {
-			auditAction := "assistance." + action + "ed"
+			// The audit action vocabulary (see migrations/0007) only allows
+			// 'assistance.created' and 'assistance.status_changed', so all
+			// status transitions map to the latter.
 			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: a.OrganizationID,
 				ActorID:        &actorID,
-				Action:         auditAction,
+				Action:         "assistance.status_changed",
 				Resource:       "assistance",
 				ResourceID:     shared.StrPtr(a.ID.String()),
 				Outcome:        "success",
 				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"service_request_id": a.ServiceRequestID.String(),
+					"action":             action,
 					"status":             string(a.Status),
 				},
 			}); err != nil {
