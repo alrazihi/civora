@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	assistancedomain "github.com/alrazihi/civora/internal/assistance/domain"
 	assistanceapp "github.com/alrazihi/civora/internal/assistance/application"
 	assistancepostgres "github.com/alrazihi/civora/internal/assistance/infrastructure/postgres"
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
@@ -15,6 +16,7 @@ import (
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
 	decisionsapp "github.com/alrazihi/civora/internal/decisions/application"
+	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
 	eligibilityapp "github.com/alrazihi/civora/internal/eligibility/application"
 	eligibilitypostgres "github.com/alrazihi/civora/internal/eligibility/infrastructure/postgres"
@@ -99,6 +101,9 @@ func TestConcurrentCaseTransitions(t *testing.T) {
 				Status:         caseDomain.CaseStatusOpen,
 				ActorID:        actorID,
 			})
+			if err != nil {
+				t.Logf("ChangeStatus error: %v", err)
+			}
 			mu.Lock()
 			if err == nil {
 				successCount++
@@ -147,7 +152,7 @@ func TestConcurrentDuplicateAssistance(t *testing.T) {
 			_, err := assistanceSvc.CreateAssistance(ctx, assistanceapp.CreateAssistanceParams{
 				OrganizationID:   org.ID,
 				ServiceRequestID: caseID,
-				Type:             "SHELTER",
+				Type:             assistancedomain.AssistanceTypeShelter,
 				Description:      "Emergency shelter",
 				ResponsibleStaff: actorID,
 				ActorID:          actorID,
@@ -195,7 +200,7 @@ func TestConcurrentDuplicateDecision(t *testing.T) {
 			_, err := decisionSvc.MakeDecision(ctx, decisionsapp.MakeDecisionParams{
 				OrganizationID:   org.ID,
 				ServiceRequestID: caseID,
-				Decision:         "APPROVED",
+				Decision:         decisionsdomain.DecisionTypeApproved,
 				Reason:           "Concurrency test",
 				ActorID:          actorID,
 			})

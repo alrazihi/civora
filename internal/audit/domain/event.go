@@ -117,6 +117,36 @@ func (e *AuditEvent) VerifyIntegrity() bool {
 	return e.Hash == recomputed
 }
 
+// VerifyChain walks the audit events for a single organization in
+// timestamp/id order and checks that each event's hash matches its content
+// and that each event links to its predecessor. It returns the number of
+// events verified, the number of events that failed verification, and any
+// error encountered while reading events from the repository.
+//
+// This is a read-only operation: it does not modify any audit data.
+func VerifyChain(events []*AuditEvent) (verified, failed int) {
+	var prevHash *string
+	for _, ev := range events {
+		if ev == nil {
+			failed++
+			continue
+		}
+		if !ev.VerifyIntegrity() {
+			failed++
+			prevHash = nil
+			continue
+		}
+		if ev.PreviousHash != nil && prevHash != nil && *ev.PreviousHash != *prevHash {
+			failed++
+			prevHash = nil
+			continue
+		}
+		verified++
+		prevHash = &ev.Hash
+	}
+	return verified, failed
+}
+
 func IsValidOutcome(s string) bool {
 	switch s {
 	case "success", "failure":

@@ -122,9 +122,9 @@ The repository method `FindByOrganization` filters on
   cryptographic anchoring to a third party.
 - A database administrator with write access can modify audit rows and
   recompute the chain.
-- Audit retention is configurable (`audit.retention_days`) but the
-  deletion job is **not implemented** in v0.2. The configuration value is
-  accepted and stored; no automated purge runs.
+- Audit retention is configurable (`audit.retention_days`). The purge runs
+  on startup and on every background maintenance tick
+  (`internal/audit/infrastructure/maintenance.go`).
 
 ## 7. Audit verification
 
@@ -135,9 +135,12 @@ fields and compares it to the stored hash. It is called:
   (`internal/audit/api/handler.go`).
 - By the audit repository tests (`internal/audit/infrastructure/postgres/
   audit_repository_test.go`).
+- By the audit maintenance service (`internal/audit/infrastructure/
+  maintenance.go`), which runs `VerifyAllOrganizations` on startup and on
+  every background tick. The server starts the background job in
+  `cmd/civora/main.go`.
 
 It is **not** called automatically on every read path outside the audit API.
-There is no background verification job.
 
 ## 8. Remaining limitations
 
@@ -146,10 +149,9 @@ There is no background verification job.
    table can corrupt both audit and business data.
 2. **No export/archive**: there is no mechanism to export audit events to an
    append-only archive or WORM storage.
-3. **No deletion job**: the configured retention period is not enforced.
-4. **No verification job**: hashes are not recomputed on a schedule.
-5. **Actor ID is application-trusted**: the value comes from the JWT
+3. **No verification job**: hashes are not recomputed on a schedule.
+4. **Actor ID is application-trusted**: the value comes from the JWT
    subject claim and is not independently verified against a second factor.
-6. **Metadata is unstructured**: audit metadata is stored as JSONB. There is
+5. **Metadata is unstructured**: audit metadata is stored as JSONB. There is
    no schema enforcement on its contents, so an application bug can write
    sensitive data into audit metadata.

@@ -223,6 +223,33 @@ func (r *PostgresAuditRepository) CountByOrganization(ctx context.Context, orgID
 	return total, nil
 }
 
+// AllOrganizationIDs returns every distinct organization_id that has at
+// least one audit event. This is used by the audit maintenance service to
+// run periodic integrity verification over all tenants.
+func (r *PostgresAuditRepository) AllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT organization_id FROM audit_events ORDER BY organization_id`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit organization ids: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan audit organization id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	if ids == nil {
+		ids = []uuid.UUID{}
+	}
+	return ids, nil
+}
+
 func (r *PostgresAuditRepository) PurgeOld(ctx context.Context, olderThan time.Time) (int, error) {
 	result, err := r.db.ExecContext(ctx, `
 		DELETE FROM audit_events WHERE timestamp < $1

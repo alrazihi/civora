@@ -17,4 +17,8 @@ type AuditRepository interface {
 	RecordEvent(ctx context.Context, orgID uuid.UUID, event *AuditEvent) error
 	RecordEventTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *AuditEvent) error
 	PurgeOld(ctx context.Context, olderThan time.Time) (int, error)
+	// AllOrganizationIDs returns every distinct organization_id that has at
+	// least one audit event. Used by the audit maintenance service to run
+	// periodic integrity verification over all tenants.
+	AllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error)
 }

@@ -17,6 +17,7 @@ import (
 	assistancepostgres "github.com/alrazihi/civora/internal/assistance/infrastructure/postgres"
 	auditapi "github.com/alrazihi/civora/internal/audit/api"
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
+	auditinfra "github.com/alrazihi/civora/internal/audit/infrastructure"
 	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
 	caseapi "github.com/alrazihi/civora/internal/cases/api"
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
@@ -93,6 +94,21 @@ func main() {
 		if _, err := auditService.PurgeOld(context.Background()); err != nil {
 			log.Printf("warning: failed to purge old audit events: %v", err)
 		}
+	}
+
+	// Audit maintenance service: periodic integrity verification and
+	// retention purging. Runs in the background and exits when the
+	// context is cancelled (SIGINT/SIGTERM).
+	auditMaintenance := auditinfra.NewAuditMaintenanceService(auditRepo, cfg.Audit)
+	maintenanceStop := auditMaintenance.StartBackground(ctx, 24*time.Hour)
+	defer close(maintenanceStop)
+
+	// Run an initial verification pass on startup so that any pre-existing
+	// integrity failures are surfaced in the logs immediately.
+	if verified, failed, _, err := auditMaintenance.VerifyAllOrganizations(ctx); err != nil {
+		log.Printf("warning: audit verification failed: %v", err)
+	} else if failed > 0 {
+		log.Printf("AUDIT INTEGRITY FAILURE: %d of %d events failed verification", failed, verified+failed)
 	}
 
 	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
