@@ -1,7 +1,7 @@
 # CIVORA Final Hostile Security Review
 
 ## 1. Exact HEAD commit SHA
-b7e5420
+c8e28ff065c4cef8263beb44da536c63723e7920
 
 ## 2. Review date
 2026-09-08
