@@ -157,6 +157,9 @@ func TestConcurrentDuplicateAssistance(t *testing.T) {
 				ResponsibleStaff: actorID,
 				ActorID:          actorID,
 			})
+			if err != nil {
+				t.Logf("CreateAssistance error: %v", err)
+			}
 			mu.Lock()
 			if err == nil {
 				successCount++
@@ -167,7 +170,7 @@ func TestConcurrentDuplicateAssistance(t *testing.T) {
 
 	wg.Wait()
 
-	assert.Greater(t, successCount, 0, "at least one assistance creation should succeed")
+	assert.Equal(t, 5, successCount, "all concurrent assistance creations should succeed; got %d", successCount)
 }
 
 func TestConcurrentDuplicateDecision(t *testing.T) {

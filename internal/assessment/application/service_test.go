@@ -86,13 +86,6 @@ func (m *mockUserChecker) BelongsToOrganization(ctx context.Context, orgID, user
 	return false, nil
 }
 
-func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
-	if m.members[orgID] == nil {
-		m.members[orgID] = make(map[uuid.UUID]bool)
-	}
-	m.members[orgID][userID] = true
-}
-
 func TestCreateAssessment_CrossTenantCase(t *testing.T) {
 	caseFinder := newMockCaseFinder()
 	svc := NewAssessmentService(newMockAssessmentRepo(), caseFinder, newMockUserChecker(), nil)

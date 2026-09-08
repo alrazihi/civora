@@ -157,19 +157,6 @@ func (rl *UserRateLimiter) Stop() {
 	})
 }
 
-func (rl *UserRateLimiter) getAttempt(email string) *authAttempt {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	emailLower := strings.ToLower(strings.TrimSpace(email))
-	a, exists := rl.attempts[emailLower]
-	if !exists {
-		a = &authAttempt{}
-		rl.attempts[emailLower] = a
-	}
-	return a
-}
-
 func (rl *UserRateLimiter) RecordFailedAttempt(email string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()

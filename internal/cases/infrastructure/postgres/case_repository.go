@@ -152,7 +152,6 @@ func (r *PostgresCaseRepository) CountByOrganization(ctx context.Context, orgID 
 	if filter.PersonID != nil {
 		query += fmt.Sprintf(" AND person_id = $%d", argPos)
 		args = append(args, *filter.PersonID)
-		argPos++
 	}
 
 	var total int

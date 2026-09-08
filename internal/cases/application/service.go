@@ -28,10 +28,6 @@ type UserChecker interface {
 	BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error)
 }
 
-type txEventRecorder interface {
-	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
-}
-
 type CaseService struct {
 	repo         domain.CaseRepository
 	personFinder shared.PersonFinder

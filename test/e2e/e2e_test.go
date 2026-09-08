@@ -209,7 +209,7 @@ func (ts *TestServer) createOrg(t *testing.T, slug, name string) uuid.UUID {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
 	orgID, _ := uuid.Parse(result.Data.ID)
 	return orgID
 }
@@ -227,7 +227,7 @@ func (ts *TestServer) registerUser(t *testing.T, orgID uuid.UUID, email, name, p
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
 	userID, _ := uuid.Parse(result.Data.ID)
 	return userID
 }
@@ -245,16 +245,8 @@ func (ts *TestServer) login(t *testing.T, orgID uuid.UUID, email, password strin
 			Token string `json:"token"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
 	return result.Data.Token
-}
-
-func tablesExist(db *sql.DB) bool {
-	var exists bool
-	err := db.QueryRow(`
-		SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'organizations')
-	`).Scan(&exists)
-	return err == nil && exists
 }
 
 func getEnv(key, fallback string) string {
@@ -286,7 +278,7 @@ func TestEmergencyAssistanceRequestLifecycle(t *testing.T) {
 			CaseNumber string `json:"case_number"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &createResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &createResp))
 	caseID := createResp.Data.ID
 	assert.Equal(t, "NEW", createResp.Data.Status)
 	assert.NotEmpty(t, createResp.Data.CaseNumber)
@@ -338,7 +330,7 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &personResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &personResp))
 	personID := personResp.Data.ID
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+org1.String()+"/cases", token1, map[string]interface{}{
@@ -354,7 +346,7 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
 	caseID := caseResp.Data.ID
 
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+org2.String()+"/people/"+personID, token2, nil)
@@ -466,7 +458,7 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &personResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &personResp))
 	personID := personResp.Data.ID
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
@@ -484,7 +476,7 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 			Status string `json:"status"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
 	caseID := caseResp.Data.ID
 	assert.Equal(t, "NEW", caseResp.Data.Status)
 
@@ -515,7 +507,7 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 			Result string `json:"result"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &eligibilityResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &eligibilityResp))
 	eligibilityID := eligibilityResp.Data.ID
 
 	resp = ts.makeRequest(t, "PATCH", "/api/v1/organizations/"+orgID.String()+"/eligibilities/"+eligibilityID+"/result", token, map[string]interface{}{
@@ -588,7 +580,7 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 			Status string `json:"status"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &assistanceResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &assistanceResp))
 	assistanceID := assistanceResp.Data.ID
 
 	var staffID struct {
@@ -605,9 +597,9 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 			OrganizationID string `json:"organization_id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(userResp.Body.Bytes(), &usersList)
+	require.NoError(t, json.Unmarshal(userResp.Body.Bytes(), &usersList))
 	if len(usersList.Data) > 0 {
-		json.Unmarshal(userResp.Body.Bytes(), &staffID)
+		require.NoError(t, json.Unmarshal(userResp.Body.Bytes(), &staffID))
 		staffUUID := usersList.Data[0].ID
 
 		resp = ts.makeRequest(t, "PATCH", "/api/v1/organizations/"+orgID.String()+"/assistance/"+assistanceID+"/status", token, map[string]interface{}{
@@ -631,7 +623,7 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &followUpResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &followUpResp))
 	followUpID := followUpResp.Data.ID
 
 	resp = ts.makeRequest(t, "PATCH", "/api/v1/organizations/"+orgID.String()+"/follow-ups/"+followUpID+"/complete", token, map[string]interface{}{
@@ -701,7 +693,7 @@ func TestAuditTrailForServiceRequest(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &personResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &personResp))
 	personID := personResp.Data.ID
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
@@ -718,7 +710,7 @@ func TestAuditTrailForServiceRequest(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
 	caseID := caseResp.Data.ID
 
 	ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/transitions", token, map[string]interface{}{
@@ -755,7 +747,7 @@ func TestAuditTrailForServiceRequest(t *testing.T) {
 			Hash     string `json:"hash"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &auditResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &auditResp))
 	require.NotEmpty(t, auditResp.Data)
 
 	actions := make(map[string]bool)

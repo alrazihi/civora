@@ -31,7 +31,7 @@ func TestEvidenceSecurity_CrossTenantRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+org1.String()+"/evidence", token1, map[string]interface{}{
 		"service_request_id": caseResp.Data.ID,
@@ -46,7 +46,7 @@ func TestEvidenceSecurity_CrossTenantRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &evResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &evResp))
 
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+org2.String()+"/evidence/"+evResp.Data.ID, token1, nil)
 	assert.Equal(t, http.StatusForbidden, resp.Code,
@@ -71,7 +71,7 @@ func TestEvidenceSecurity_CrossCaseRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseA)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseA))
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
 		"title":        "Case B",
@@ -84,7 +84,7 @@ func TestEvidenceSecurity_CrossCaseRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseB)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseB))
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/evidence", token, map[string]interface{}{
 		"service_request_id": caseA.Data.ID,
@@ -102,7 +102,7 @@ func TestEvidenceSecurity_CrossCaseRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &listResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &listResp))
 	assert.Empty(t, listResp.Data, "Case B should have no evidence")
 }
 
@@ -144,7 +144,7 @@ func TestEvidenceSecurity_StorageReferenceNotLeaked(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/evidence", token, map[string]interface{}{
 		"service_request_id": caseResp.Data.ID,
@@ -160,7 +160,7 @@ func TestEvidenceSecurity_StorageReferenceNotLeaked(t *testing.T) {
 			StorageReference string `json:"storage_reference"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &evResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &evResp))
 
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/evidence/"+evResp.Data.ID, token, nil)
 	require.Equal(t, http.StatusOK, resp.Code, "response body: %s", resp.Body.String())
@@ -170,7 +170,7 @@ func TestEvidenceSecurity_StorageReferenceNotLeaked(t *testing.T) {
 			StorageReference string `json:"storage_reference"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &getResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &getResp))
 	assert.Equal(t, "s3://civora-evidence/secret-doc-001", getResp.Data.StorageReference,
 		"authorized user should see storage reference")
 }
