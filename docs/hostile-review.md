@@ -1,21 +1,26 @@
 # CIVORA Final Hostile Security Review
 
 ## 1. Exact HEAD commit SHA
-6275c63318e05f427527884e1facb8452e9216f0
+9216713780b3fc394ee1358287aee21aca02db4f
 
 ## 2. Review date
 2026-09-08
 
 ## 3. Scope
-Independent hostile review of CIVORA at HEAD 6275c63318e05f427527884e1facb8452e9216f0.
+Independent hostile review of CIVORA at HEAD 9216713780b3fc394ee1358287aee21aca02db4f.
 This review does not reuse the verdict from any prior commit. All code paths, tests,
 CI config, and documentation were re-examined from scratch.
+
+Note: The current HEAD `9216713780b3fc394ee1358287aee21aca02db4f` is a
+documentation-only commit. The actual code changes under review were introduced
+in earlier commits:
 
 Changes inspected since 7e94f86:
 - 21a62a7 (docs: update hostile security review findings)
 - 2adf24634f71af979fc9850d4ef4f9758150227f (code fixes for review findings)
 - b0233b3 (docs: update hostile security review findings)
 - 6275c63318e05f427527884e1facb8452e9216f0 (merge: fix audit row limit + lint-clean)
+- 9216713780b3fc394ee1358287aee21aca02db4f0 (docs: update hostile security review to reflect resolved findings)
 
 ## 4. Tests/commands executed
 - go build ./...
