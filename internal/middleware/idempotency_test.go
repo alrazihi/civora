@@ -125,7 +125,7 @@ func TestIdempotencyKey_ReturnsCachedResponse(t *testing.T) {
 
 	handler := IdempotencyKey(store)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("should not be called"))
+		_, _ = w.Write([]byte("should not be called"))
 	}))
 
 	r := httptest.NewRequest(http.MethodPost, "/test", nil)

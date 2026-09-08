@@ -73,7 +73,12 @@ func (s *AuditMaintenanceService) VerifyOrganization(ctx context.Context, orgID 
 		return 0, 0, nil
 	}
 
-	events, err := s.repo.FindByOrganization(ctx, orgID, 100000, 0)
+	count, err := s.repo.CountByOrganization(ctx, orgID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to count audit events for organization %s: %w", orgID, err)
+	}
+
+	events, err := s.repo.FindByOrganization(ctx, orgID, count, 0)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to read audit events for organization %s: %w", orgID, err)
 	}

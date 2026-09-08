@@ -99,7 +99,7 @@ func TestHandlerSecurity_CrossTenantRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &caseResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
 
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+org2.String()+"/cases/"+caseResp.Data.ID, token1, nil)
 	assert.Equal(t, http.StatusForbidden, resp.Code,
@@ -132,7 +132,7 @@ func TestHandlerSecurity_AuditHashChain(t *testing.T) {
 			Hash string `json:"hash"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &auditResp)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &auditResp))
 	require.NotEmpty(t, auditResp.Data, "audit events should exist")
 
 	for _, ev := range auditResp.Data {
