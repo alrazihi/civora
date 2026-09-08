@@ -6,11 +6,11 @@
 
 ## 1. Where audit events are stored
 
-Audit events are stored in a single PostgreSQL table named `audit_events`,
-defined in `migrations/0001_init.up.sql`. The table is **not** stored in a
-separate database, separate schema, or separate storage system. It lives in
-the same PostgreSQL instance and the same `public` schema as every other
-CIVORA entity.
+Audit events are stored in a dedicated PostgreSQL schema named `audit`,
+defined in `migrations/0008_audit_schema_isolation.up.sql`. The schema is
+**not** the same `public` schema that holds every other CIVORA entity. It
+lives in the same PostgreSQL instance, but a corruption of the `public`
+schema (or a careless migration) cannot take the audit trail down with it.
 
 Table columns:
 
@@ -28,6 +28,9 @@ Table columns:
 | `timestamp` | TIMESTAMPTZ | Event time |
 | `hash` | TEXT | SHA-256 digest of the event content |
 | `previous_hash` | TEXT | Hash of the preceding event for the same organization |
+
+A CHECK constraint on `action` (migration 0007/0008) restricts the column
+to a known vocabulary of 28 audit actions.
 
 ## 2. Transaction boundaries
 
@@ -114,10 +117,15 @@ The repository method `FindByOrganization` filters on
 - Hash chain with SHA-256, chained per organization.
 - `integrity_valid` flag exposed in the audit API.
 - All audit writes are inside the same transaction as the state change.
+- Audit events live in a dedicated `audit` schema, isolated from the
+  `public` schema that holds business data.
+- Audit retention purge runs on startup and on every maintenance tick.
 
 ## 6. What is NOT guaranteed
 
-- Audit events are not stored separately from business data.
+- Audit events are not stored in a separate database instance. They are
+  in the same PostgreSQL instance as business data, but in a dedicated
+  `audit` schema.
 - There is no append-only storage, no external verification, and no
   cryptographic anchoring to a third party.
 - A database administrator with write access can modify audit rows and
@@ -144,12 +152,13 @@ It is **not** called automatically on every read path outside the audit API.
 
 ## 8. Remaining limitations
 
-1. **Single-table storage**: audit events share the same database and schema
-   as business data. A schema migration that corrupts the `audit_events`
-   table can corrupt both audit and business data.
+1. **Shared database instance**: audit events share the same PostgreSQL
+   instance as business data, though they live in a separate `audit`
+   schema. An instance-level failure (disk, corruption, DROP DATABASE) can
+   destroy both audit and business data.
 2. **No export/archive**: there is no mechanism to export audit events to an
    append-only archive or WORM storage.
-3. **No verification job**: hashes are not recomputed on a schedule.
+3. **No external verification**: hashes are not anchored to a third party.
 4. **Actor ID is application-trusted**: the value comes from the JWT
    subject claim and is not independently verified against a second factor.
 5. **Metadata is unstructured**: audit metadata is stored as JSONB. There is
