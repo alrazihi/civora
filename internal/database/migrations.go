@@ -143,8 +143,13 @@ func (m *Migrator) runMigration(ctx context.Context, mg Migration) error {
 		}
 	}()
 
-	if _, err := tx.ExecContext(ctx, string(mg.Up)); err != nil {
-		return fmt.Errorf("failed to execute migration up for %d: %w", mg.Version, err)
+	// The pgx stdlib driver executes the whole string as a single
+	// statement, so multi-statement migrations must be split before
+	// execution. Statements are split on unquoted semicolons.
+	for _, stmt := range splitSQL(string(mg.Up)) {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("failed to execute migration up for %d: %w", mg.Version, err)
+		}
 	}
 
 	_, err = tx.ExecContext(ctx,
@@ -160,6 +165,36 @@ func (m *Migrator) runMigration(ctx context.Context, mg Migration) error {
 
 	committed = true
 	return nil
+}
+
+// splitSQL splits a migration script into individual SQL statements,
+// respecting single-quoted string literals so that semicolons inside
+// them (e.g. CHECK constraint value lists) are not treated as statement
+// boundaries.
+func splitSQL(sql string) []string {
+	var stmts []string
+	var cur []rune
+	inString := false
+	for _, r := range sql {
+		if r == '\'' {
+			inString = !inString
+		}
+		if r == ';' && !inString {
+			if len(cur) > 0 {
+				stmts = append(stmts, strings.TrimSpace(string(cur)))
+				cur = nil
+			}
+			continue
+		}
+		cur = append(cur, r)
+	}
+	if len(cur) > 0 {
+		s := strings.TrimSpace(string(cur))
+		if s != "" {
+			stmts = append(stmts, s)
+		}
+	}
+	return stmts
 }
 
 func parseMigrationFilename(name string) (int, string, error) {

@@ -66,7 +66,7 @@ func TruncateTables(t *testing.T, db *sql.DB) {
 			evidence,
 			eligibilities,
 			people,
-			audit_events,
+			audit.audit_events,
 			cases,
 			users,
 			roles,

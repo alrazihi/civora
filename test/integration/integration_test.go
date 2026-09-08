@@ -309,17 +309,17 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition')", org.ID).Scan(&count)
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition')", org.ID).Scan(&count)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, 2, "should have at least 2 audit events")
 
 	var hash, prevHash *string
-	err = db.QueryRowContext(ctx, "SELECT hash, previous_hash FROM audit_events WHERE organization_id = $1 ORDER BY timestamp DESC, id DESC LIMIT 1", org.ID).Scan(&hash, &prevHash)
+	err = db.QueryRowContext(ctx, "SELECT hash, previous_hash FROM audit.audit_events WHERE organization_id = $1 ORDER BY timestamp DESC, id DESC LIMIT 1", org.ID).Scan(&hash, &prevHash)
 	require.NoError(t, err)
 	require.NotNil(t, hash, "audit event should have a hash")
 
 	var firstHash *string
-	err = db.QueryRowContext(ctx, "SELECT hash FROM audit_events WHERE organization_id = $1 ORDER BY timestamp ASC, id ASC LIMIT 1", org.ID).Scan(&firstHash)
+	err = db.QueryRowContext(ctx, "SELECT hash FROM audit.audit_events WHERE organization_id = $1 ORDER BY timestamp ASC, id ASC LIMIT 1", org.ID).Scan(&firstHash)
 	require.NoError(t, err)
 	require.NotNil(t, firstHash, "first audit event should have a hash")
 }
@@ -375,7 +375,7 @@ func TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure(t *testing.T) {
 	assert.Equal(t, 0, caseCount, "case should be rolled back when audit fails")
 
 	var auditCount int
-	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events WHERE organization_id = $1 AND resource = $2", orgID, "case").Scan(&auditCount)
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1 AND resource = $2", orgID, "case").Scan(&auditCount)
 	require.NoError(t, err)
 	assert.Equal(t, 0, auditCount, "no audit events should exist for the failed case creation")
 }

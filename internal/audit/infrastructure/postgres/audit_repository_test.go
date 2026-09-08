@@ -62,7 +62,7 @@ func TestAuditRepository_TenantIsolation(t *testing.T) {
 	org2 := helpers.SeedOrg(db)
 	actor := helpers.SeedUser(db, org1)
 
-	ev, err := domain.NewAuditEvent(org1, actor, "test.action", "test", nil, "success", nil, nil, nil)
+	ev, err := domain.NewAuditEvent(org1, actor, "case.created", "case", nil, "success", nil, nil, nil)
 	require.NoError(t, err)
 	err = repo.RecordEvent(context.Background(), org1, ev)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestAuditRepository_FindByOrganization(t *testing.T) {
 	actor := helpers.SeedUser(db, orgID)
 
 	for i := 0; i < 3; i++ {
-		ev, err := domain.NewAuditEvent(orgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
+		ev, err := domain.NewAuditEvent(orgID, actor, "case.created", "case", nil, "success", nil, nil, nil)
 		require.NoError(t, err)
 		err = repo.RecordEvent(context.Background(), orgID, ev)
 		require.NoError(t, err)

@@ -109,7 +109,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 		TRUNCATE TABLE
 			follow_ups, assistance, decisions, assessments,
 			evidence, eligibilities, people,
-			audit_events, cases, users, roles, organizations
+			audit.audit_events, cases, users, roles, organizations
 		RESTART IDENTITY CASCADE
 	`)
 	require.NoError(t, err)

@@ -78,6 +78,12 @@ func (s *AuditMaintenanceService) VerifyOrganization(ctx context.Context, orgID 
 		return 0, 0, fmt.Errorf("failed to read audit events for organization %s: %w", orgID, err)
 	}
 
+	// VerifyChain expects events in chronological order (oldest first), but
+	// FindByOrganization returns them newest-first. Reverse before verifying.
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+
 	verified, failed = domain.VerifyChain(events)
 	if failed > 0 {
 		s.logger.Printf("AUDIT INTEGRITY FAILURE: organization %s has %d events that failed verification", orgID, failed)

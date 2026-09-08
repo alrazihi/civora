@@ -58,9 +58,9 @@ func (r *PostgresAuditRepository) RecordEventTx(ctx context.Context, tx *sql.Tx,
 }
 
 func (r *PostgresAuditRepository) writeEvent(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *domain.AuditEvent) error {
-	var lastHash *string
+var lastHash *string
 	err := tx.QueryRowContext(ctx, `
-		SELECT hash FROM audit_events
+		SELECT hash FROM audit.audit_events
 		WHERE organization_id = $1
 		ORDER BY timestamp DESC, id DESC
 		LIMIT 1
@@ -82,7 +82,7 @@ func (r *PostgresAuditRepository) writeEvent(ctx context.Context, tx *sql.Tx, or
 	}
 
 	query := `
-		INSERT INTO audit_events (
+		INSERT INTO audit.audit_events (
 			id, organization_id, actor_id, action, resource,
 			resource_id, outcome, request_id, metadata,
 			timestamp, previous_hash, hash
@@ -116,7 +116,7 @@ func (r *PostgresAuditRepository) Save(ctx context.Context, event *domain.AuditE
 	}
 
 	query := `
-		INSERT INTO audit_events (
+		INSERT INTO audit.audit_events (
 			id, organization_id, actor_id, action, resource,
 			resource_id, outcome, request_id, metadata,
 			timestamp, previous_hash, hash
@@ -146,7 +146,7 @@ func (r *PostgresAuditRepository) Save(ctx context.Context, event *domain.AuditE
 func (r *PostgresAuditRepository) GetLastHash(ctx context.Context, orgID uuid.UUID) (*string, error) {
 	var lastHash *string
 	query := `
-		SELECT hash FROM audit_events
+		SELECT hash FROM audit.audit_events
 		WHERE organization_id = $1
 		ORDER BY timestamp DESC, id DESC
 		LIMIT 1
@@ -163,10 +163,10 @@ func (r *PostgresAuditRepository) GetLastHash(ctx context.Context, orgID uuid.UU
 
 func (r *PostgresAuditRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.AuditEvent, error) {
 	query := `
-		SELECT id, organization_id, actor_id, action, resource,
-			   resource_id, outcome, request_id, metadata,
-			   timestamp, previous_hash, hash
-		FROM audit_events
+SELECT id, organization_id, actor_id, action, resource,
+		   resource_id, outcome, request_id, metadata,
+		   timestamp, previous_hash, hash
+		FROM audit.audit_events
 		WHERE organization_id = $1
 		ORDER BY timestamp DESC, id DESC
 		LIMIT $2 OFFSET $3
@@ -215,7 +215,7 @@ func (r *PostgresAuditRepository) FindByOrganization(ctx context.Context, orgID 
 
 func (r *PostgresAuditRepository) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
 	var total int
-	query := `SELECT COUNT(*) FROM audit_events WHERE organization_id = $1`
+	query := `SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1`
 	err := r.db.QueryRowContext(ctx, query, orgID).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count audit events: %w", err)
@@ -227,7 +227,7 @@ func (r *PostgresAuditRepository) CountByOrganization(ctx context.Context, orgID
 // least one audit event. This is used by the audit maintenance service to
 // run periodic integrity verification over all tenants.
 func (r *PostgresAuditRepository) AllOrganizationIDs(ctx context.Context) ([]uuid.UUID, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT organization_id FROM audit_events ORDER BY organization_id`)
+	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT organization_id FROM audit.audit_events ORDER BY organization_id`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit organization ids: %w", err)
 	}
@@ -252,7 +252,7 @@ func (r *PostgresAuditRepository) AllOrganizationIDs(ctx context.Context) ([]uui
 
 func (r *PostgresAuditRepository) PurgeOld(ctx context.Context, olderThan time.Time) (int, error) {
 	result, err := r.db.ExecContext(ctx, `
-		DELETE FROM audit_events WHERE timestamp < $1
+		DELETE FROM audit.audit_events WHERE timestamp < $1
 	`, olderThan)
 	if err != nil {
 		return 0, fmt.Errorf("failed to purge old audit events: %w", err)
