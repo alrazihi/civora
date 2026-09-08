@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/alrazihi/civora/internal/organizations/domain"
@@ -70,6 +71,9 @@ func (r *PostgresOrganizationRepository) scanOrganization(row interface {
 	var org domain.Organization
 	err := row.Scan(&org.ID, &org.Name, &org.Description, &org.Slug, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrOrgNotFound
+		}
 		return nil, fmt.Errorf("failed to scan organization: %w", err)
 	}
 	return &org, nil

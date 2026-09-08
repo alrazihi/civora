@@ -89,6 +89,9 @@ func (r *PostgresRoleRepository) FindByOrganization(ctx context.Context, orgID u
 		}
 		roles = append(roles, role)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return roles, nil
 }
 
@@ -106,7 +109,9 @@ func (r *PostgresRoleRepository) scanRole(row interface {
 	}
 
 	if len(permsJSON) > 0 {
-		_ = json.Unmarshal(permsJSON, &r2.Permissions)
+		if err := json.Unmarshal(permsJSON, &r2.Permissions); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal role permissions: %w", err)
+		}
 	}
 
 	return &r2, nil
@@ -124,7 +129,9 @@ func (r *PostgresRoleRepository) scanRoleFromRows(rows *sql.Rows) (*domain.Role,
 	}
 
 	if len(permsJSON) > 0 {
-		_ = json.Unmarshal(permsJSON, &r2.Permissions)
+		if err := json.Unmarshal(permsJSON, &r2.Permissions); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal role permissions: %w", err)
+		}
 	}
 
 	return &r2, nil

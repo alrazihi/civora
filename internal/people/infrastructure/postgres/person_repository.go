@@ -98,6 +98,9 @@ func (r *PostgresPersonRepository) FindByOrganization(ctx context.Context, orgID
 		}
 		persons = append(persons, p)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return persons, nil
 }
 
@@ -129,8 +132,11 @@ func (r *PostgresPersonRepository) updatePerson(ctx context.Context, e sqlExecer
 	if err != nil {
 		return fmt.Errorf("failed to update person: %w", err)
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if affected == 0 {
 		return fmt.Errorf("no rows affected")
 	}
 	return nil

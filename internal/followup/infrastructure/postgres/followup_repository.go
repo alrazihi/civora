@@ -93,6 +93,9 @@ func (r *PostgresFollowUpRepository) FindByServiceRequest(ctx context.Context, o
 		}
 		items = append(items, f)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return items, nil
 }
 
@@ -128,6 +131,9 @@ func (r *PostgresFollowUpRepository) FindByOrganization(ctx context.Context, org
 			return nil, err
 		}
 		items = append(items, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return items, nil
 }

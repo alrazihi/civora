@@ -2,8 +2,28 @@ package shared
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
+
+// WriteBody writes raw bytes to w after the status header has already been
+// written. Write errors on an http.ResponseWriter are almost always
+// client-disconnect I/O errors that cannot be recovered from, so the error
+// is logged and dropped rather than silently ignored.
+func WriteBody(w http.ResponseWriter, body []byte) {
+	if _, err := w.Write(body); err != nil {
+		log.Printf("write response body: %v", err)
+	}
+}
+
+// WriteRawJSON writes a pre-serialized JSON payload. Like WriteBody, write
+// errors on an http.ResponseWriter are unrecoverable I/O errors and are
+// logged rather than silently ignored.
+func WriteRawJSON(w http.ResponseWriter, statusCode int, body []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	WriteBody(w, body)
+}
 
 type APIResponse struct {
 	Success bool            `json:"success"`
@@ -28,7 +48,12 @@ func WriteJSON(w http.ResponseWriter, statusCode int, payload APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		// Encoding to an http.ResponseWriter can only fail on I/O errors
+		// (client disconnect, etc.). Nothing meaningful can be done at this
+		// point; the headers and status code have already been sent.
+		_ = err
+	}
 }
 
 func WriteError(w http.ResponseWriter, statusCode int, code ErrorCode, message string) {

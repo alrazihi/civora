@@ -11,6 +11,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var (
+	ErrUserNotFound     = errors.New("user not found")
+	ErrUserInvalidInput = errors.New("invalid user input")
+)
+
 type User struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
@@ -125,7 +130,10 @@ func NewOrganizationUserChecker(userRepo UserRepository) *OrganizationUserChecke
 func (c *OrganizationUserChecker) BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error) {
 	user, err := c.userRepo.FindByID(ctx, orgID, userID)
 	if err != nil {
-		return false, nil
+		if errors.Is(err, ErrUserNotFound) {
+			return false, nil
+		}
+		return false, err
 	}
 	return user.OrganizationID == orgID, nil
 }

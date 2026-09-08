@@ -95,6 +95,9 @@ func (r *PostgresAssessmentRepository) FindByOrganization(ctx context.Context, o
 		}
 		items = append(items, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return items, nil
 }
 

@@ -57,7 +57,10 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 		return nil, ErrOrgInvalidInput
 	}
 
-	existing, _ := s.repo.FindBySlug(ctx, params.Slug)
+	existing, err := s.repo.FindBySlug(ctx, params.Slug)
+	if err != nil && !errors.Is(err, domain.ErrOrgNotFound) {
+		return nil, fmt.Errorf("failed to check existing organization slug: %w", err)
+	}
 	if existing != nil {
 		return nil, ErrOrgSlugTaken
 	}
@@ -68,7 +71,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, params Cre
 	}
 
 	var result *domain.Organization
-	err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		if err := s.repo.SaveTx(ctx, tx, org); err != nil {
 			return fmt.Errorf("failed to save organization: %w", err)
 		}

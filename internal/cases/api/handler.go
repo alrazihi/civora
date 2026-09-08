@@ -134,8 +134,14 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, parseErr := strconv.Atoi(r.URL.Query().Get("page"))
+	if parseErr != nil {
+		page = 1
+	}
+	perPage, parseErr := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if parseErr != nil {
+		perPage = 20
+	}
 	if page < 1 {
 		page = 1
 	}

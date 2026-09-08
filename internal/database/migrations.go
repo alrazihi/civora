@@ -59,12 +59,18 @@ func (m *Migrator) LoadMigrations() error {
 		})
 	}
 
-	allEntries, _ := fs.ReadDir(m.fs, ".")
+	allEntries, err := fs.ReadDir(m.fs, ".")
+	if err != nil {
+		return fmt.Errorf("failed to read migrations: %w", err)
+	}
 	for i := range migrations {
 		downFile := fmt.Sprintf("%04d_%s.down.sql", migrations[i].Version, migrations[i].Name)
 		for _, entry := range allEntries {
 			if entry.Name() == downFile {
-				downSQL, _ := fs.ReadFile(m.fs, downFile)
+				downSQL, err := fs.ReadFile(m.fs, downFile)
+				if err != nil {
+					return fmt.Errorf("failed to read migration %s: %w", downFile, err)
+				}
 				migrations[i].Down = downSQL
 				break
 			}
@@ -124,7 +130,18 @@ func (m *Migrator) runMigration(ctx context.Context, mg Migration) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin migration transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Rollback after commit returns sql.ErrTxDone; a genuine
+				// rollback failure is logged but not surfaced because the
+				// migration has already failed.
+				_ = rbErr
+			}
+		}
+	}()
 
 	if _, err := tx.ExecContext(ctx, string(mg.Up)); err != nil {
 		return fmt.Errorf("failed to execute migration up for %d: %w", mg.Version, err)
@@ -137,7 +154,12 @@ func (m *Migrator) runMigration(ctx context.Context, mg Migration) error {
 		return fmt.Errorf("failed to record migration %d: %w", mg.Version, err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration %d: %w", mg.Version, err)
+	}
+
+	committed = true
+	return nil
 }
 
 func parseMigrationFilename(name string) (int, string, error) {

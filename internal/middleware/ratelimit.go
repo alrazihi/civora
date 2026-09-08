@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alrazihi/civora/internal/shared"
 )
 
 type visitor struct {
@@ -94,10 +96,11 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 			v.lastReq = now
 
 			if v.tokens < 1 {
+				body := []byte(`{"success":false,"error":{"code":"RATE_LIMITED","message":"Too many requests"}}`)
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Retry-After", "1")
 				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte(`{"success":false,"error":{"code":"RATE_LIMITED","message":"Too many requests"}}`))
+				shared.WriteBody(w, body)
 				return
 			}
 

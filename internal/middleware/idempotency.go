@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/alrazihi/civora/internal/shared"
 )
 
 type IdempotencyStore struct {
@@ -106,7 +108,7 @@ func IdempotencyKey(store *IdempotencyStore) func(http.Handler) http.Handler {
 					}
 				}
 				w.WriteHeader(rec.StatusCode)
-				w.Write(rec.Body)
+				shared.WriteBody(w, rec.Body)
 				return
 			}
 

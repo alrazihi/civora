@@ -88,6 +88,9 @@ func (r *PostgresUserRepository) FindByOrganization(ctx context.Context, orgID u
 		}
 		users = append(users, u)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return users, nil
 }
 
@@ -101,7 +104,7 @@ func (r *PostgresUserRepository) scanUser(row interface {
 		&u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil, domain.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("failed to scan user: %w", err)
 	}

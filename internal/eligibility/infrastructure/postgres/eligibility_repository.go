@@ -104,6 +104,9 @@ func (r *PostgresEligibilityRepository) FindByOrganization(ctx context.Context, 
 		}
 		items = append(items, e)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return items, nil
 }
 

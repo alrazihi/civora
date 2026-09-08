@@ -27,7 +27,8 @@ func TestAuditRepository_RecordEventAndGetLastHash(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, lastHash, "no events should mean nil last hash")
 
-	ev1 := domain.NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
+	ev1, err := domain.NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
+	require.NoError(t, err)
 	err = repo.RecordEvent(context.Background(), orgID, ev1)
 	require.NoError(t, err)
 
@@ -36,7 +37,8 @@ func TestAuditRepository_RecordEventAndGetLastHash(t *testing.T) {
 	require.NotNil(t, lastHash)
 	assert.Equal(t, ev1.Hash, *lastHash)
 
-	ev2 := domain.NewAuditEvent(orgID, actorID, "case.status_changed", "case", nil, "success", nil, nil, lastHash)
+	ev2, err := domain.NewAuditEvent(orgID, actorID, "case.status_changed", "case", nil, "success", nil, nil, lastHash)
+	require.NoError(t, err)
 	err = repo.RecordEvent(context.Background(), orgID, ev2)
 	require.NoError(t, err)
 
@@ -60,8 +62,9 @@ func TestAuditRepository_TenantIsolation(t *testing.T) {
 	org2 := helpers.SeedOrg(db)
 	actor := helpers.SeedUser(db, org1)
 
-	ev := domain.NewAuditEvent(org1, actor, "test.action", "test", nil, "success", nil, nil, nil)
-	err := repo.RecordEvent(context.Background(), org1, ev)
+	ev, err := domain.NewAuditEvent(org1, actor, "test.action", "test", nil, "success", nil, nil, nil)
+	require.NoError(t, err)
+	err = repo.RecordEvent(context.Background(), org1, ev)
 	require.NoError(t, err)
 
 	lastHash, err := repo.GetLastHash(context.Background(), org2)
@@ -82,8 +85,9 @@ func TestAuditRepository_FindByOrganization(t *testing.T) {
 	actor := helpers.SeedUser(db, orgID)
 
 	for i := 0; i < 3; i++ {
-		ev := domain.NewAuditEvent(orgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
-		err := repo.RecordEvent(context.Background(), orgID, ev)
+		ev, err := domain.NewAuditEvent(orgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
+		require.NoError(t, err)
+		err = repo.RecordEvent(context.Background(), orgID, ev)
 		require.NoError(t, err)
 	}
 
@@ -109,7 +113,8 @@ func TestAuditRepository_ForeignKeyConstraint(t *testing.T) {
 	fakeOrgID := uuid.New()
 	actor := uuid.New()
 
-	ev := domain.NewAuditEvent(fakeOrgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
-	err := repo.RecordEvent(context.Background(), fakeOrgID, ev)
+	ev, err := domain.NewAuditEvent(fakeOrgID, actor, "test.action", "test", nil, "success", nil, nil, nil)
+	require.NoError(t, err)
+	err = repo.RecordEvent(context.Background(), fakeOrgID, ev)
 	require.Error(t, err, "should fail due to foreign key constraint")
 }

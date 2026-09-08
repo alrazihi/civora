@@ -78,6 +78,7 @@ components:
       schema:
         type: string
         format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       description: Correlation ID for the request. Generated if not provided by the client.
 
   schemas:
@@ -104,6 +105,7 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         name:
           type: string
         description:
@@ -174,9 +176,11 @@ components:
             id:
               type: string
               format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
             organization_id:
               type: string
               format: uuid
+              pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
             email:
               type: string
               format: email
@@ -189,9 +193,11 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         email:
           type: string
           format: email
@@ -200,6 +206,7 @@ components:
         role_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
           nullable: true
         created_at:
           type: string
@@ -212,15 +219,18 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         case_number:
           type: string
           example: "CAS-20260906-00001234"
         person_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
           nullable: true
         title:
           type: string
@@ -239,9 +249,11 @@ components:
         created_by:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         assigned_to:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
           nullable: true
         created_at:
           type: string
@@ -273,6 +285,7 @@ components:
         person_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
 
     ChangeCaseStatusRequest:
       type: object
@@ -289,6 +302,7 @@ components:
         user_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
 
     Person:
       type: object
@@ -297,9 +311,11 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         external_reference:
           type: string
           nullable: true
@@ -388,12 +404,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         criteria:
           type: object
           additionalProperties: true
@@ -406,6 +425,7 @@ components:
         assessed_by:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         assessed_at:
           type: string
           format: date-time
@@ -420,6 +440,7 @@ components:
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         criteria:
           type: object
           additionalProperties: true
@@ -441,12 +462,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
           enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
@@ -457,6 +481,7 @@ components:
         uploaded_by:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         created_at:
           type: string
           format: date-time
@@ -468,6 +493,7 @@ components:
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
           enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
@@ -483,12 +509,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         findings:
           type: string
         needs_identified:
@@ -499,6 +528,7 @@ components:
         assessor:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         assessed_at:
           type: string
           format: date-time
@@ -513,6 +543,7 @@ components:
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         findings:
           type: string
         needs_identified:
@@ -528,12 +559,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         decision:
           type: string
           enum: [APPROVED, REJECTED, NEEDS_MORE_INFORMATION]
@@ -542,6 +576,7 @@ components:
         decision_maker:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         decided_at:
           type: string
           format: date-time
@@ -556,6 +591,7 @@ components:
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         decision:
           type: string
           enum: [APPROVED, REJECTED, NEEDS_MORE_INFORMATION]
@@ -569,12 +605,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
           enum: [FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT, OTHER]
@@ -586,6 +625,7 @@ components:
         responsible_staff:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         started_at:
           type: string
           format: date-time
@@ -608,6 +648,7 @@ components:
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
           enum: [FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT, OTHER]
@@ -616,6 +657,7 @@ components:
         responsible_staff:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
 
     UpdateAssistanceStatusRequest:
       type: object
@@ -632,12 +674,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         scheduled_date:
           type: string
           format: date
@@ -652,6 +697,7 @@ components:
         performed_by:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         created_at:
           type: string
           format: date-time
@@ -666,6 +712,7 @@ components:
         service_request_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         scheduled_date:
           type: string
           format: date
@@ -690,12 +737,15 @@ components:
         id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         organization_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         actor_id:
           type: string
           format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
           nullable: true
         action:
           type: string
@@ -847,6 +897,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Organization details
@@ -872,6 +923,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -907,6 +959,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -940,6 +993,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: page
           in: query
           schema:
@@ -980,12 +1034,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: userId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: User details
@@ -1013,6 +1069,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: Idempotency-Key
           in: header
           description: |
@@ -1021,6 +1078,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1053,6 +1111,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: page
           in: query
           schema:
@@ -1102,12 +1161,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: caseId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Case details
@@ -1152,12 +1213,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: caseId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1199,12 +1262,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: caseId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1240,6 +1305,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: page
           in: query
           schema:
@@ -1280,6 +1346,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1312,6 +1379,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: page
           in: query
           schema:
@@ -1352,6 +1420,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: externalRef
           in: path
           required: true
@@ -1386,12 +1455,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: personId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Person details
@@ -1418,12 +1489,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: personId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1465,6 +1538,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1497,6 +1571,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: page
           in: query
           schema:
@@ -1524,7 +1599,7 @@ paths:
 
   /organizations/{orgId}/eligibilities/{eligibilityId}:
     get:
-      operationId: getOrgeligibilitiesEligibility
+      operationId: getEligibilityById
       tags: [Eligibilities]
       summary: Get an eligibility assessment
       description: Retrieves a specific eligibility assessment. Requires authentication.
@@ -1537,45 +1612,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: eligibilityId
           in: path
           required: true
           schema:
             type: string
             format: uuid
-      responses:
-        '200':
-          description: Eligibility details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Eligibility'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /organizations/{orgId}/eligibilities/service-request/{serviceRequestId}:
-    get:
-      operationId: getOrgeligibilitiesservicerequestServiceRequest
-      tags: [Eligibilities]
-      summary: Get eligibility by service request
-      description: Retrieves the eligibility assessment for a specific service request. Requires authentication.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Eligibility details
@@ -1590,7 +1634,7 @@ paths:
 
   /organizations/{orgId}/eligibilities/{eligibilityId}/result:
     patch:
-      operationId: updateOrgeligibilitiesEligibilityresult
+      operationId: updateEligibilityResult
       tags: [Eligibilities]
       summary: Update eligibility result
       description: Updates the result of an eligibility assessment. Requires admin or staff role.
@@ -1603,12 +1647,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: eligibilityId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1635,6 +1681,41 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /organizations/{orgId}/eligibilities/by-service-request/{serviceRequestId}:
+    get:
+      operationId: getEligibilityByServiceRequestId
+      tags: [Eligibilities]
+      summary: Get eligibility by service request
+      description: Retrieves the eligibility assessment for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Eligibility details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eligibility'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /organizations/{orgId}/evidence:
     post:
       operationId: createOrgevidence
@@ -1650,6 +1731,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1668,9 +1750,44 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /organizations/{orgId}/evidence/service-request/{serviceRequestId}:
+  /organizations/{orgId}/evidence/{evidenceId}:
     get:
-      operationId: getOrgevidenceservicerequestServiceRequest
+      operationId: getEvidenceById
+      tags: [Evidence]
+      summary: Get evidence
+      description: Retrieves a specific evidence item. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Evidence details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/evidence/by-service-request/{serviceRequestId}:
+    get:
+      operationId: listEvidenceByServiceRequestId
       tags: [Evidence]
       summary: List evidence by service request
       description: Lists evidence items for a specific service request. Requires authentication.
@@ -1683,12 +1800,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: serviceRequestId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: page
           in: query
           schema:
@@ -1714,39 +1833,6 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /organizations/{orgId}/evidence/{evidenceId}:
-    get:
-      operationId: getOrgevidenceEvidence
-      tags: [Evidence]
-      summary: Get evidence
-      description: Retrieves a specific evidence item. Requires authentication.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: evidenceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Evidence details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Evidence'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/assessments:
     post:
       operationId: createOrgassessments
@@ -1762,6 +1848,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1780,42 +1867,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /organizations/{orgId}/assessments/service-request/{serviceRequestId}:
-    get:
-      operationId: getOrgassessmentsservicerequestServiceRequest
-      tags: [Assessments]
-      summary: Get assessment by service request
-      description: Retrieves the assessment for a specific service request. Requires authentication.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Assessment details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Assessment'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/assessments/{assessmentId}:
     get:
-      operationId: getOrgassessmentsAssessment
+      operationId: getAssessmentById
       tags: [Assessments]
       summary: Get an assessment
       description: Retrieves a specific assessment. Requires authentication.
@@ -1828,12 +1882,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: assessmentId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Assessment details
@@ -1846,6 +1902,41 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+
+  /organizations/{orgId}/assessments/by-service-request/{serviceRequestId}:
+    get:
+      operationId: getAssessmentByServiceRequestId
+      tags: [Assessments]
+      summary: Get assessment by service request
+      description: Retrieves the assessment for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Assessment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assessment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /organizations/{orgId}/decisions:
     post:
@@ -1862,6 +1953,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1880,42 +1972,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /organizations/{orgId}/decisions/service-request/{serviceRequestId}:
-    get:
-      operationId: getOrgdecisionsservicerequestServiceRequest
-      tags: [Decisions]
-      summary: Get decision by service request
-      description: Retrieves the decision for a specific service request. Requires authentication.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Decision details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Decision'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/decisions/{decisionId}:
     get:
-      operationId: getOrgdecisionsDecision
+      operationId: getDecisionById
       tags: [Decisions]
       summary: Get a decision
       description: Retrieves a specific decision. Requires authentication.
@@ -1928,12 +1987,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: decisionId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Decision details
@@ -1946,6 +2007,41 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+
+  /organizations/{orgId}/decisions/by-service-request/{serviceRequestId}:
+    get:
+      operationId: getDecisionByServiceRequestId
+      tags: [Decisions]
+      summary: Get decision by service request
+      description: Retrieves the decision for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Decision details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /organizations/{orgId}/assistance:
     post:
@@ -1962,6 +2058,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1980,55 +2077,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /organizations/{orgId}/assistance/service-request/{serviceRequestId}:
-    get:
-      operationId: getOrgassistanceservicerequestServiceRequest
-      tags: [Assistance]
-      summary: List assistance by service request
-      description: Lists assistance actions for a specific service request. Requires authentication.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
-      responses:
-        '200':
-          description: List of assistance actions with pagination
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Assistance'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/assistance/{assistanceId}:
     get:
-      operationId: getOrgassistanceAssistance
+      operationId: getAssistanceById
       tags: [Assistance]
       summary: Get assistance
       description: Retrieves a specific assistance action. Requires authentication.
@@ -2041,12 +2092,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: assistanceId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Assistance details
@@ -2061,7 +2114,7 @@ paths:
 
   /organizations/{orgId}/assistance/{assistanceId}/status:
     patch:
-      operationId: updateOrgassistanceAssistancestatus
+      operationId: updateAssistanceStatus
       tags: [Assistance]
       summary: Update assistance status
       description: Updates the status of an assistance action (start, complete, cancel). Requires admin or staff role.
@@ -2074,12 +2127,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: assistanceId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2106,6 +2161,54 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /organizations/{orgId}/assistance/by-service-request/{serviceRequestId}:
+    get:
+      operationId: listAssistanceByServiceRequestId
+      tags: [Assistance]
+      summary: List assistance by service request
+      description: Lists assistance actions for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of assistance actions with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Assistance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /organizations/{orgId}/follow-ups:
     post:
       operationId: createOrgfollowups
@@ -2121,6 +2224,7 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2139,55 +2243,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /organizations/{orgId}/follow-ups/service-request/{serviceRequestId}:
-    get:
-      operationId: getOrgfollowupsservicerequestServiceRequest
-      tags: [FollowUps]
-      summary: List follow-ups by service request
-      description: Lists follow-up items for a specific service request. Requires authentication.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
-      responses:
-        '200':
-          description: List of follow-up items with pagination
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FollowUp'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/follow-ups/{followUpId}:
     get:
-      operationId: getOrgfollowupsFollowUp
+      operationId: getFollowUpById
       tags: [FollowUps]
       summary: Get a follow-up
       description: Retrieves a specific follow-up item. Requires authentication.
@@ -2200,12 +2258,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: followUpId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Follow-up details
@@ -2220,7 +2280,7 @@ paths:
 
   /organizations/{orgId}/follow-ups/{followUpId}/complete:
     patch:
-      operationId: updateOrgfollowupsFollowUpcomplete
+      operationId: completeFollowUp
       tags: [FollowUps]
       summary: Complete a follow-up
       description: Marks a follow-up as completed. Requires admin or staff role.
@@ -2233,12 +2293,14 @@ paths:
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         - name: followUpId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2264,3 +2326,51 @@ paths:
                  $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/follow-ups/by-service-request/{serviceRequestId}:
+    get:
+      operationId: listFollowUpsByServiceRequestId
+      tags: [FollowUps]
+      summary: List follow-ups by service request
+      description: Lists follow-up items for a specific service request. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: serviceRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: List of follow-up items with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FollowUp'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+

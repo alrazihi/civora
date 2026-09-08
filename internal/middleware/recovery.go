@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/alrazihi/civora/internal/shared"
@@ -14,14 +15,20 @@ func Recover(next http.Handler) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("X-Content-Type-Options", "nosniff")
 				w.WriteHeader(http.StatusInternalServerError)
-				body, _ := json.Marshal(shared.APIResponse{
+				body, err := json.Marshal(shared.APIResponse{
 					Success: false,
 					Error: &shared.ErrorResponse{
 						Code:    string(shared.CodeInternalError),
 						Message: "Internal server error",
 					},
 				})
-				w.Write(body)
+				if err != nil {
+					log.Printf("marshal recovery response: %v", err)
+					return
+				}
+				if _, err := w.Write(body); err != nil {
+					log.Printf("write recovery response: %v", err)
+				}
 			}
 		}()
 		next.ServeHTTP(w, r)

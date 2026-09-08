@@ -19,7 +19,8 @@ func TestNewAuditEvent(t *testing.T) {
 	resource := "case"
 	resourceID := "case-123"
 
-	ev := NewAuditEvent(orgID, actorID, action, resource, &resourceID, "success", nil, nil, nil)
+	ev, err := NewAuditEvent(orgID, actorID, action, resource, &resourceID, "success", nil, nil, nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, orgID, ev.OrganizationID)
 	assert.Equal(t, &actorID, ev.ActorID)
@@ -36,10 +37,12 @@ func TestAuditEvent_ComputeHash(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	ev1 := NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil,
+	ev1, err := NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil,
 		map[string]interface{}{"seq": 1}, nil)
-	ev2 := NewAuditEvent(orgID, actorID, "case.closed", "case", nil, "success", nil,
+	require.NoError(t, err)
+	ev2, err := NewAuditEvent(orgID, actorID, "case.closed", "case", nil, "success", nil,
 		map[string]interface{}{"seq": 2}, nil)
+	require.NoError(t, err)
 
 	assert.NotEmpty(t, ev1.Hash)
 	assert.NotEqual(t, ev1.Hash, ev2.Hash, "events with different content should have different hashes")
@@ -49,7 +52,8 @@ func TestAuditEvent_VerifyIntegrity(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	ev := NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
+	ev, err := NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
+	require.NoError(t, err)
 	assert.True(t, ev.VerifyIntegrity())
 }
 
@@ -57,7 +61,8 @@ func TestAuditEvent_TamperDetection(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	ev := NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
+	ev, err := NewAuditEvent(orgID, actorID, "case.created", "case", nil, "success", nil, nil, nil)
+	require.NoError(t, err)
 	assert.True(t, ev.VerifyIntegrity())
 
 	ev.Outcome = "failure"
@@ -68,8 +73,10 @@ func TestAuditEvent_HashChain(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	ev1 := NewAuditEvent(orgID, actorID, "case.created", "case", strPtr("case-1"), "success", nil, nil, nil)
-	ev2 := NewAuditEvent(orgID, actorID, "case.status_changed", "case", strPtr("case-1"), "success", nil, nil, &ev1.Hash)
+	ev1, err := NewAuditEvent(orgID, actorID, "case.created", "case", strPtr("case-1"), "success", nil, nil, nil)
+	require.NoError(t, err)
+	ev2, err := NewAuditEvent(orgID, actorID, "case.status_changed", "case", strPtr("case-1"), "success", nil, nil, &ev1.Hash)
+	require.NoError(t, err)
 
 	assert.True(t, ev1.VerifyIntegrity())
 	assert.True(t, ev2.VerifyIntegrity())
@@ -97,7 +104,9 @@ func TestComputeHashManual(t *testing.T) {
 		Outcome:        "success",
 		Timestamp:      time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC),
 	}
-	ev.Hash = ev.ComputeHash()
+	hash, err := ev.ComputeHash()
+	require.NoError(t, err)
+	ev.Hash = hash
 
 	metaBytes, _ := json.Marshal(ev.Metadata)
 

@@ -5,10 +5,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrMetadataUnmarshal is returned when audit metadata cannot be serialized
+// for hashing. It is a hard error: a broken hash chain is a data-integrity
+// failure and must never be silently ignored.
+var ErrMetadataUnmarshal = errors.New("audit metadata is not JSON-serializable")
 
 type AuditEvent struct {
 	ID             uuid.UUID              `json:"id"`
@@ -34,7 +41,7 @@ func NewAuditEvent(
 	requestID *string,
 	metadata map[string]interface{},
 	previousHash *string,
-) *AuditEvent {
+) (*AuditEvent, error) {
 	ev := &AuditEvent{
 		ID:             uuid.New(),
 		OrganizationID: orgID,
@@ -48,11 +55,15 @@ func NewAuditEvent(
 		Timestamp:      time.Now().UTC(),
 		PreviousHash:   previousHash,
 	}
-	ev.Hash = ev.ComputeHash()
-	return ev
+	hash, err := ev.ComputeHash()
+	if err != nil {
+		return nil, err
+	}
+	ev.Hash = hash
+	return ev, nil
 }
 
-func (e *AuditEvent) ComputeHash() string {
+func (e *AuditEvent) ComputeHash() (string, error) {
 	h := sha256.New()
 
 	h.Write([]byte(e.OrganizationID.String()))
@@ -81,7 +92,10 @@ func (e *AuditEvent) ComputeHash() string {
 	}
 	h.Write([]byte("|"))
 
-	metaBytes, _ := json.Marshal(e.Metadata)
+	metaBytes, err := json.Marshal(e.Metadata)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrMetadataUnmarshal, err)
+	}
 	h.Write(metaBytes)
 	h.Write([]byte("|"))
 
@@ -92,11 +106,15 @@ func (e *AuditEvent) ComputeHash() string {
 		h.Write([]byte(*e.PreviousHash))
 	}
 
-	return hex.EncodeToString(h.Sum(nil))
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func (e *AuditEvent) VerifyIntegrity() bool {
-	return e.Hash == e.ComputeHash()
+	recomputed, err := e.ComputeHash()
+	if err != nil {
+		return false
+	}
+	return e.Hash == recomputed
 }
 
 func IsValidOutcome(s string) bool {

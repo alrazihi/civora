@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -69,16 +70,21 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if h.userRateLimiter != nil && req.Email != "" {
 		if locked, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); locked {
 			retrySeconds := int(retryAfter.Seconds()) + 1
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			body, err := json.Marshal(map[string]interface{}{
 				"success": false,
 				"error": map[string]string{
 					"code":    "RATE_LIMITED",
 					"message": fmt.Sprintf("Too many registration attempts for this email. Try again in %d seconds.", retrySeconds),
 				},
 			})
+			if err != nil {
+				log.Printf("marshal rate-limited response: %v", err)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			w.WriteHeader(http.StatusTooManyRequests)
+			shared.WriteBody(w, body)
 			return
 		}
 	}
@@ -111,16 +117,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Email != "" {
 			if locked, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); locked {
 				retrySeconds := int(retryAfter.Seconds()) + 1
-				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
-				w.WriteHeader(http.StatusTooManyRequests)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				body, err := json.Marshal(map[string]interface{}{
 					"success": false,
 					"error": map[string]string{
 						"code":    "ACCOUNT_LOCKED",
 						"message": fmt.Sprintf("Account temporarily locked due to too many failed login attempts. Try again in %d seconds.", retrySeconds),
 					},
 				})
+				if err != nil {
+					log.Printf("marshal account-locked response: %v", err)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+				w.WriteHeader(http.StatusTooManyRequests)
+				shared.WriteBody(w, body)
 				return
 			}
 		}
@@ -172,8 +183,14 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetTenantID(r)
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, parseErr := strconv.Atoi(r.URL.Query().Get("page"))
+	if parseErr != nil {
+		page = 1
+	}
+	perPage, parseErr := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if parseErr != nil {
+		perPage = 20
+	}
 	if page < 1 {
 		page = 1
 	}

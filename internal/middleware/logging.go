@@ -93,8 +93,20 @@ func Logging(next http.Handler) http.Handler {
 			UserAgent:     r.UserAgent(),
 		}
 
-		encoded, _ := json.Marshal(entry)
-		os.Stdout.Write(append(encoded, '\n'))
+		encoded, err := json.Marshal(entry)
+		if err != nil {
+			// Marshal of a logEntry struct cannot fail in practice, but if it
+			// does we must not silently drop the log line.
+			if _, werr := os.Stdout.Write(append([]byte(`{"level":"error","message":"failed to marshal log entry"}`), '\n')); werr != nil {
+				_ = werr
+			}
+			return
+		}
+		if _, err := os.Stdout.Write(append(encoded, '\n')); err != nil {
+			// Stdout write failure (pipe closed, disk full) is unrecoverable at
+			// request time; nothing can be done except drop the line.
+			_ = err
+		}
 	})
 }
 

@@ -3,14 +3,28 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/google/uuid"
-	"github.com/jackc/pgconn"
 )
+
+// isPostgresUniqueViolation reports whether err is a Postgres unique-violation
+// (SQLSTATE 23505). The pgx/v5 stdlib driver returns *pgconn.PgError from the
+// github.com/jackc/pgx/v5/pgconn package, so we cannot rely on a single
+// imported *pgconn.PgError type across the module. Matching on the SQLSTATE
+// string is robust to both the plain pgconn and pgx/v5/pgconn packages.
+func isPostgresUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), "SQLSTATE 23505") {
+		return true
+	}
+	return false
+}
 
 type PostgresCaseRepository struct {
 	db *sql.DB
@@ -54,8 +68,7 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 		if err == nil {
 			return nil
 		}
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if isPostgresUniqueViolation(err) {
 			c.CaseNumber = domain.GenerateCaseNumber(time.Now().UTC())
 			continue
 		}
@@ -119,6 +132,9 @@ func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Contex
 		}
 		cases = append(cases, c)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return cases, nil
 }
 
@@ -165,8 +181,11 @@ func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, 
 	if err != nil {
 		return fmt.Errorf("failed to update case status: %w", err)
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if affected == 0 {
 		return fmt.Errorf("concurrent modification detected")
 	}
 	return nil
@@ -190,8 +209,11 @@ func (r *PostgresCaseRepository) assign(ctx context.Context, e sqlExecer, orgID,
 	if err != nil {
 		return fmt.Errorf("failed to assign case: %w", err)
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if affected == 0 {
 		return fmt.Errorf("no rows affected")
 	}
 	return nil

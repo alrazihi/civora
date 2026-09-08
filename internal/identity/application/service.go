@@ -75,7 +75,7 @@ func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParam
 	}
 
 	existing, err := s.userRepo.FindByEmail(ctx, params.OrganizationID, params.Email)
-	if err != nil {
+	if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
 		return nil, fmt.Errorf("failed to check existing user: %w", err)
 	}
 	if existing != nil {

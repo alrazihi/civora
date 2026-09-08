@@ -18,6 +18,7 @@ const (
 var (
 	ErrInvalidOrgName = errors.New("organization name is required")
 	ErrInvalidOrgSlug = errors.New("organization slug is required")
+	ErrOrgNotFound    = errors.New("organization not found")
 )
 
 type Organization struct {

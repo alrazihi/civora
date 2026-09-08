@@ -188,7 +188,11 @@ func getStringValue(v any) string {
 }
 
 func writeUnauthorized(w http.ResponseWriter) {
+	body := []byte(`{"success":false,"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"success":false,"error":{"code":"UNAUTHORIZED","message":"Authentication required"}}`))
+	if _, err := w.Write(body); err != nil {
+		// Client disconnected; nothing can be done at this point.
+		_ = err
+	}
 }

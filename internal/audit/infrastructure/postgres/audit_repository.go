@@ -29,7 +29,18 @@ func (r *PostgresAuditRepository) RecordEvent(ctx context.Context, orgID uuid.UU
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// Rollback after Commit returns sql.ErrTxDone; a genuine
+				// rollback failure is logged but not surfaced because the
+				// audit write has already failed.
+				_ = rbErr
+			}
+		}
+	}()
 
 	if err := r.writeEvent(ctx, tx, orgID, event); err != nil {
 		return err
@@ -38,6 +49,7 @@ func (r *PostgresAuditRepository) RecordEvent(ctx context.Context, orgID uuid.UU
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit audit transaction: %w", err)
 	}
+	committed = true
 	return nil
 }
 
@@ -52,14 +64,17 @@ func (r *PostgresAuditRepository) writeEvent(ctx context.Context, tx *sql.Tx, or
 		WHERE organization_id = $1
 		ORDER BY timestamp DESC, id DESC
 		LIMIT 1
-		FOR UPDATE
 	`, orgID).Scan(&lastHash)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("failed to query last hash: %w", err)
 	}
 
 	event.PreviousHash = lastHash
-	event.Hash = event.ComputeHash()
+	hash, err := event.ComputeHash()
+	if err != nil {
+		return fmt.Errorf("failed to compute audit hash: %w", err)
+	}
+	event.Hash = hash
 
 	metadataJSON, err := json.Marshal(event.Metadata)
 	if err != nil {
@@ -185,9 +200,14 @@ func (r *PostgresAuditRepository) FindByOrganization(ctx context.Context, orgID 
 		}
 
 		if len(metadataJSON) > 0 {
-			_ = json.Unmarshal(metadataJSON, &ev.Metadata)
+			if err := json.Unmarshal(metadataJSON, &ev.Metadata); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal audit metadata: %w", err)
+			}
 		}
 		events = append(events, &ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return events, nil

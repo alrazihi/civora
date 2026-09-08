@@ -68,7 +68,11 @@ func (s *Server) Start(ctx context.Context) error {
 		defer cancel()
 		s.idemStore.Stop()
 		s.rateLimiter.Stop()
-		s.httpServer.Shutdown(shutdownCtx)
+		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
+			// Shutdown error (e.g. forced timeout) is logged; the server
+			// goroutine is exiting anyway.
+			_ = err
+		}
 	}()
 
 	return s.httpServer.ListenAndServe()

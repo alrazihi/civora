@@ -38,7 +38,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Post("/", h.CreateFollowUp)
-			r.Get("/service-request/{serviceRequestId}", h.ListFollowUps)
+			r.Get("/by-service-request/{serviceRequestId}", h.ListFollowUps)
 		})
 		r.Get("/{followUpId}", h.GetFollowUp)
 		r.Group(func(r chi.Router) {
@@ -177,8 +177,14 @@ func (h *Handler) ListFollowUps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, parseErr := strconv.Atoi(r.URL.Query().Get("page"))
+	if parseErr != nil {
+		page = 1
+	}
+	perPage, parseErr := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if parseErr != nil {
+		perPage = 20
+	}
 	if page < 1 {
 		page = 1
 	}

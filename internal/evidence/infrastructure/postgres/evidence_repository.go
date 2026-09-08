@@ -84,6 +84,9 @@ func (r *PostgresEvidenceRepository) FindByServiceRequest(ctx context.Context, o
 		}
 		items = append(items, e)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
 	return items, nil
 }
 
@@ -119,6 +122,9 @@ func (r *PostgresEvidenceRepository) FindByOrganization(ctx context.Context, org
 			return nil, err
 		}
 		items = append(items, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return items, nil
 }
