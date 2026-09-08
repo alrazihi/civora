@@ -180,7 +180,7 @@ func TestConcurrentDuplicateDecision(t *testing.T) {
 	caseID := uuid.New()
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, created_by, assigned_to, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
-		caseID, org.ID, "CONC-DEC", "Concurrency Decision Case", "", "NEW", "GENERAL", "NORMAL", actorID, nil,
+		caseID, org.ID, "CONC-DEC", "Concurrency Decision Case", "", "DECISION_PENDING", "GENERAL", "NORMAL", actorID, nil,
 	)
 	require.NoError(t, err)
 
@@ -202,6 +202,8 @@ func TestConcurrentDuplicateDecision(t *testing.T) {
 			mu.Lock()
 			if err == nil {
 				successCount++
+			} else {
+				t.Logf("MakeDecision error: %v", err)
 			}
 			mu.Unlock()
 		}()
