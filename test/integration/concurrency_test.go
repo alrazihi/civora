@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	assistancedomain "github.com/alrazihi/civora/internal/assistance/domain"
 	assistanceapp "github.com/alrazihi/civora/internal/assistance/application"
+	assistancedomain "github.com/alrazihi/civora/internal/assistance/domain"
 	assistancepostgres "github.com/alrazihi/civora/internal/assistance/infrastructure/postgres"
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
 	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"

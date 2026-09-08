@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/audit/domain"
+	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
@@ -61,7 +61,7 @@ func TestAuditMaintenanceService_VerifyOrganization_TamperDetection(t *testing.T
 
 	// Tamper with the stored hash directly in the database.
 	_, err = db.ExecContext(context.Background(),
-		`UPDATE audit_events SET hash = $1 WHERE id = $2`,
+		`UPDATE audit.audit_events SET hash = $1 WHERE id = $2`,
 		"0000000000000000000000000000000000000000000000000000000000000000",
 		ev.ID,
 	)
@@ -89,7 +89,7 @@ func TestAuditMaintenanceService_PurgeOld(t *testing.T) {
 
 	// Create an old event by inserting directly with an old timestamp.
 	_, err := db.ExecContext(context.Background(),
-		`INSERT INTO audit_events (id, organization_id, actor_id, action, resource, outcome, timestamp, hash, previous_hash)
+		`INSERT INTO audit.audit_events (id, organization_id, actor_id, action, resource, outcome, timestamp, hash, previous_hash)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		uuid.New(), orgID, actorID, "case.created", "case", "success",
 		"2020-01-01T00:00:00Z", "oldhash", nil,

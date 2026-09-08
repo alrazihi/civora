@@ -58,7 +58,7 @@ func (r *PostgresAuditRepository) RecordEventTx(ctx context.Context, tx *sql.Tx,
 }
 
 func (r *PostgresAuditRepository) writeEvent(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *domain.AuditEvent) error {
-var lastHash *string
+	var lastHash *string
 	err := tx.QueryRowContext(ctx, `
 		SELECT hash FROM audit.audit_events
 		WHERE organization_id = $1
