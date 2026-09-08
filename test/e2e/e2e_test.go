@@ -583,12 +583,6 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &assistanceResp))
 	assistanceID := assistanceResp.Data.ID
 
-	var staffID struct {
-		Data struct {
-			ID             string `json:"id"`
-			OrganizationID string `json:"organization_id"`
-		} `json:"data"`
-	}
 	userResp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/users", token, nil)
 	require.Equal(t, http.StatusOK, userResp.Code)
 	var usersList struct {
@@ -599,15 +593,10 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(userResp.Body.Bytes(), &usersList))
 	if len(usersList.Data) > 0 {
-		require.NoError(t, json.Unmarshal(userResp.Body.Bytes(), &staffID))
-		staffUUID := usersList.Data[0].ID
-
 		resp = ts.makeRequest(t, "PATCH", "/api/v1/organizations/"+orgID.String()+"/assistance/"+assistanceID+"/status", token, map[string]interface{}{
 			"action": "start",
 		})
 		require.Equal(t, http.StatusOK, resp.Code, "response body: %s", resp.Body.String())
-
-		_ = staffUUID
 	}
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/follow-ups", token, map[string]interface{}{
