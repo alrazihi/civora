@@ -252,7 +252,7 @@
           <option value="OTHER">Other</option>
         </select>
         <label>Description</label><textarea id="asst-desc" rows="3" required></textarea>
-        <label>Responsible Staff User ID</label><input id="asst-staff" required placeholder="UUID of staff user">
+        <label>Responsible Staff</label><select id="asst-staff" required><option value="">Select staff...</option></select>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('assistance-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>

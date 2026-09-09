@@ -125,6 +125,10 @@ func (h *Handler) GetByServiceRequest(w http.ResponseWriter, r *http.Request) {
 
 	d, err := h.svc.GetDecisionByServiceRequest(r.Context(), orgID, serviceRequestID)
 	if err != nil {
+		if errors.Is(err, application.ErrDecisionNotFound) || errors.Is(err, domain.ErrDecisionNotFound) {
+			shared.WriteSuccess(w, http.StatusOK, nil, nil)
+			return
+		}
 		writeDecisionError(w, err)
 		return
 	}

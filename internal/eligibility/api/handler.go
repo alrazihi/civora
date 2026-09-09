@@ -130,6 +130,10 @@ func (h *Handler) GetByServiceRequest(w http.ResponseWriter, r *http.Request) {
 
 	e, err := h.svc.GetEligibilityByServiceRequest(r.Context(), orgID, serviceRequestID)
 	if err != nil {
+		if errors.Is(err, application.ErrEligibilityNotFound) || errors.Is(err, domain.ErrEligibilityNotFound) {
+			shared.WriteSuccess(w, http.StatusOK, nil, nil)
+			return
+		}
 		writeEligibilityError(w, err)
 		return
 	}

@@ -171,7 +171,6 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	log.Printf("CIVORA starting on port %s", cfg.Server.Port)
 	if err := srv.Start(ctx); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}

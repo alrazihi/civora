@@ -127,6 +127,7 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 		return nil, ErrCaseNotFound
 	}
 
+	oldStatus := c.Status
 	if err := c.TransitionTo(params.Status); err != nil {
 		if errors.Is(err, domain.ErrInvalidStateTransition) {
 			return nil, fmt.Errorf("%w: from %s to %s", ErrCaseTransition, c.Status, params.Status)
@@ -150,7 +151,7 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 				Outcome:        "success",
 				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
-					"from": string(c.Status),
+					"from": string(oldStatus),
 					"to":   string(params.Status),
 				},
 			}); err != nil {

@@ -277,7 +277,7 @@ const app = {
       this.currentCase = res.data;
       document.getElementById('case-status').textContent = res.data.status;
       document.getElementById('case-status').className = `badge ${res.data.status.toLowerCase().replace('_','-')}`;
-      this.renderTimeline(res.data.status);
+      await this.loadTimeline(res.data.id);
       this.renderActions(res.data.status);
       await this.loadCaseSections(res.data.id);
     } catch (err) {
@@ -289,11 +289,24 @@ const app = {
   showEvidenceForm() { this.showModal('evidence-modal'); },
   showAssessmentForm() { this.showModal('assessment-modal'); },
   showDecisionForm() { this.showModal('decision-modal'); },
-  showAssistanceForm() { this.showModal('assistance-modal'); },
+  showAssistanceForm() { this.loadStaffOptions().then(() => this.showModal('assistance-modal')); },
   showFollowUpForm() { this.showModal('followup-modal'); },
 
   showModal(id) { document.getElementById(id)?.classList.remove('hidden'); },
   hideModal(id) { document.getElementById(id)?.classList.add('hidden'); },
+
+  async loadStaffOptions() {
+    const select = document.getElementById('asst-staff');
+    if (!select) return;
+    try {
+      const res = await api('GET', this.orgPath('/users?per_page=200'));
+      const users = res.data || [];
+      select.innerHTML = '<option value="">Select staff...</option>' +
+        users.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('');
+    } catch (err) {
+      select.innerHTML = '<option value="">Failed to load users</option>';
+    }
+  },
 
   async submitEligibility(e) {
     e.preventDefault();
@@ -316,6 +329,7 @@ const app = {
         service_request_id: this.currentCase.id,
         type: document.getElementById('ev-type').value,
         description: document.getElementById('ev-desc').value,
+        storage_reference: document.getElementById('ev-ref').value,
       });
       this.hideModal('evidence-modal');
       await this.loadCaseSections(this.currentCase.id);

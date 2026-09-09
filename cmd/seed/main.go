@@ -159,10 +159,10 @@ func main() {
 		log.Fatalf("failed to create follow-up: %v", err)
 	}
 
-	fmt.Println("Demo seed completed successfully.")
-	fmt.Printf("Organization: %s (slug: %s)\n", orgID, slug)
-	fmt.Printf("Admin: admin@demo.org / demopass1234\n")
-	fmt.Printf("Staff: staff@demo.org / demopass1234\n")
-	fmt.Printf("Case ID: %s\n", caseID)
-	fmt.Println("Use these credentials to log in at http://localhost:8080")
+  fmt.Println("Demo seed completed successfully.")
+  fmt.Printf("Organization: %s (slug: %s)\n", orgID, slug)
+  fmt.Printf("Admin: admin@demo.org / demopass1234 (id: %s)\n", adminID)
+  fmt.Printf("Staff: staff@demo.org / demopass1234 (id: %s)\n", staffID)
+  fmt.Printf("Case ID: %s\n", caseID)
+  fmt.Println("Use these credentials to log in at http://localhost:8080")
 }

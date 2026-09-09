@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/alrazihi/civora/internal/config"
@@ -90,7 +93,44 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
-	return s.httpServer.ListenAndServe()
+	addr := s.httpServer.Addr
+	listener, actualPort, err := s.listen(addr)
+	if err != nil {
+		return err
+	}
+	s.httpServer.Addr = listener.Addr().String()
+	log.Printf("CIVORA starting on port %d", actualPort)
+
+	return s.httpServer.Serve(listener)
+}
+
+func (s *Server) listen(addr string) (net.Listener, int, error) {
+	if addr == "" || addr == ":" {
+		addr = ":0"
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err == nil {
+		return listener, listener.Addr().(*net.TCPAddr).Port, nil
+	}
+
+	_, basePort, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
+	port, err := strconv.Atoi(basePort)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to parse port %s: %w", basePort, err)
+	}
+
+	for candidate := port + 1; candidate < 65535; candidate++ {
+		candidateAddr := net.JoinHostPort("", strconv.Itoa(candidate))
+		listener, err = net.Listen("tcp", candidateAddr)
+		if err == nil {
+			return listener, candidate, nil
+		}
+	}
+
+	return nil, 0, fmt.Errorf("failed to find available port starting from %s: %w", addr, err)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

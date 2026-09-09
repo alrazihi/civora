@@ -127,6 +127,10 @@ func (h *Handler) GetByServiceRequest(w http.ResponseWriter, r *http.Request) {
 
 	a, err := h.svc.GetAssessmentByServiceRequest(r.Context(), orgID, serviceRequestID)
 	if err != nil {
+		if errors.Is(err, application.ErrAssessmentNotFound) || errors.Is(err, domain.ErrAssessmentNotFound) {
+			shared.WriteSuccess(w, http.StatusOK, nil, nil)
+			return
+		}
 		writeAssessmentError(w, err)
 		return
 	}
