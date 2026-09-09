@@ -23,11 +23,6 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
       - name: Check formatting
         run: test -z "$(gofmt -l .)" || (echo "Run 'gofmt -w .' and commit" && exit 1)
 
@@ -35,9 +30,9 @@ jobs:
         run: GOMEMLIMIT=2GiB go vet ./internal/... ./cmd/...
 
       - name: golangci-lint (with gosec)
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64
+          version: v2.12.2
           args: --enable=gosec --timeout=5m ./...
 
   test:
