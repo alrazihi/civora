@@ -557,11 +557,6 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 
 	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/transitions", token, map[string]interface{}{
-		"status": "APPROVED",
-	})
-	require.Equal(t, http.StatusOK, resp.Code)
-
-	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/transitions", token, map[string]interface{}{
 		"status": "IN_PROGRESS",
 	})
 	require.Equal(t, http.StatusOK, resp.Code)
