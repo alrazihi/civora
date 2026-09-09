@@ -79,7 +79,7 @@ func (r *PostgresRoleRepository) FindByOrganization(ctx context.Context, orgID u
 	if err != nil {
 		return nil, fmt.Errorf("failed to query roles: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var roles []*domain.Role
 	for rows.Next() {

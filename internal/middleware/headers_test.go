@@ -81,7 +81,7 @@ func TestBodySizeLimit_RejectsOversized(t *testing.T) {
 	largeBody := strings.Repeat("a", 11<<20)
 	resp, err := http.Post(ts.URL, "application/json", strings.NewReader(largeBody))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
 }

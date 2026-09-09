@@ -78,7 +78,7 @@ func (r *PostgresUserRepository) FindByOrganization(ctx context.Context, orgID u
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []*domain.User
 	for rows.Next() {

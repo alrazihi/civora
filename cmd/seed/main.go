@@ -24,7 +24,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	migrator := database.NewMigrator(db.DB, migrations.FS)
 	if err := migrator.LoadMigrations(); err != nil {

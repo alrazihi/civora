@@ -69,9 +69,9 @@ func (s *Server) MountStaticFS(fs http.FileSystem) {
 			http.NotFound(w, r)
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		io.Copy(w, f)
+		_, _ = io.Copy(w, f)
 	})
 	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.FileServer(fs).ServeHTTP(w, r)
