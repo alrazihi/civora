@@ -249,15 +249,6 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	}, nil)
 }
 
-func parseOrgID(r *http.Request) (uuid.UUID, bool) {
-	orgIDStr := chi.URLParam(r, "orgId")
-	orgID, err := uuid.Parse(orgIDStr)
-	if err != nil {
-		return uuid.Nil, false
-	}
-	return orgID, true
-}
-
 func mustParseUUID(s string) uuid.UUID {
 	id, err := uuid.Parse(s)
 	if err != nil {

@@ -84,7 +84,7 @@ func (r *PostgresAssistanceRepository) FindByServiceRequest(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query assistance: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*domain.Assistance
 	for rows.Next() {

@@ -81,13 +81,11 @@ func (s *Server) MountStaticFS(fs http.FileSystem) {
 func (s *Server) Start(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		s.idemStore.Stop()
 		s.rateLimiter.Stop()
 		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-			// Shutdown error (e.g. forced timeout) is logged; the server
-			// goroutine is exiting anyway.
 			_ = err
 		}
 	}()

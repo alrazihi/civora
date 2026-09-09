@@ -94,7 +94,7 @@ func (r *PostgresEligibilityRepository) FindByOrganization(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to query eligibilities: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*domain.Eligibility
 	for rows.Next() {
