@@ -9,6 +9,7 @@ on:
 env:
   CIVORA_TEST_DB_USER: civora_test
   CIVORA_TEST_DB_PASSWORD: civora_test
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   lint:
@@ -21,6 +22,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Check formatting
         run: test -z "$(gofmt -l .)" || (echo "Run 'gofmt -w .' and commit" && exit 1)
