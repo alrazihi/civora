@@ -61,6 +61,16 @@ func (s *Server) Router() *chi.Mux {
 	return s.router
 }
 
+func (s *Server) MountStaticFS(fs http.FileSystem) {
+	s.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/index.html"
+		http.FileServer(fs).ServeHTTP(w, r)
+	})
+	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.FileServer(fs).ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) Start(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()

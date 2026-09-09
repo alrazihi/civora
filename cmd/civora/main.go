@@ -161,6 +161,7 @@ func main() {
 	assistanceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
