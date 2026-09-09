@@ -67,29 +67,33 @@ func main() {
 	}
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("demopass1234"), 4)
+
+	adminRoleID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`,
+		adminRoleID, orgID, "admin", "Full access", `["*"]`)
+	if err != nil {
+		log.Fatalf("failed to create admin role: %v", err)
+	}
+
+	staffRoleID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`,
+		staffRoleID, orgID, "staff", "Standard access", `["cases:*"]`)
+	if err != nil {
+		log.Fatalf("failed to create staff role: %v", err)
+	}
+
 	adminID := uuid.New()
-	_, err = db.DB.ExecContext(ctx, `INSERT INTO users (id, organization_id, email, name, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
-		adminID, orgID, "admin@demo.org", "Demo Admin", string(hashedPassword))
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO users (id, organization_id, email, name, role_id, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		adminID, orgID, "admin@demo.org", "Demo Admin", adminRoleID, string(hashedPassword))
 	if err != nil {
 		log.Fatalf("failed to create admin user: %v", err)
 	}
 
 	staffID := uuid.New()
-	_, err = db.DB.ExecContext(ctx, `INSERT INTO users (id, organization_id, email, name, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
-		staffID, orgID, "staff@demo.org", "Demo Staff", string(hashedPassword))
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO users (id, organization_id, email, name, role_id, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		staffID, orgID, "staff@demo.org", "Demo Staff", staffRoleID, string(hashedPassword))
 	if err != nil {
 		log.Fatalf("failed to create staff user: %v", err)
-	}
-
-	_, err = db.DB.ExecContext(ctx, `INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`,
-		uuid.New(), orgID, "admin", "Full access", `["*"]`)
-	if err != nil {
-		log.Fatalf("failed to create admin role: %v", err)
-	}
-	_, err = db.DB.ExecContext(ctx, `INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`,
-		uuid.New(), orgID, "staff", "Standard access", `["cases:*"]`)
-	if err != nil {
-		log.Fatalf("failed to create staff role: %v", err)
 	}
 
 	personID := uuid.New()

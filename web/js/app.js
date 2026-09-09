@@ -1,6 +1,10 @@
 const app = {
   currentCase: null,
 
+  orgPath(path) {
+    return `/organizations/${orgId}${path}`;
+  },
+
   init() {
     if (token) router.navigate('dashboard');
     else router.navigate('login');
@@ -14,7 +18,7 @@ const app = {
     const password = document.getElementById('login-password').value;
     try {
       const res = await api('POST', `/organizations/${org}/auth/login`, { email, password });
-      setAuth(res.data.token, org);
+      setAuth(res.data.token, res.data.user.organization_id);
       router.navigate('dashboard');
     } catch (err) {
       alert(err.message);
@@ -49,7 +53,7 @@ const app = {
       city: document.getElementById('p-city').value.trim() || undefined,
     };
     try {
-      const res = await api('POST', '/people', data);
+      const res = await api('POST', this.orgPath('/people'), data);
       document.getElementById('new-case-person-id').value = res.data.id;
       document.getElementById('person-result').textContent = `Person created: ${res.data.first_name} ${res.data.last_name}`;
     } catch (err) {
@@ -67,7 +71,7 @@ const app = {
       person_id: document.getElementById('new-case-person-id').value || undefined,
     };
     try {
-      const res = await api('POST', '/cases', data);
+      const res = await api('POST', this.orgPath('/cases'), data);
       router.navigate('case', res.data.id);
     } catch (err) {
       alert(err.message);
@@ -76,7 +80,7 @@ const app = {
 
   async loadDashboard() {
     try {
-      const res = await api('GET', '/cases?per_page=50');
+      const res = await api('GET', this.orgPath('/cases?per_page=50'));
       const cases = res.data || [];
       const tbody = document.getElementById('case-table-body');
       if (!cases.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No cases yet</td></tr>'; return; }
@@ -96,7 +100,7 @@ const app = {
 
   async loadCase(id) {
     try {
-      const res = await api('GET', `/cases/${id}`);
+      const res = await api('GET', this.orgPath(`/cases/${id}`));
       this.currentCase = res.data;
       document.getElementById('case-title').textContent = res.data.title;
       document.getElementById('case-number').textContent = res.data.case_number;
@@ -115,12 +119,12 @@ const app = {
   },
 
   async loadCaseSections(id) {
-    await this.loadSection('eligibility', `/eligibilities/by-service-request/${id}`);
-    await this.loadSection('evidence', `/evidence/by-service-request/${id}`);
-    await this.loadSection('assessment', `/assessments/by-service-request/${id}`);
-    await this.loadSection('decision', `/decisions/by-service-request/${id}`);
-    await this.loadSection('assistance', `/assistance/by-service-request/${id}`);
-    await this.loadSection('followup', `/follow-ups/by-service-request/${id}`);
+    await this.loadSection('eligibility', this.orgPath(`/eligibilities/by-service-request/${id}`));
+    await this.loadSection('evidence', this.orgPath(`/evidence/by-service-request/${id}`));
+    await this.loadSection('assessment', this.orgPath(`/assessments/by-service-request/${id}`));
+    await this.loadSection('decision', this.orgPath(`/decisions/by-service-request/${id}`));
+    await this.loadSection('assistance', this.orgPath(`/assistance/by-service-request/${id}`));
+    await this.loadSection('followup', this.orgPath(`/follow-ups/by-service-request/${id}`));
   },
 
   async loadSection(name, path) {
@@ -174,7 +178,13 @@ const app = {
       }
     } catch (err) {
       const el = document.getElementById(`sec-${name}`);
-      if (el) el.innerHTML = `<p style="color:var(--danger)">Error loading: ${err.message}</p>`;
+      if (el) {
+        if (err.message && err.message.includes('404')) {
+          el.innerHTML = '<p class="empty">Not yet recorded</p>';
+        } else {
+          el.innerHTML = `<p style="color:var(--danger)">Error loading: ${err.message}</p>`;
+        }
+      }
     }
   },
 
@@ -220,10 +230,15 @@ const app = {
       html += `<button class="btn secondary" onclick="app.showAssessmentForm()">Add Assessment</button>`;
     }
     if (status === 'DECISION_PENDING') {
+      html += this.btn('Approve Case', `transition('APPROVED')`);
+      html += this.btn('Reject Case', `transition('REJECTED')`);
       html += `<button class="btn secondary" onclick="app.showDecisionForm()">Record Decision</button>`;
     }
     if (status === 'APPROVED') {
       html += this.btn('Start Assistance', `transition('IN_PROGRESS')`);
+    }
+    if (status === 'REJECTED') {
+      html += this.btn('Close Case', `transition('CLOSED')`);
     }
     if (status === 'IN_PROGRESS') {
       html += this.btn('Schedule Follow-up', `transition('FOLLOW_UP')`);
@@ -238,13 +253,13 @@ const app = {
   },
 
   btn(label, onclick) {
-    return `<button class="btn" onclick="${onclick}">${label}</button>`;
+    return `<button class="btn" onclick="app.${onclick}">${label}</button>`;
   },
 
   async transition(status) {
     if (!this.currentCase) return;
     try {
-      const res = await api('POST', `/cases/${this.currentCase.id}/transitions`, { status });
+      const res = await api('POST', this.orgPath(`/cases/${this.currentCase.id}/transitions`), { status });
       this.currentCase = res.data;
       document.getElementById('case-status').textContent = res.data.status;
       document.getElementById('case-status').className = `badge ${res.data.status.toLowerCase().replace('_','-')}`;
@@ -269,20 +284,21 @@ const app = {
   async submitEligibility(e) {
     e.preventDefault();
     try {
-      await api('POST', '/eligibilities', {
+      await api('POST', this.orgPath('/eligibilities'), {
         service_request_id: this.currentCase.id,
         criteria: { manual: true },
         explanation: document.getElementById('elig-explanation').value,
       });
       this.hideModal('eligibility-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderActions(this.currentCase.status);
     } catch (err) { alert(err.message); }
   },
 
   async submitEvidence(e) {
     e.preventDefault();
     try {
-      await api('POST', '/evidence', {
+      await api('POST', this.orgPath('/evidence'), {
         service_request_id: this.currentCase.id,
         type: document.getElementById('ev-type').value,
         description: document.getElementById('ev-desc').value,
@@ -290,13 +306,14 @@ const app = {
       });
       this.hideModal('evidence-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderActions(this.currentCase.status);
     } catch (err) { alert(err.message); }
   },
 
   async submitAssessment(e) {
     e.preventDefault();
     try {
-      await api('POST', '/assessments', {
+      await api('POST', this.orgPath('/assessments'), {
         service_request_id: this.currentCase.id,
         findings: document.getElementById('as-findings').value,
         needs_identified: document.getElementById('as-needs').value,
@@ -304,26 +321,28 @@ const app = {
       });
       this.hideModal('assessment-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderActions(this.currentCase.status);
     } catch (err) { alert(err.message); }
   },
 
   async submitDecision(e) {
     e.preventDefault();
     try {
-      await api('POST', '/decisions', {
+      await api('POST', this.orgPath('/decisions'), {
         service_request_id: this.currentCase.id,
         decision: document.getElementById('dec-decision').value,
         reason: document.getElementById('dec-reason').value,
       });
       this.hideModal('decision-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderActions(this.currentCase.status);
     } catch (err) { alert(err.message); }
   },
 
   async submitAssistance(e) {
     e.preventDefault();
     try {
-      await api('POST', '/assistance', {
+      await api('POST', this.orgPath('/assistance'), {
         service_request_id: this.currentCase.id,
         type: document.getElementById('asst-type').value,
         description: document.getElementById('asst-desc').value,
@@ -331,13 +350,14 @@ const app = {
       });
       this.hideModal('assistance-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderActions(this.currentCase.status);
     } catch (err) { alert(err.message); }
   },
 
   async submitFollowUp(e) {
     e.preventDefault();
     try {
-      await api('POST', '/follow-ups', {
+      await api('POST', this.orgPath('/follow-ups'), {
         service_request_id: this.currentCase.id,
         scheduled_date: document.getElementById('fu-date').value,
         outcome: document.getElementById('fu-outcome').value,
@@ -345,6 +365,7 @@ const app = {
       });
       this.hideModal('followup-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderActions(this.currentCase.status);
     } catch (err) { alert(err.message); }
   },
 

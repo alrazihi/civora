@@ -27,7 +27,7 @@ async function api(method, path, body) {
   if (res.status === 401) { clearAuth(); router.navigate('login'); }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${res.status}`);
+    throw new Error(`${res.status} ${err.error?.message || `HTTP ${res.status}`}`);
   }
   return res.json().catch(() => ({}));
 }

@@ -14,11 +14,14 @@ import (
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	orgdomain "github.com/alrazihi/civora/internal/organizations/domain"
 )
 
 type Handler struct {
 	svc             IdentityService
 	userRateLimiter *middleware.UserRateLimiter
+	orgFinder       func(ctx context.Context, slug string) (*orgdomain.Organization, error)
 }
 
 type IdentityService interface {
@@ -36,6 +39,10 @@ func NewHandlerWithRateLimiter(svc IdentityService, userRateLimiter *middleware.
 	return &Handler{svc: svc, userRateLimiter: userRateLimiter}
 }
 
+func NewHandlerWithOrgLookup(svc IdentityService, userRateLimiter *middleware.UserRateLimiter, orgFinder func(ctx context.Context, slug string) (*orgdomain.Organization, error)) *Handler {
+	return &Handler{svc: svc, userRateLimiter: userRateLimiter, orgFinder: orgFinder}
+}
+
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
 	r.Route("/api/v1/organizations/{orgId}/auth", func(r chi.Router) {
 		r.Post("/login", h.Login)
@@ -51,9 +58,9 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	orgID, ok := parseOrgID(r)
-	if !ok {
-		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+	orgID, err := h.resolveOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())
 		return
 	}
 
@@ -68,7 +75,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.userRateLimiter != nil && req.Email != "" {
-		if locked, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); locked {
+		if allowed, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); !allowed {
 			retrySeconds := int(retryAfter.Seconds()) + 1
 			body, err := json.Marshal(map[string]interface{}{
 				"success": false,
@@ -110,45 +117,40 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	if h.userRateLimiter != nil {
-		var req struct {
-			Email string `json:"email"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Email != "" {
-			if locked, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); locked {
-				retrySeconds := int(retryAfter.Seconds()) + 1
-				body, err := json.Marshal(map[string]interface{}{
-					"success": false,
-					"error": map[string]string{
-						"code":    "ACCOUNT_LOCKED",
-						"message": fmt.Sprintf("Account temporarily locked due to too many failed login attempts. Try again in %d seconds.", retrySeconds),
-					},
-				})
-				if err != nil {
-					log.Printf("marshal account-locked response: %v", err)
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
-				w.WriteHeader(http.StatusTooManyRequests)
-				shared.WriteBody(w, body)
-				return
-			}
-		}
-	}
-
-	orgID, ok := parseOrgID(r)
-	if !ok {
-		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
-		return
-	}
-
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	if h.userRateLimiter != nil && req.Email != "" {
+		if allowed, _, retryAfter := h.userRateLimiter.CheckRateLimit(req.Email); !allowed {
+			retrySeconds := int(retryAfter.Seconds()) + 1
+			body, err := json.Marshal(map[string]interface{}{
+				"success": false,
+				"error": map[string]string{
+					"code":    "ACCOUNT_LOCKED",
+					"message": fmt.Sprintf("Account temporarily locked due to too many failed login attempts. Try again in %d seconds.", retrySeconds),
+				},
+			})
+			if err != nil {
+				log.Printf("marshal account-locked response: %v", err)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			w.WriteHeader(http.StatusTooManyRequests)
+			shared.WriteBody(w, body)
+			return
+		}
+	}
+
+	orgID, err := h.resolveOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())
 		return
 	}
 
@@ -281,4 +283,25 @@ func writeDomainError(w http.ResponseWriter, err error) {
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
+}
+
+func (h *Handler) resolveOrgID(r *http.Request) (uuid.UUID, error) {
+	orgIDStr := chi.URLParam(r, "orgId")
+	orgID, err := uuid.Parse(orgIDStr)
+	if err == nil {
+		return orgID, nil
+	}
+
+	if h.orgFinder == nil || orgIDStr == "" {
+		return uuid.Nil, fmt.Errorf("invalid organization ID: %q", orgIDStr)
+	}
+
+	org, err := h.orgFinder(r.Context(), orgIDStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("organization lookup failed for %q: %v", orgIDStr, err)
+	}
+	if org == nil {
+		return uuid.Nil, fmt.Errorf("organization not found: %q", orgIDStr)
+	}
+	return org.ID, nil
 }

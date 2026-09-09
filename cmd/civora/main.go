@@ -43,6 +43,7 @@ import (
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	orgapi "github.com/alrazihi/civora/internal/organizations/api"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
+	orgdomain "github.com/alrazihi/civora/internal/organizations/domain"
 	orgpostgres "github.com/alrazihi/civora/internal/organizations/infrastructure/postgres"
 	peopleapi "github.com/alrazihi/civora/internal/people/api"
 	peoplapp "github.com/alrazihi/civora/internal/people/application"
@@ -116,8 +117,10 @@ func main() {
 
 	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
 
-	userRateLimiter := intmid.NewUserRateLimiter(5, 15*time.Minute, 15*time.Minute)
-	identityHandler := identityapi.NewHandlerWithRateLimiter(identityService, userRateLimiter)
+	userRateLimiter := intmid.NewUserRateLimiter(20, 5*time.Minute, 5*time.Minute)
+	identityHandler := identityapi.NewHandlerWithOrgLookup(identityService, userRateLimiter, func(ctx context.Context, slug string) (*orgdomain.Organization, error) {
+		return orgRepo.FindBySlug(ctx, slug)
+	})
 
 	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
