@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -63,8 +64,14 @@ func (s *Server) Router() *chi.Mux {
 
 func (s *Server) MountStaticFS(fs http.FileSystem) {
 	s.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = "/index.html"
-		http.FileServer(fs).ServeHTTP(w, r)
+		f, err := fs.Open("/index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		io.Copy(w, f)
 	})
 	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.FileServer(fs).ServeHTTP(w, r)
