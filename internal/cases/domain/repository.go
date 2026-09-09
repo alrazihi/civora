@@ -19,6 +19,8 @@ type CaseRepository interface {
 	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status CaseStatus, version int) error
 	Assign(ctx context.Context, orgID, id, userID uuid.UUID) error
 	AssignTx(ctx context.Context, tx *sql.Tx, orgID, id, userID uuid.UUID) error
+	UpdateWorkflowInstanceID(ctx context.Context, orgID, caseID, instanceID uuid.UUID) error
+	UpdateWorkflowInstanceIDTx(ctx context.Context, tx *sql.Tx, orgID, caseID, instanceID uuid.UUID) error
 }
 
 type CaseFilter struct {

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/database"
@@ -44,6 +45,11 @@ func main() {
 			TRUNCATE TABLE
 				follow_ups, assistance, decisions, assessments,
 				evidence, eligibilities, people,
+				workflow_transition_history,
+				workflow_instances,
+				workflow_transitions,
+				workflow_states,
+				workflow_definitions,
 				audit.audit_events, cases, users, roles, organizations
 			RESTART IDENTITY CASCADE;
 		`); err != nil {
@@ -112,6 +118,86 @@ func main() {
 		log.Fatalf("failed to create case: %v", err)
 	}
 
+	workflowDefID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO workflow_definitions (id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())`,
+		workflowDefID, orgID, "emergency_assistance", "Emergency Assistance", "Emergency assistance request workflow", 1, "ACTIVE", "NEW", `{}`)
+	if err != nil {
+		log.Fatalf("failed to create workflow definition: %v", err)
+	}
+
+	now := time.Now().UTC()
+	stateIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+	stateInsert := `INSERT INTO workflow_states (id, workflow_definition_id, organization_id, key, name, description, category, terminal, display_order, responsible_role, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
+	for i, stateKey := range []string{"NEW", "OPEN", "IN_REVIEW", "ASSESSMENT", "DECISION_PENDING", "APPROVED", "REJECTED", "IN_PROGRESS", "FOLLOW_UP", "CLOSED"} {
+		terminal := "false"
+		if stateKey == "REJECTED" || stateKey == "CLOSED" {
+			terminal = "true"
+		}
+		_, err = db.DB.ExecContext(ctx, stateInsert, stateIDs[i], workflowDefID, orgID, stateKey, stateKey, "", "", terminal, i, "", now)
+		if err != nil {
+			log.Fatalf("failed to create workflow state %s: %v", stateKey, err)
+		}
+	}
+
+	transitionInsert := `INSERT INTO workflow_transitions (id, workflow_definition_id, organization_id, key, name, from_state, to_state, description, conditions, allowed_roles, active, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`
+	transitions := []struct {
+		id            uuid.UUID
+		key, from, to string
+	}{
+		{uuid.New(), "open", "NEW", "OPEN"},
+		{uuid.New(), "review", "NEW", "IN_REVIEW"},
+		{uuid.New(), "reopen", "IN_REVIEW", "OPEN"},
+		{uuid.New(), "assess", "OPEN", "IN_REVIEW"},
+		{uuid.New(), "assess2", "IN_REVIEW", "ASSESSMENT"},
+		{uuid.New(), "decide", "ASSESSMENT", "DECISION_PENDING"},
+		{uuid.New(), "approve", "DECISION_PENDING", "APPROVED"},
+		{uuid.New(), "reject", "DECISION_PENDING", "REJECTED"},
+		{uuid.New(), "start_assistance", "APPROVED", "IN_PROGRESS"},
+		{uuid.New(), "close_rejected", "REJECTED", "CLOSED"},
+		{uuid.New(), "follow_up", "IN_PROGRESS", "FOLLOW_UP"},
+		{uuid.New(), "complete", "FOLLOW_UP", "CLOSED"},
+	}
+	for _, t := range transitions {
+		_, err = db.DB.ExecContext(ctx, transitionInsert, t.id, workflowDefID, orgID, t.key, t.key, t.from, t.to, "", "[]", "[]", true, now)
+		if err != nil {
+			log.Fatalf("failed to create workflow transition %s: %v", t.key, err)
+		}
+	}
+
+	instanceID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		instanceID, orgID, workflowDefID, 1, caseID, "CLOSED", now, now, `{}`, 1)
+	if err != nil {
+		log.Fatalf("failed to create workflow instance: %v", err)
+	}
+
+	_, err = db.DB.ExecContext(ctx, `UPDATE cases SET workflow_instance_id = $1 WHERE id = $2`, instanceID, caseID)
+	if err != nil {
+		log.Fatalf("failed to link workflow instance to case: %v", err)
+	}
+
+	historyInsert := `INSERT INTO workflow_transition_history (id, organization_id, workflow_instance_id, case_id, from_state, to_state, transition_key, actor_id, occurred_at, reason, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
+	historyEntries := []struct {
+		id            uuid.UUID
+		from, to, key string
+		actor         *uuid.UUID
+	}{
+		{uuid.New(), "NEW", "OPEN", "open", &adminID},
+		{uuid.New(), "OPEN", "IN_REVIEW", "assess", &staffID},
+		{uuid.New(), "IN_REVIEW", "ASSESSMENT", "assess2", &staffID},
+		{uuid.New(), "ASSESSMENT", "DECISION_PENDING", "decide", &staffID},
+		{uuid.New(), "DECISION_PENDING", "APPROVED", "approve", &adminID},
+		{uuid.New(), "APPROVED", "IN_PROGRESS", "start_assistance", &staffID},
+		{uuid.New(), "IN_PROGRESS", "FOLLOW_UP", "follow_up", &staffID},
+		{uuid.New(), "FOLLOW_UP", "CLOSED", "complete", &adminID},
+	}
+	for _, h := range historyEntries {
+		_, err = db.DB.ExecContext(ctx, historyInsert, h.id, orgID, instanceID, caseID, h.from, h.to, h.key, h.actor, now, "", `{}`)
+		if err != nil {
+			log.Fatalf("failed to create workflow transition history: %v", err)
+		}
+	}
+
 	eligibilityID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO eligibilities (id, organization_id, service_request_id, criteria, result, explanation, assessed_by, assessed_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
 		eligibilityID, orgID, caseID, `{"displaced":true,"verified":true}`, "ELIGIBLE", "All criteria verified with documentation", adminID)
@@ -159,10 +245,10 @@ func main() {
 		log.Fatalf("failed to create follow-up: %v", err)
 	}
 
-  fmt.Println("Demo seed completed successfully.")
-  fmt.Printf("Organization: %s (slug: %s)\n", orgID, slug)
-  fmt.Printf("Admin: admin@demo.org / demopass1234 (id: %s)\n", adminID)
-  fmt.Printf("Staff: staff@demo.org / demopass1234 (id: %s)\n", staffID)
-  fmt.Printf("Case ID: %s\n", caseID)
-  fmt.Println("Use these credentials to log in at http://localhost:8080")
+	fmt.Println("Demo seed completed successfully.")
+	fmt.Printf("Organization: %s (slug: %s)\n", orgID, slug)
+	fmt.Printf("Admin: admin@demo.org / demopass1234 (id: %s)\n", adminID)
+	fmt.Printf("Staff: staff@demo.org / demopass1234 (id: %s)\n", staffID)
+	fmt.Printf("Case ID: %s\n", caseID)
+	fmt.Println("Use these credentials to log in at http://localhost:8080")
 }

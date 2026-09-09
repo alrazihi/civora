@@ -12,6 +12,7 @@ import (
 	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	"github.com/google/uuid"
 )
 
@@ -23,16 +24,39 @@ var (
 	ErrInvalidCaseStatus = errors.New("case is not in DECISION_PENDING status")
 )
 
+type UserChecker interface {
+	BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error)
+}
+
 type DecisionService struct {
 	repo        decisionsdomain.DecisionRepository
 	caseUpdater shared.CaseUpdater
 	caseFinder  shared.CaseFinder
-	userChecker shared.UserChecker
+	userChecker UserChecker
 	auditor     auditdomain.EventRecorder
+	workflowSvc *workflowapp.WorkflowService
 }
 
-func NewDecisionService(repo decisionsdomain.DecisionRepository, caseUpdater shared.CaseUpdater, caseFinder shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *DecisionService {
-	return &DecisionService{repo: repo, caseUpdater: caseUpdater, caseFinder: caseFinder, userChecker: userChecker, auditor: auditor}
+func NewDecisionService(
+	repo decisionsdomain.DecisionRepository,
+	caseUpdater shared.CaseUpdater,
+	caseFinder shared.CaseFinder,
+	userChecker UserChecker,
+	auditor auditdomain.EventRecorder,
+	workflowSvc ...*workflowapp.WorkflowService,
+) *DecisionService {
+	var wf *workflowapp.WorkflowService
+	if len(workflowSvc) > 0 {
+		wf = workflowSvc[0]
+	}
+	return &DecisionService{
+		repo:        repo,
+		caseUpdater: caseUpdater,
+		caseFinder:  caseFinder,
+		userChecker: userChecker,
+		auditor:     auditor,
+		workflowSvc: wf,
+	}
 }
 
 type MakeDecisionParams struct {
@@ -85,8 +109,25 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 			return fmt.Errorf("failed to save decision: %w", err)
 		}
 
-		if err := s.caseUpdater.UpdateStatusTx(ctx, tx, params.OrganizationID, params.ServiceRequestID, newCaseStatus, c.Version); err != nil {
-			return fmt.Errorf("failed to update case status: %w", err)
+		if s.workflowSvc != nil {
+			instance, err := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, params.ServiceRequestID)
+			if err == nil {
+				transitionKey := "approve"
+				if params.Decision == decisionsdomain.DecisionTypeRejected {
+					transitionKey = "reject"
+				}
+				_, _ = s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+					TenantID:      params.OrganizationID,
+					InstanceID:    instance.ID,
+					TransitionKey: transitionKey,
+					ActorID:       params.ActorID,
+					Reason:        params.Reason,
+				})
+			}
+		} else if s.caseUpdater != nil {
+			if err := s.caseUpdater.UpdateStatusTx(ctx, tx, params.OrganizationID, params.ServiceRequestID, newCaseStatus, c.Version); err != nil {
+				return fmt.Errorf("failed to update case status: %w", err)
+			}
 		}
 
 		if s.auditor != nil {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -18,16 +19,81 @@ import (
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
 	orgpostgres "github.com/alrazihi/civora/internal/organizations/infrastructure/postgres"
 	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
+	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowService, uuid.UUID) {
+	t.Helper()
+	orgID := helpers.SeedOrg(db)
+	defRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db)
+	stateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db)
+	transitionRepo := workflowpostgres.NewPostgresWorkflowTransitionRepository(db)
+	instanceRepo := workflowpostgres.NewPostgresWorkflowInstanceRepository(db)
+	historyRepo := workflowpostgres.NewPostgresWorkflowTransitionHistoryRepository(db)
+	auditRepo := auditpostgres.NewPostgresAuditRepository(db)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
+
+	workflowSvc := workflowapp.NewWorkflowService(defRepo, stateRepo, transitionRepo, instanceRepo, historyRepo, auditService)
+
+	now := time.Now().UTC()
+	states := []workflowdomain.WorkflowState{
+		{ID: uuid.New(), TenantID: orgID, Key: "NEW", Name: "New Request", Terminal: false, DisplayOrder: 0, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "OPEN", Name: "Open", Terminal: false, DisplayOrder: 1, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "IN_REVIEW", Name: "In Review", Terminal: false, DisplayOrder: 2, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "ASSESSMENT", Name: "Assessment", Terminal: false, DisplayOrder: 3, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "DECISION_PENDING", Name: "Decision Pending", Terminal: false, DisplayOrder: 4, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "APPROVED", Name: "Approved", Terminal: false, DisplayOrder: 5, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "REJECTED", Name: "Rejected", Terminal: false, DisplayOrder: 6, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "IN_PROGRESS", Name: "In Progress", Terminal: false, DisplayOrder: 7, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "FOLLOW_UP", Name: "Follow-up", Terminal: false, DisplayOrder: 8, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "CLOSED", Name: "Closed", Terminal: true, DisplayOrder: 9, CreatedAt: now},
+	}
+
+	transitions := []workflowdomain.WorkflowTransition{
+		{ID: uuid.New(), TenantID: orgID, Key: "open", Name: "Open", FromState: "NEW", ToState: "OPEN", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "review", Name: "Review", FromState: "NEW", ToState: "IN_REVIEW", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "reopen", Name: "Reopen", FromState: "IN_REVIEW", ToState: "OPEN", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "assess", Name: "Assess", FromState: "OPEN", ToState: "IN_REVIEW", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "assess2", Name: "Assess", FromState: "IN_REVIEW", ToState: "ASSESSMENT", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "decide", Name: "Decide", FromState: "ASSESSMENT", ToState: "DECISION_PENDING", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "approve", Name: "Approve", FromState: "DECISION_PENDING", ToState: "APPROVED", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "reject", Name: "Reject", FromState: "DECISION_PENDING", ToState: "REJECTED", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "start_assistance", Name: "Start Assistance", FromState: "APPROVED", ToState: "IN_PROGRESS", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "close_rejected", Name: "Close Rejected", FromState: "REJECTED", ToState: "CLOSED", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "follow_up", Name: "Follow Up", FromState: "IN_PROGRESS", ToState: "FOLLOW_UP", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "complete", Name: "Complete", FromState: "FOLLOW_UP", ToState: "CLOSED", Active: true, CreatedAt: now},
+	}
+
+	def, err := workflowSvc.CreateWorkflowDefinition(context.Background(), workflowapp.CreateWorkflowDefinitionParams{
+		TenantID:     orgID,
+		Key:          "emergency_assistance",
+		Name:         "Emergency Assistance",
+		Description:  "Emergency assistance request workflow",
+		Version:      1,
+		InitialState: "NEW",
+		States:       states,
+		Transitions:  transitions,
+		Metadata:     map[string]interface{}{},
+	})
+	require.NoError(t, err)
+
+	err = workflowSvc.ActivateWorkflowDefinition(context.Background(), orgID, def.ID)
+	require.NoError(t, err)
+
+	return workflowSvc, orgID
+}
+
 func setupAppServices(t *testing.T) (
 	*orgapp.OrganizationService,
 	*caseapp.CaseService,
 	*sql.DB,
+	uuid.UUID,
 ) {
 	t.Helper()
 	db := helpers.TestDB(t)
@@ -43,9 +109,14 @@ func setupAppServices(t *testing.T) (
 	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
 	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
-	return orgapp.NewOrganizationService(orgRepo, roleCreator, auditService),
-		caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo),
-		db
+	orgSvc := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
+
+	workflowSvc, workflowOrgID := seedWorkflowDefinition(t, db)
+
+	return orgSvc,
+		caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowSvc),
+		db,
+		workflowOrgID
 }
 
 func TestOrganizationLifecycle(t *testing.T) {
@@ -53,7 +124,7 @@ func TestOrganizationLifecycle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, _, _ := setupAppServices(t)
+	orgSvc, _, _, _ := setupAppServices(t)
 	ctx := context.Background()
 
 	org, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
@@ -78,7 +149,7 @@ func TestOrganizationDuplicateSlug(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, _, _ := setupAppServices(t)
+	orgSvc, _, _, _ := setupAppServices(t)
 	ctx := context.Background()
 
 	slug := "dup-slug-" + uuid.NewString()[:8]
@@ -103,19 +174,13 @@ func TestCaseLifecycle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, caseSvc, db := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID := setupAppServices(t)
 	ctx := context.Background()
+	helpers.SeedDefaultRoles(db, workflowOrgID)
 
-	org, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
-		Name:        "Case Org",
-		Description: "",
-		Slug:        "case-org-" + uuid.NewString()[:8],
-	})
-	require.NoError(t, err)
-
-	actorID := helpers.SeedUser(db, org.ID)
+	actorID := helpers.SeedUser(db, workflowOrgID)
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		Title:          "Emergency Food Request",
 		Description:    "Family needs food assistance",
 		ServiceType:    caseDomain.ServiceTypeEmergency,
@@ -126,7 +191,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusNew, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusOpen,
 		ActorID:        actorID,
@@ -135,7 +200,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusOpen, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusInReview,
 		ActorID:        actorID,
@@ -144,7 +209,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusInReview, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusAssessment,
 		ActorID:        actorID,
@@ -153,7 +218,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusAssessment, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusDecisionPending,
 		ActorID:        actorID,
@@ -162,7 +227,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusDecisionPending, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusApproved,
 		ActorID:        actorID,
@@ -171,7 +236,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusApproved, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusInProgress,
 		ActorID:        actorID,
@@ -180,7 +245,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusInProgress, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusFollowUp,
 		ActorID:        actorID,
@@ -189,7 +254,7 @@ func TestCaseLifecycle(t *testing.T) {
 	assert.Equal(t, caseDomain.CaseStatusFollowUp, c.Status)
 
 	c, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusClosed,
 		ActorID:        actorID,
@@ -204,19 +269,13 @@ func TestCaseInvalidTransition(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, caseSvc, db := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID := setupAppServices(t)
 	ctx := context.Background()
+	helpers.SeedDefaultRoles(db, workflowOrgID)
 
-	org, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
-		Name:        "Transition Org",
-		Description: "",
-		Slug:        "transition-org-" + uuid.NewString()[:8],
-	})
-	require.NoError(t, err)
-
-	actorID := helpers.SeedUser(db, org.ID)
+	actorID := helpers.SeedUser(db, workflowOrgID)
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		Title:          "Test Case",
 		Description:    "Description",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
@@ -226,7 +285,7 @@ func TestCaseInvalidTransition(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusClosed,
 		ActorID:        actorID,
@@ -240,7 +299,7 @@ func TestCaseTenantIsolation(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, caseSvc, db := setupAppServices(t)
+	orgSvc, caseSvc, db, _ := setupAppServices(t)
 	ctx := context.Background()
 
 	org1, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
@@ -278,20 +337,14 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, caseSvc, db := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID := setupAppServices(t)
 	ctx := context.Background()
+	helpers.SeedDefaultRoles(db, workflowOrgID)
 
-	org, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
-		Name:        "Audit Org",
-		Description: "",
-		Slug:        "audit-org-" + uuid.NewString()[:8],
-	})
-	require.NoError(t, err)
-
-	actorID := helpers.SeedUser(db, org.ID)
+	actorID := helpers.SeedUser(db, workflowOrgID)
 
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		Title:          "Test Case for Audit",
 		Description:    "Description",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
@@ -301,7 +354,7 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = caseSvc.ChangeStatus(ctx, caseapp.ChangeCaseStatusParams{
-		OrganizationID: org.ID,
+		OrganizationID: workflowOrgID,
 		CaseID:         c.ID,
 		Status:         caseDomain.CaseStatusOpen,
 		ActorID:        actorID,
@@ -309,17 +362,17 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition')", org.ID).Scan(&count)
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition')", workflowOrgID).Scan(&count)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, 2, "should have at least 2 audit events")
 
 	var hash, prevHash *string
-	err = db.QueryRowContext(ctx, "SELECT hash, previous_hash FROM audit.audit_events WHERE organization_id = $1 ORDER BY timestamp DESC, id DESC LIMIT 1", org.ID).Scan(&hash, &prevHash)
+	err = db.QueryRowContext(ctx, "SELECT hash, previous_hash FROM audit.audit_events WHERE organization_id = $1 ORDER BY timestamp DESC, id DESC LIMIT 1", workflowOrgID).Scan(&hash, &prevHash)
 	require.NoError(t, err)
 	require.NotNil(t, hash, "audit event should have a hash")
 
 	var firstHash *string
-	err = db.QueryRowContext(ctx, "SELECT hash FROM audit.audit_events WHERE organization_id = $1 ORDER BY timestamp ASC, id ASC LIMIT 1", org.ID).Scan(&firstHash)
+	err = db.QueryRowContext(ctx, "SELECT hash FROM audit.audit_events WHERE organization_id = $1 ORDER BY timestamp ASC, id ASC LIMIT 1", workflowOrgID).Scan(&firstHash)
 	require.NoError(t, err)
 	require.NotNil(t, firstHash, "first audit event should have a hash")
 }

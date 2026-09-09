@@ -30,7 +30,7 @@ func TestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to connect to test database: %v", err)
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(5)
 
 	if err := ensureSchema(db); err != nil {
 		t.Fatalf("failed to ensure schema: %v", err)
@@ -66,6 +66,11 @@ func TruncateTables(t *testing.T, db *sql.DB) {
 			evidence,
 			eligibilities,
 			people,
+			workflow_transition_history,
+			workflow_instances,
+			workflow_transitions,
+			workflow_states,
+			workflow_definitions,
 			audit.audit_events,
 			cases,
 			users,

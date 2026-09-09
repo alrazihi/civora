@@ -49,6 +49,9 @@ import (
 	peoplapp "github.com/alrazihi/civora/internal/people/application"
 	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/server"
+	workflowapi "github.com/alrazihi/civora/internal/workflow/api"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/migrations"
 )
 
@@ -91,7 +94,22 @@ func main() {
 	assistanceRepo := assistancepostgres.NewPostgresAssistanceRepository(db.DB)
 	followUpRepo := followuppostgres.NewPostgresFollowUpRepository(db.DB)
 
+	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
+	workflowStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db.DB)
+	workflowTransitionRepo := workflowpostgres.NewPostgresWorkflowTransitionRepository(db.DB)
+	workflowInstanceRepo := workflowpostgres.NewPostgresWorkflowInstanceRepository(db.DB)
+	workflowHistoryRepo := workflowpostgres.NewPostgresWorkflowTransitionHistoryRepository(db.DB)
+
 	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
+
+	workflowService := workflowapp.NewWorkflowService(
+		workflowDefRepo,
+		workflowStateRepo,
+		workflowTransitionRepo,
+		workflowInstanceRepo,
+		workflowHistoryRepo,
+		auditService,
+	)
 
 	if cfg.Audit.RetentionDays > 0 {
 		if _, err := auditService.PurgeOld(context.Background()); err != nil {
@@ -128,7 +146,7 @@ func main() {
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 	orgHandler := orgapi.NewHandler(orgService)
 
-	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo)
+	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowService)
 	caseHandler := caseapi.NewHandler(caseService)
 
 	personService := peoplapp.NewPersonService(personRepo, auditService)
@@ -143,7 +161,7 @@ func main() {
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assessmentHandler := assessmentapi.NewHandler(assessmentService)
 
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
 	decisionHandler := decisionsapi.NewHandler(decisionService)
 
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
@@ -153,6 +171,8 @@ func main() {
 	followUpHandler := followupapi.NewHandler(followUpService)
 
 	auditHandler := auditapi.NewHandler(auditService)
+
+	workflowHandler := workflowapi.NewHandler(workflowService)
 
 	srv := server.New(cfg, db.DB)
 	identityHandler.RegisterRoutes(srv.Router(), authMiddleware)
@@ -166,6 +186,7 @@ func main() {
 	assistanceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

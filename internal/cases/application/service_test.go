@@ -139,6 +139,21 @@ func (m *mockCaseRepository) AssignTx(ctx context.Context, tx *sql.Tx, orgID, id
 	return nil
 }
 
+func (m *mockCaseRepository) UpdateWorkflowInstanceID(ctx context.Context, orgID, caseID, instanceID uuid.UUID) error {
+	return m.UpdateWorkflowInstanceIDTx(ctx, nil, orgID, caseID, instanceID)
+}
+
+func (m *mockCaseRepository) UpdateWorkflowInstanceIDTx(ctx context.Context, tx *sql.Tx, orgID, caseID, instanceID uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.cases[caseID]
+	if !ok || c.OrganizationID != orgID {
+		return errors.New("not found")
+	}
+	c.WorkflowInstanceID = &instanceID
+	return nil
+}
+
 type mockUserChecker struct {
 	members map[uuid.UUID]map[uuid.UUID]bool
 }

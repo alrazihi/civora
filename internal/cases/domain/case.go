@@ -54,21 +54,22 @@ var (
 )
 
 type Case struct {
-	ID             uuid.UUID   `json:"id"`
-	OrganizationID uuid.UUID   `json:"organization_id"`
-	CaseNumber     string      `json:"case_number"`
-	Title          string      `json:"title"`
-	Description    string      `json:"description"`
-	Status         CaseStatus  `json:"status"`
-	ServiceType    ServiceType `json:"service_type"`
-	Priority       Priority    `json:"priority"`
-	PersonID       *uuid.UUID  `json:"person_id"`
-	CreatedByID    uuid.UUID   `json:"created_by"`
-	AssignedToID   *uuid.UUID  `json:"assigned_to"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
-	ClosedAt       *time.Time  `json:"closed_at"`
-	Version        int         `json:"version"`
+	ID                 uuid.UUID   `json:"id"`
+	OrganizationID     uuid.UUID   `json:"organization_id"`
+	CaseNumber         string      `json:"case_number"`
+	Title              string      `json:"title"`
+	Description        string      `json:"description"`
+	Status             CaseStatus  `json:"status"`
+	ServiceType        ServiceType `json:"service_type"`
+	Priority           Priority    `json:"priority"`
+	PersonID           *uuid.UUID  `json:"person_id"`
+	CreatedByID        uuid.UUID   `json:"created_by"`
+	AssignedToID       *uuid.UUID  `json:"assigned_to"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+	ClosedAt           *time.Time  `json:"closed_at"`
+	Version            int         `json:"version"`
+	WorkflowInstanceID *uuid.UUID  `json:"workflow_instance_id,omitempty"`
 }
 
 const (
