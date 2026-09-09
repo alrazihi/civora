@@ -163,7 +163,7 @@ func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
 
 func TestCreateCase(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -190,7 +190,7 @@ func TestCreateCase(t *testing.T) {
 
 func TestCaseLifecycle(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -236,7 +236,7 @@ func TestCaseLifecycle(t *testing.T) {
 
 func TestInvalidStateTransition(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -262,7 +262,7 @@ func TestInvalidStateTransition(t *testing.T) {
 
 func TestReopenFromReview(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -301,7 +301,7 @@ func TestReopenFromReview(t *testing.T) {
 func TestCasePersonTenantIsolation(t *testing.T) {
 	repo := newMockCaseRepo()
 	personFinder := newMockPersonFinder()
-	svc := NewCaseService(repo, personFinder, newMockUserChecker(), nil)
+	svc := NewCaseService(repo, personFinder, newMockUserChecker(), nil, nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -325,7 +325,7 @@ func TestCasePersonTenantIsolation(t *testing.T) {
 
 func TestCaseTenantIsolation(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -348,7 +348,7 @@ func TestCaseTenantIsolation(t *testing.T) {
 func TestAssignCase(t *testing.T) {
 	repo := newMockCaseRepo()
 	checker := newMockUserChecker()
-	svc := NewCaseService(repo, newMockPersonFinder(), checker, nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), checker, nil, nil)
 
 	orgID := uuid.New()
 	creator := uuid.New()
@@ -379,7 +379,7 @@ func TestAssignCase(t *testing.T) {
 func TestAssignCase_CrossTenantRejected(t *testing.T) {
 	repo := newMockCaseRepo()
 	checker := newMockUserChecker()
-	svc := NewCaseService(repo, newMockPersonFinder(), checker, nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), checker, nil, nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -409,7 +409,7 @@ func TestAssignCase_CrossTenantRejected(t *testing.T) {
 
 func TestListCases(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -453,7 +453,7 @@ func NewCollisionMockCaseRepo(maxCollisions int) *collisionMockCaseRepo {
 
 func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 	repo := NewCollisionMockCaseRepo(1)
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -473,7 +473,7 @@ func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 
 func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
 	repo := NewCollisionMockCaseRepo(10)
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil)
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
 	orgID := uuid.New()
 	userID := uuid.New()

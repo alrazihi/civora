@@ -25,13 +25,14 @@ var (
 
 type DecisionService struct {
 	repo        decisionsdomain.DecisionRepository
-	caseRepo    shared.CaseFinder
+	caseUpdater shared.CaseUpdater
+	caseFinder  shared.CaseFinder
 	userChecker shared.UserChecker
 	auditor     auditdomain.EventRecorder
 }
 
-func NewDecisionService(repo decisionsdomain.DecisionRepository, caseRepo shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *DecisionService {
-	return &DecisionService{repo: repo, caseRepo: caseRepo, userChecker: userChecker, auditor: auditor}
+func NewDecisionService(repo decisionsdomain.DecisionRepository, caseUpdater shared.CaseUpdater, caseFinder shared.CaseFinder, userChecker shared.UserChecker, auditor auditdomain.EventRecorder) *DecisionService {
+	return &DecisionService{repo: repo, caseUpdater: caseUpdater, caseFinder: caseFinder, userChecker: userChecker, auditor: auditor}
 }
 
 type MakeDecisionParams struct {
@@ -43,7 +44,7 @@ type MakeDecisionParams struct {
 }
 
 func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionParams) (*decisionsdomain.Decision, error) {
-	c, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	c, err := s.caseFinder.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
 	}
@@ -68,6 +69,11 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 		return nil, ErrInvalidCaseStatus
 	}
 
+	newCaseStatus := casesdomain.CaseStatusApproved
+	if params.Decision == decisionsdomain.DecisionTypeRejected {
+		newCaseStatus = casesdomain.CaseStatusRejected
+	}
+
 	d, err := decisionsdomain.NewDecision(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Decision, params.Reason)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrDecisionInput, err)
@@ -77,6 +83,10 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		if err := s.repo.SaveTx(ctx, tx, d); err != nil {
 			return fmt.Errorf("failed to save decision: %w", err)
+		}
+
+		if err := s.caseUpdater.UpdateStatusTx(ctx, tx, params.OrganizationID, params.ServiceRequestID, newCaseStatus, c.Version); err != nil {
+			return fmt.Errorf("failed to update case status: %w", err)
 		}
 
 		if s.auditor != nil {

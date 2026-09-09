@@ -8,6 +8,7 @@ import (
 
 	assessmentdomain "github.com/alrazihi/civora/internal/assessment/domain"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
@@ -18,6 +19,7 @@ var (
 	ErrAssessmentNotFound = errors.New("assessment not found")
 	ErrAssessmentInput    = errors.New("invalid assessment input")
 	ErrCaseNotFound       = errors.New("case not found")
+	ErrCaseClosed         = errors.New("case is closed")
 	ErrUserNotFound       = errors.New("user not found")
 )
 
@@ -48,6 +50,9 @@ func (s *AssessmentService) CreateAssessment(ctx context.Context, params CreateA
 	}
 	if c.OrganizationID != params.OrganizationID {
 		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	existing, err := s.repo.FindByServiceRequest(ctx, params.OrganizationID, params.ServiceRequestID)

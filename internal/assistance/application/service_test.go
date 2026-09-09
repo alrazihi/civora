@@ -132,11 +132,15 @@ func TestCreateAssistance_CrossTenantUser(t *testing.T) {
 
 func TestUpdateAssistanceStatus_InvalidAction(t *testing.T) {
 	repo := newMockAssistanceRepo()
-	svc := NewAssistanceService(repo, newMockCaseFinder(), newMockUserChecker(), nil)
+	caseFinder := newMockCaseFinder()
+	svc := NewAssistanceService(repo, caseFinder, newMockUserChecker(), nil)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
-	a, _ := assistancedomain.NewAssistance(orgID, uuid.New(), actorID, assistancedomain.AssistanceTypeFood, "Test")
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	caseFinder.addCase(c)
+
+	a, _ := assistancedomain.NewAssistance(orgID, c.ID, actorID, assistancedomain.AssistanceTypeFood, "Test")
 	repo.items[a.ID] = a
 
 	_, err := svc.UpdateAssistanceStatus(context.Background(), orgID, a.ID, "invalid", actorID)

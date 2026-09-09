@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	evidencedomain "github.com/alrazihi/civora/internal/evidence/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
@@ -18,6 +19,7 @@ var (
 	ErrEvidenceNotFound = errors.New("evidence not found")
 	ErrEvidenceInput    = errors.New("invalid evidence input")
 	ErrCaseNotFound     = errors.New("case not found")
+	ErrCaseClosed       = errors.New("case is closed")
 	ErrUserNotFound     = errors.New("user not found")
 )
 
@@ -48,6 +50,9 @@ func (s *EvidenceService) AddEvidence(ctx context.Context, params AddEvidencePar
 	}
 	if c.OrganizationID != params.OrganizationID {
 		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)

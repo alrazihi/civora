@@ -56,8 +56,8 @@ func setupConcurrencyServices(t *testing.T) (
 	orgSvc := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 	_ = orgSvc
 
-	caseSvc := caseapp.NewCaseService(caseRepo, peoplepostgres.NewPostgresPersonRepository(db), identityDomain.NewOrganizationUserChecker(userRepo), auditService)
-	decisionSvc := decisionsapp.NewDecisionService(decisionRepo, caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
+	caseSvc := caseapp.NewCaseService(caseRepo, peoplepostgres.NewPostgresPersonRepository(db), identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo)
+	decisionSvc := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
 	assistanceSvc := assistanceapp.NewAssistanceService(assistanceRepo, caseRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
 	_ = eligibilityRepo
 	_ = eligibilityapp.NewEligibilityService

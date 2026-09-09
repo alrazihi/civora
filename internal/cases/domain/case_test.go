@@ -131,6 +131,18 @@ func TestCase_RegenerateCaseNumber(t *testing.T) {
 	assert.Contains(t, c.CaseNumber, "CAS-")
 }
 
+func TestIsClosed(t *testing.T) {
+	t.Run("closed case", func(t *testing.T) {
+		assert.True(t, IsClosed(CaseStatusClosed))
+	})
+	t.Run("open case", func(t *testing.T) {
+		assert.False(t, IsClosed(CaseStatusOpen))
+	})
+	t.Run("new case", func(t *testing.T) {
+		assert.False(t, IsClosed(CaseStatusNew))
+	})
+}
+
 func TestNewCase_InputValidation(t *testing.T) {
 	t.Run("title too long", func(t *testing.T) {
 		longTitle := strings.Repeat("x", maxTitleLength+1)

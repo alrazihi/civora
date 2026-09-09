@@ -126,7 +126,7 @@ func main() {
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 	orgHandler := orgapi.NewHandler(orgService)
 
-	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo)
 	caseHandler := caseapi.NewHandler(caseService)
 
 	personService := peoplapp.NewPersonService(personRepo, auditService)
@@ -141,7 +141,7 @@ func main() {
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assessmentHandler := assessmentapi.NewHandler(assessmentService)
 
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	decisionHandler := decisionsapi.NewHandler(decisionService)
 
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)

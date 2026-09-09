@@ -105,14 +105,14 @@ func main() {
 
 	caseID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`,
-		caseID, orgID, "CAS-20260909-DEMO001", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "NEW", "EMERGENCY", "URGENT", &personID, adminID)
+		caseID, orgID, "CAS-20260909-DEMO001", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID)
 	if err != nil {
 		log.Fatalf("failed to create case: %v", err)
 	}
 
 	eligibilityID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO eligibilities (id, organization_id, service_request_id, criteria, result, explanation, assessed_by, assessed_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
-		eligibilityID, orgID, caseID, `{"displaced":true,"verified":true}`, "REQUIRES_MORE_INFORMATION", "Initial assessment pending full documentation", adminID)
+		eligibilityID, orgID, caseID, `{"displaced":true,"verified":true}`, "ELIGIBLE", "All criteria verified with documentation", adminID)
 	if err != nil {
 		log.Fatalf("failed to create eligibility: %v", err)
 	}
@@ -145,7 +145,7 @@ func main() {
 
 	assistanceID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO assistance (id, organization_id, service_request_id, type, description, status, responsible_staff, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
-		assistanceID, orgID, caseID, "SHELTER", "Emergency shelter placement at City Shelter Center for 30 days", "PLANNED", staffID)
+		assistanceID, orgID, caseID, "SHELTER", "Emergency shelter placement at City Shelter Center for 30 days", "COMPLETED", staffID)
 	if err != nil {
 		log.Fatalf("failed to create assistance: %v", err)
 	}

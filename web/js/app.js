@@ -111,7 +111,7 @@ const app = {
       document.getElementById('case-desc').textContent = res.data.description || 'No description';
 
       await this.loadCaseSections(id);
-      this.renderTimeline(res.data.status);
+      await this.loadTimeline(id);
       this.renderActions(res.data.status);
     } catch (err) {
       alert(err.message);
@@ -139,11 +139,11 @@ const app = {
       } else if (name === 'evidence') {
         if (Array.isArray(data)) {
           if (!data.length) { el.innerHTML = '<p class="empty">No evidence yet</p>'; return; }
-          el.innerHTML = '<table><thead><tr><th>Type</th><th>Description</th><th>Storage</th></tr></thead><tbody>' +
-            data.map(e => `<tr><td>${e.type}</td><td>${e.description}</td><td>${e.storage_reference}</td></tr>`).join('') +
+          el.innerHTML = '<table><thead><tr><th>Type</th><th>Description</th></tr></thead><tbody>' +
+            data.map(e => `<tr><td>${e.type}</td><td>${e.description}</td></tr>`).join('') +
             '</tbody></table>';
         } else {
-          el.innerHTML = `<strong>Type:</strong> ${data.type}<br><strong>Description:</strong> ${data.description}<br><strong>Storage:</strong> ${data.storage_reference}`;
+          el.innerHTML = `<strong>Type:</strong> ${data.type}<br><strong>Description:</strong> ${data.description}`;
         }
       } else if (name === 'assessment') {
         if (Array.isArray(data)) {
@@ -188,30 +188,8 @@ const app = {
     }
   },
 
-  renderTimeline(status) {
-    const steps = [
-      { key: 'NEW', label: 'Request Created' },
-      { key: 'OPEN', label: 'Opened' },
-      { key: 'IN_REVIEW', label: 'In Review' },
-      { key: 'ASSESSMENT', label: 'Assessment' },
-      { key: 'DECISION_PENDING', label: 'Decision Pending' },
-      { key: 'APPROVED', label: 'Approved' },
-      { key: 'REJECTED', label: 'Rejected' },
-      { key: 'IN_PROGRESS', label: 'In Progress' },
-      { key: 'FOLLOW_UP', label: 'Follow-up' },
-      { key: 'CLOSED', label: 'Closed' },
-    ];
-    const order = ['NEW','OPEN','IN_REVIEW','ASSESSMENT','DECISION_PENDING','APPROVED','REJECTED','IN_PROGRESS','FOLLOW_UP','CLOSED'];
-    const currentIdx = order.indexOf(status);
-    const container = document.getElementById('timeline');
-    if (!container) return;
-    container.innerHTML = steps.map((s, i) => {
-      let cls = '';
-      if (i < currentIdx) cls = 'completed';
-      else if (i === currentIdx) cls = '';
-      else cls = 'pending';
-      return `<div class="timeline-item ${cls}"><div class="timeline-title">${s.label}</div><div class="timeline-meta">${s.key}</div></div>`;
-    }).join('');
+  btn(label, onclick) {
+    return `<button class="btn" onclick="app.${onclick}">${label}</button>`;
   },
 
   renderActions(status) {
@@ -250,6 +228,42 @@ const app = {
     }
     if (!html) html = '<p class="empty">No actions available</p>';
     container.innerHTML = html;
+  },
+
+  async loadTimeline(id) {
+    const container = document.getElementById('timeline');
+    if (!container) return;
+    try {
+      const res = await api('GET', this.orgPath(`/cases/${id}/timeline`));
+      const events = res.data || [];
+      if (!events.length) {
+        container.innerHTML = '<p class="empty">No timeline events yet</p>';
+        return;
+      }
+      const decisionEvents = events.filter(e => e.action === 'decision.made');
+      const approved = decisionEvents.find(e => {
+        const d = (e.metadata && e.metadata.decision) || '';
+        return d === 'APPROVED';
+      });
+      const rejected = decisionEvents.find(e => {
+        const d = (e.metadata && e.metadata.decision) || '';
+        return d === 'REJECTED';
+      });
+      container.innerHTML = events.map(ev => {
+        let label = ev.action;
+        if (ev.metadata) {
+          if (ev.metadata.decision) label += ` (${ev.metadata.decision})`;
+          if (ev.metadata.to) label += ` → ${ev.metadata.to}`;
+          if (ev.metadata.from) label += ` from ${ev.metadata.from}`;
+          if (ev.metadata.assistance_type) label += ` (${ev.metadata.assistance_type})`;
+          if (ev.metadata.action && ev.resource === 'assistance') label += ` (${ev.metadata.action})`;
+        }
+        const time = new Date(ev.timestamp).toLocaleString();
+        return `<div class="timeline-item"><div class="timeline-title">${label}</div><div class="timeline-meta">${time}</div></div>`;
+      }).join('');
+    } catch (err) {
+      container.innerHTML = '<p class="empty">Unable to load timeline</p>';
+    }
   },
 
   btn(label, onclick) {
@@ -302,7 +316,6 @@ const app = {
         service_request_id: this.currentCase.id,
         type: document.getElementById('ev-type').value,
         description: document.getElementById('ev-desc').value,
-        storage_reference: document.getElementById('ev-ref').value,
       });
       this.hideModal('evidence-modal');
       await this.loadCaseSections(this.currentCase.id);

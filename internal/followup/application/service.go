@@ -8,6 +8,7 @@ import (
 	"time"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	followupdomain "github.com/alrazihi/civora/internal/followup/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
@@ -19,6 +20,7 @@ var (
 	ErrFollowUpNotFound = errors.New("follow-up not found")
 	ErrFollowUpInput    = errors.New("invalid follow-up input")
 	ErrCaseNotFound     = errors.New("case not found")
+	ErrCaseClosed       = errors.New("case is closed")
 	ErrUserNotFound     = errors.New("user not found")
 )
 
@@ -49,6 +51,9 @@ func (s *FollowUpService) CreateFollowUp(ctx context.Context, params CreateFollo
 	}
 	if c.OrganizationID != params.OrganizationID {
 		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	if !followupdomain.IsValidCaseStatusForFollowUp(string(c.Status)) {

@@ -304,6 +304,28 @@ components:
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
 
+    TimelineEvent:
+      type: object
+      required: [id, action, resource, outcome, timestamp]
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        action:
+          type: string
+        resource:
+          type: string
+        outcome:
+          type: string
+          enum: [success, failure]
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
     Person:
       type: object
       required: [id, organization_id, first_name, last_name, preferred_language, status, created_at, updated_at]
@@ -457,7 +479,7 @@ components:
 
     Evidence:
       type: object
-      required: [id, organization_id, service_request_id, type, description, storage_reference, uploaded_by, created_at]
+      required: [id, organization_id, service_request_id, type, description, uploaded_by, created_at]
       properties:
         id:
           type: string
@@ -476,8 +498,6 @@ components:
           enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
         description:
           type: string
-        storage_reference:
-          type: string
         uploaded_by:
           type: string
           format: uuid
@@ -488,7 +508,7 @@ components:
 
     CreateEvidenceRequest:
       type: object
-      required: [service_request_id, type, description, storage_reference]
+      required: [service_request_id, type, description]
       properties:
         service_request_id:
           type: string
@@ -498,8 +518,6 @@ components:
           type: string
           enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
         description:
-          type: string
-        storage_reference:
           type: string
 
     Assessment:
@@ -1178,6 +1196,43 @@ paths:
                 $ref: '#/components/schemas/Case'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/cases/{caseId}/timeline:
+    get:
+      operationId: getOrgcasesCaseTimeline
+      tags: [Cases]
+      summary: Get case timeline
+      description: Returns a chronological timeline of audit events for a case.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Chronological list of audit events for the case
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimelineEvent'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

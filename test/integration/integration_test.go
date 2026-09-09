@@ -44,7 +44,7 @@ func setupAppServices(t *testing.T) (
 
 	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
 	return orgapp.NewOrganizationService(orgRepo, roleCreator, auditService),
-		caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService),
+		caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo),
 		db
 }
 
@@ -351,7 +351,7 @@ func TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure(t *testing.T) {
 	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
 	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
-	caseSvc := caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
+	caseSvc := caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo)
 
 	ctx := context.Background()
 	orgID := helpers.SeedOrg(db)
@@ -395,7 +395,7 @@ func TestAuditAtomicity_StatusChangeRollsBackOnAuditFailure(t *testing.T) {
 	auditRepo := &failingAuditRepo{PostgresAuditRepository: *auditpostgres.NewPostgresAuditRepository(db)}
 	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
 
-	caseSvc := caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService)
+	caseSvc := caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo)
 
 	ctx := context.Background()
 	orgID := helpers.SeedOrg(db)

@@ -21,11 +21,12 @@ import (
 )
 
 type mockCaseService struct {
-	createCaseFn   func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
-	changeStatusFn func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
-	assignCaseFn   func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
-	getCaseFn      func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
-	listCasesFn    func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
+	createCaseFn    func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
+	changeStatusFn  func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
+	assignCaseFn    func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
+	getCaseFn       func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
+	getCaseTimeline func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
+	listCasesFn     func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
 }
 
 func (m *mockCaseService) CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
@@ -45,6 +46,13 @@ func (m *mockCaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit,
 func (m *mockCaseService) GetCase(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {
 	if m.getCaseFn != nil {
 		return m.getCaseFn(ctx, orgID, id)
+	}
+	return nil, nil
+}
+
+func (m *mockCaseService) GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error) {
+	if m.getCaseTimeline != nil {
+		return m.getCaseTimeline(ctx, orgID, caseID)
 	}
 	return nil, nil
 }
@@ -73,6 +81,7 @@ func setupCaseRouter(svc CaseService) http.Handler {
 		r.Post("/", h.CreateCase)
 		r.Get("/", h.ListCases)
 		r.Get("/{caseId}", h.GetCase)
+		r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)

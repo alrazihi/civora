@@ -156,8 +156,7 @@ func TestEvidenceSecurity_StorageReferenceNotLeaked(t *testing.T) {
 
 	var evResp struct {
 		Data struct {
-			ID               string `json:"id"`
-			StorageReference string `json:"storage_reference"`
+			ID string `json:"id"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &evResp))
@@ -165,12 +164,9 @@ func TestEvidenceSecurity_StorageReferenceNotLeaked(t *testing.T) {
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/evidence/"+evResp.Data.ID, token, nil)
 	require.Equal(t, http.StatusOK, resp.Code, "response body: %s", resp.Body.String())
 
-	var getResp struct {
-		Data struct {
-			StorageReference string `json:"storage_reference"`
-		} `json:"data"`
-	}
+	var getResp map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &getResp))
-	assert.Equal(t, "s3://civora-evidence/secret-doc-001", getResp.Data.StorageReference,
-		"authorized user should see storage reference")
+	data := getResp["data"].(map[string]interface{})
+	_, hasStorageRef := data["storage_reference"]
+	assert.False(t, hasStorageRef, "storage_reference must not be exposed in API responses")
 }

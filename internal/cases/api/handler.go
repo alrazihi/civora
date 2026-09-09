@@ -27,6 +27,7 @@ type CaseService interface {
 	CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
 	ListCases(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
 	GetCase(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
+	GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
 	ChangeStatus(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
 	AssignCase(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
 }
@@ -38,6 +39,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Post("/", h.CreateCase)
 		r.Get("/", h.ListCases)
 		r.Get("/{caseId}", h.GetCase)
+		r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)
@@ -125,6 +127,40 @@ func (h *Handler) GetCase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shared.WriteSuccess(w, http.StatusOK, serializeCase(c), nil)
+}
+
+func (h *Handler) GetCaseTimeline(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	timeline, err := h.svc.GetCaseTimeline(r.Context(), orgID, caseID)
+	if err != nil {
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, err.Error())
+		return
+	}
+
+	result := make([]map[string]interface{}, len(timeline))
+	for i, ev := range timeline {
+		result[i] = map[string]interface{}{
+			"id":        ev.ID,
+			"action":    ev.Action,
+			"resource":  ev.Resource,
+			"outcome":   ev.Outcome,
+			"timestamp": ev.Timestamp,
+			"metadata":  ev.Metadata,
+		}
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, result, nil)
 }
 
 func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {

@@ -223,6 +223,57 @@ func (r *PostgresAuditRepository) CountByOrganization(ctx context.Context, orgID
 	return total, nil
 }
 
+func (r *PostgresAuditRepository) FindByResource(ctx context.Context, orgID uuid.UUID, resourceID string) ([]*domain.AuditEvent, error) {
+	query := `
+SELECT id, organization_id, actor_id, action, resource,
+		   resource_id, outcome, request_id, metadata,
+		   timestamp, previous_hash, hash
+		FROM audit.audit_events
+		WHERE organization_id = $1 AND resource_id = $2
+		ORDER BY timestamp ASC, id ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, orgID, resourceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit events by resource: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*domain.AuditEvent
+	for rows.Next() {
+		var ev domain.AuditEvent
+		var metadataJSON []byte
+
+		if err := rows.Scan(
+			&ev.ID,
+			&ev.OrganizationID,
+			&ev.ActorID,
+			&ev.Action,
+			&ev.Resource,
+			&ev.ResourceID,
+			&ev.Outcome,
+			&ev.RequestID,
+			&metadataJSON,
+			&ev.Timestamp,
+			&ev.PreviousHash,
+			&ev.Hash,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan audit event: %w", err)
+		}
+
+		if len(metadataJSON) > 0 {
+			if err := json.Unmarshal(metadataJSON, &ev.Metadata); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal audit metadata: %w", err)
+			}
+		}
+		events = append(events, &ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return events, nil
+}
+
 // AllOrganizationIDs returns every distinct organization_id that has at
 // least one audit event. This is used by the audit maintenance service to
 // run periodic integrity verification over all tenants.

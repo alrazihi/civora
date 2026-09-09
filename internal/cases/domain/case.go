@@ -193,6 +193,10 @@ func IsValidStatus(status string) bool {
 	}
 }
 
+func IsClosed(status CaseStatus) bool {
+	return status == CaseStatusClosed
+}
+
 func GenerateCaseNumber(t time.Time) string {
 	return fmt.Sprintf("CAS-%s-%08d-%s", t.Format("20060102"), t.Nanosecond()%100000000, uuid.NewString()[:8])
 }

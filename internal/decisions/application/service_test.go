@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
@@ -51,6 +52,28 @@ func (m *mockDecisionRepo) CountByOrganization(ctx context.Context, orgID uuid.U
 	return 0, nil
 }
 
+type mockCaseUpdater struct {
+	mu       sync.RWMutex
+	statuses map[uuid.UUID]domain.CaseStatus
+}
+
+func newMockCaseUpdater() *mockCaseUpdater {
+	return &mockCaseUpdater{statuses: make(map[uuid.UUID]domain.CaseStatus)}
+}
+
+func (m *mockCaseUpdater) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.statuses[id] = status
+	return nil
+}
+
+func (m *mockCaseUpdater) getStatus(id uuid.UUID) domain.CaseStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.statuses[id]
+}
+
 type mockCaseFinder struct {
 	cases map[uuid.UUID]*domain.Case
 }
@@ -95,7 +118,8 @@ func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
 
 func TestMakeDecision_CrossTenantCase(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, newMockUserChecker(), nil)
+	caseUpdater := newMockCaseUpdater()
+	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, newMockUserChecker(), nil)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -117,8 +141,9 @@ func TestMakeDecision_CrossTenantCase(t *testing.T) {
 
 func TestMakeDecision_CrossTenantUser(t *testing.T) {
 	caseFinder := newMockCaseFinder()
+	caseUpdater := newMockCaseUpdater()
 	userChecker := newMockUserChecker()
-	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil)
+	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
@@ -139,8 +164,9 @@ func TestMakeDecision_CrossTenantUser(t *testing.T) {
 
 func TestMakeDecision_InvalidCaseStatus(t *testing.T) {
 	caseFinder := newMockCaseFinder()
+	caseUpdater := newMockCaseUpdater()
 	userChecker := newMockUserChecker()
-	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil)
+	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
@@ -159,4 +185,54 @@ func TestMakeDecision_InvalidCaseStatus(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrInvalidCaseStatus)
+}
+
+func TestMakeDecision_AutoTransitionsToApproved(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	caseUpdater := newMockCaseUpdater()
+	userChecker := newMockUserChecker()
+	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c.Status = domain.CaseStatusDecisionPending
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	_, err := svc.MakeDecision(context.Background(), MakeDecisionParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeApproved,
+		Reason:           "Approved",
+		ActorID:          actorID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.CaseStatusApproved, caseUpdater.getStatus(c.ID))
+}
+
+func TestMakeDecision_AutoTransitionsToRejected(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	caseUpdater := newMockCaseUpdater()
+	userChecker := newMockUserChecker()
+	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c.Status = domain.CaseStatusDecisionPending
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	_, err := svc.MakeDecision(context.Background(), MakeDecisionParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeRejected,
+		Reason:           "Rejected",
+		ActorID:          actorID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.CaseStatusRejected, caseUpdater.getStatus(c.ID))
 }

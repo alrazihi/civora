@@ -8,6 +8,7 @@ import (
 
 	assistancedomain "github.com/alrazihi/civora/internal/assistance/domain"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
@@ -18,6 +19,7 @@ var (
 	ErrAssistanceNotFound = errors.New("assistance not found")
 	ErrAssistanceInput    = errors.New("invalid assistance input")
 	ErrCaseNotFound       = errors.New("case not found")
+	ErrCaseClosed         = errors.New("case is closed")
 	ErrUserNotFound       = errors.New("user not found")
 )
 
@@ -48,6 +50,9 @@ func (s *AssistanceService) CreateAssistance(ctx context.Context, params CreateA
 	}
 	if c.OrganizationID != params.OrganizationID {
 		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ResponsibleStaff)
@@ -133,6 +138,17 @@ func (s *AssistanceService) UpdateAssistanceStatus(ctx context.Context, orgID, i
 	a, err := s.repo.FindByID(ctx, orgID, id)
 	if err != nil {
 		return nil, ErrAssistanceNotFound
+	}
+
+	c, err := s.caseRepo.FindByID(ctx, orgID, a.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != orgID {
+		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	if !assistancedomain.IsValidStatusTransition(a.Status, action) {

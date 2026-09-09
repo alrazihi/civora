@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	eligibilitydomain "github.com/alrazihi/civora/internal/eligibility/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
@@ -18,6 +19,7 @@ var (
 	ErrEligibilityNotFound = errors.New("eligibility not found")
 	ErrEligibilityInput    = errors.New("invalid eligibility input")
 	ErrCaseNotFound        = errors.New("case not found")
+	ErrCaseClosed          = errors.New("case is closed")
 	ErrUserNotFound        = errors.New("user not found")
 )
 
@@ -47,6 +49,9 @@ func (s *EligibilityService) CreateEligibility(ctx context.Context, params Creat
 	}
 	if c.OrganizationID != params.OrganizationID {
 		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	existing, err := s.repo.FindByServiceRequest(ctx, params.OrganizationID, params.ServiceRequestID)
@@ -153,6 +158,9 @@ func (s *EligibilityService) UpdateEligibilityResult(ctx context.Context, orgID,
 	}
 	if c.OrganizationID != orgID {
 		return nil, ErrCaseNotFound
+	}
+	if casesdomain.IsClosed(c.Status) {
+		return nil, ErrCaseClosed
 	}
 
 	e.SetResult(result)

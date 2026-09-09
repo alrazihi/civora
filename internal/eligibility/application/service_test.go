@@ -86,6 +86,13 @@ func (m *mockUserChecker) BelongsToOrganization(ctx context.Context, orgID, user
 	return false, nil
 }
 
+func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
+	if m.members[orgID] == nil {
+		m.members[orgID] = make(map[uuid.UUID]bool)
+	}
+	m.members[orgID][userID] = true
+}
+
 func TestCreateEligibility_CrossTenantCase(t *testing.T) {
 	caseFinder := newMockCaseFinder()
 	svc := NewEligibilityService(newMockEligibilityRepo(), caseFinder, newMockUserChecker(), nil)
@@ -128,4 +135,28 @@ func TestCreateEligibility_CrossTenantUser(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrUserNotFound)
+}
+
+func TestCreateEligibility_ClosedCase(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	userChecker := newMockUserChecker()
+	svc := NewEligibilityService(newMockEligibilityRepo(), caseFinder, userChecker, nil)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c.Status = domain.CaseStatusClosed
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	_, err := svc.CreateEligibility(context.Background(), CreateEligibilityParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Criteria:         map[string]interface{}{},
+		Explanation:      "Test",
+		ActorID:          actorID,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrCaseClosed)
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
@@ -33,14 +34,16 @@ type CaseService struct {
 	personFinder shared.PersonFinder
 	userChecker  UserChecker
 	auditor      auditdomain.EventRecorder
+	auditRepo    auditdomain.AuditRepository
 }
 
-func NewCaseService(repo domain.CaseRepository, personFinder shared.PersonFinder, userChecker UserChecker, auditor auditdomain.EventRecorder) *CaseService {
+func NewCaseService(repo domain.CaseRepository, personFinder shared.PersonFinder, userChecker UserChecker, auditor auditdomain.EventRecorder, auditRepo auditdomain.AuditRepository) *CaseService {
 	return &CaseService{
 		repo:         repo,
 		personFinder: personFinder,
 		userChecker:  userChecker,
 		auditor:      auditor,
+		auditRepo:    auditRepo,
 	}
 }
 
@@ -253,4 +256,34 @@ func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, off
 	}
 
 	return cases, total, nil
+}
+
+type TimelineEvent struct {
+	ID        uuid.UUID              `json:"id"`
+	Action    string                 `json:"action"`
+	Resource  string                 `json:"resource"`
+	Outcome   string                 `json:"outcome"`
+	Timestamp time.Time              `json:"timestamp"`
+	Metadata  map[string]interface{} `json:"metadata"`
+}
+
+func (s *CaseService) GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UUID) ([]*TimelineEvent, error) {
+	events, err := s.auditRepo.FindByResource(ctx, orgID, caseID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get case timeline: %w", err)
+	}
+
+	var timeline []*TimelineEvent
+	for _, ev := range events {
+		timeline = append(timeline, &TimelineEvent{
+			ID:        ev.ID,
+			Action:    ev.Action,
+			Resource:  ev.Resource,
+			Outcome:   ev.Outcome,
+			Timestamp: ev.Timestamp,
+			Metadata:  ev.Metadata,
+		})
+	}
+
+	return timeline, nil
 }

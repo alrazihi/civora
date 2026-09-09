@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"database/sql"
 
 	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	peopledomain "github.com/alrazihi/civora/internal/people/domain"
@@ -10,6 +11,10 @@ import (
 
 type CaseFinder interface {
 	FindByID(ctx context.Context, orgID, id uuid.UUID) (*casesdomain.Case, error)
+}
+
+type CaseUpdater interface {
+	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status casesdomain.CaseStatus, version int) error
 }
 
 type UserChecker interface {

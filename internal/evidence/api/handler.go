@@ -185,7 +185,6 @@ func serializeEvidence(e *domain.Evidence) map[string]interface{} {
 		"service_request_id": e.ServiceRequestID,
 		"type":               e.Type,
 		"description":        e.Description,
-		"storage_reference":  e.StorageReference,
 		"uploaded_by":        e.UploadedBy,
 		"created_at":         e.CreatedAt,
 	}
