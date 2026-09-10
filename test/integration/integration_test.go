@@ -87,6 +87,41 @@ func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowServ
 	err = workflowSvc.ActivateWorkflowDefinition(context.Background(), orgID, def.ID, uuid.Nil)
 	require.NoError(t, err)
 
+	// The generic workflow definitions are shared across service types. The
+	// general_assistance workflow is the default for cases whose service type
+	// does not map to a specialized workflow (e.g. GENERAL), and the
+	// medical_assistance workflow is the default for cases whose service type
+	// is MEDICAL. Both use the same state machine so the case lifecycle is
+	// consistent.
+	for _, key := range []string{"general_assistance", "medical_assistance"} {
+		statesCopy := make([]workflowdomain.WorkflowState, len(states))
+		copy(statesCopy, states)
+		for i := range statesCopy {
+			statesCopy[i].ID = uuid.New()
+		}
+		transitionsCopy := make([]workflowdomain.WorkflowTransition, len(transitions))
+		copy(transitionsCopy, transitions)
+		for i := range transitionsCopy {
+			transitionsCopy[i].ID = uuid.New()
+		}
+		gDef, err := workflowSvc.CreateWorkflowDefinition(context.Background(), workflowapp.CreateWorkflowDefinitionParams{
+			TenantID:     orgID,
+			ActorID:      uuid.Nil,
+			Key:          key,
+			Name:         "General Assistance",
+			Description:  "General assistance request workflow",
+			Version:      1,
+			InitialState: "NEW",
+			States:       statesCopy,
+			Transitions:  transitionsCopy,
+			Metadata:     map[string]interface{}{},
+		})
+		require.NoError(t, err)
+
+		err = workflowSvc.ActivateWorkflowDefinition(context.Background(), orgID, gDef.ID, uuid.Nil)
+		require.NoError(t, err)
+	}
+
 	return workflowSvc, orgID
 }
 

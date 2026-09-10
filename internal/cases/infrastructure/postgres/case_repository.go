@@ -55,15 +55,15 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 		INSERT INTO cases (
 			id, organization_id, case_number, title, description,
 			status, service_type, priority, person_id, created_by, assigned_to,
-			created_at, updated_at, closed_at, version, workflow_instance_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`
 	const maxRetries = 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		_, err := e.ExecContext(ctx, query,
 			c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
 			c.Status, c.ServiceType, c.Priority, c.PersonID, c.CreatedByID, c.AssignedToID,
-			c.CreatedAt, c.UpdatedAt, c.ClosedAt, c.Version, c.WorkflowInstanceID,
+			c.CreatedAt, c.UpdatedAt, c.ClosedAt, c.Version, c.WorkflowInstanceID, c.WorkflowState,
 		)
 		if err == nil {
 			return nil
@@ -78,14 +78,14 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 }
 
 func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {
-	return r.FindByIDTx(ctx, r.db, orgID, id)
+	return r.FindByIDTx(ctx, nil, orgID, id)
 }
 
 func (r *PostgresCaseRepository) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Case, error) {
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at, version, workflow_instance_id
+			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
 		FROM cases
 		WHERE organization_id = $1 AND id = $2
 	`
@@ -108,7 +108,7 @@ func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Contex
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at, version, workflow_instance_id
+			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
 		FROM cases
 		WHERE organization_id = $1
 	`
@@ -182,13 +182,38 @@ func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx,
 	return r.updateStatus(ctx, tx, orgID, id, status, version)
 }
 
+// UpdateWorkflowStateTx updates the authoritative workflow state column
+// alongside the denormalized status column, keeping the two fields in sync
+// within the transition transaction.
+func (r *PostgresCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int) error {
+	query := `
+		UPDATE cases
+		SET workflow_state = $1, status = $1, version = version + 1, updated_at = now()
+		WHERE organization_id = $2 AND id = $3 AND version = $4
+	`
+	result, err := tx.ExecContext(ctx, query, workflowState, orgID, id, version)
+	if err != nil {
+		return fmt.Errorf("failed to update workflow state: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("concurrent modification detected")
+	}
+	return nil
+}
+
 func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
 	query := `
 		UPDATE cases
-		SET status = $1, version = version + 1, updated_at = now(), closed_at = CASE WHEN $1 = 'CLOSED' THEN now() ELSE closed_at END
+		SET status = $1, version = version + 1, updated_at = now(),
+		    workflow_state = $5,
+		    closed_at = CASE WHEN $1 = 'CLOSED' THEN now() ELSE closed_at END
 		WHERE organization_id = $2 AND id = $3 AND version = $4
 	`
-	result, err := e.ExecContext(ctx, query, status, orgID, id, version)
+	result, err := e.ExecContext(ctx, query, status, orgID, id, version, string(status))
 	if err != nil {
 		return fmt.Errorf("failed to update case status: %w", err)
 	}
@@ -262,24 +287,28 @@ func (r *PostgresCaseRepository) scanCase(row interface {
 	Scan(dest ...any) error
 }) (*domain.Case, error) {
 	var c domain.Case
+	var workflowState sql.NullString
 	if err := row.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
 		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
-		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}
+	c.WorkflowState = workflowState.String
 	return &c, nil
 }
 
 func (r *PostgresCaseRepository) scanCaseFromRows(rows *sql.Rows) (*domain.Case, error) {
 	var c domain.Case
+	var workflowState sql.NullString
 	if err := rows.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
 		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
-		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}
+	c.WorkflowState = workflowState.String
 	return &c, nil
 }

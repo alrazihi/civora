@@ -272,6 +272,11 @@ components:
           format: uuid
           nullable: true
           description: Linked workflow instance ID for generic workflow-driven state transitions
+        workflow_state:
+          type: string
+          nullable: true
+          description: Authoritative lifecycle state from the linked workflow instance. Mirrors status but is the single source of truth for lifecycle transitions.
+          enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
 
     CreateCaseRequest:
       type: object

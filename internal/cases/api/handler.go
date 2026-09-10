@@ -359,6 +359,14 @@ func serializeCase(c *domain.Case) map[string]interface{} {
 	} else {
 		result["workflow_instance_id"] = nil
 	}
+	// workflow_state is the authoritative lifecycle state from the linked
+	// workflow instance. It mirrors status but is the single source of truth
+	// for lifecycle transitions.
+	if c.WorkflowState != "" {
+		result["workflow_state"] = c.WorkflowState
+	} else {
+		result["workflow_state"] = nil
+	}
 	return result
 }
 

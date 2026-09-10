@@ -134,12 +134,13 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 			}
 
 			if s.workflowSvc != nil {
-				instance, err := s.workflowSvc.CreateInstanceForCaseTx(ctx, tx, c.OrganizationID, c.ID, workflowKeyForServiceType(c.ServiceType), c.CreatedByID)
+				instance, err := s.workflowSvc.CreateInstanceForCaseTx(ctx, tx, c.OrganizationID, c.ID, domain.WorkflowKeyForServiceType(c.ServiceType), c.CreatedByID)
 				if err != nil {
 					return fmt.Errorf("failed to create workflow instance for case: %w", err)
 				}
 				instanceID := instance.ID
 				c.WorkflowInstanceID = &instanceID
+				c.WorkflowState = instance.CurrentState
 				if err := c.SyncStatusFromWorkflow(instance.CurrentState); err != nil {
 					return fmt.Errorf("failed to sync case status from workflow: %w", err)
 				}
@@ -245,11 +246,9 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 		return nil, fmt.Errorf("%w: no transition leads to status %s from %s", ErrCaseTransition, params.Status, instance.CurrentState)
 	}
 
-	newCaseStatus := domain.CaseStatus(targetTransition.ToState)
-
 	var result *domain.Case
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		_, err := s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+		_, err = s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
 			TenantID:      params.OrganizationID,
 			InstanceID:    instance.ID,
 			TransitionKey: targetTransition.Key,
@@ -261,8 +260,21 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 			return fmt.Errorf("workflow transition failed: %w", err)
 		}
 
-		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, params.CaseID, newCaseStatus, c.Version); err != nil {
-			return fmt.Errorf("failed to update case status: %w", err)
+		// Refresh the case from the database to get the updated status
+		// from the OnTransition observer callback.
+		updatedCase, err := s.repo.FindByIDTx(ctx, tx, params.OrganizationID, params.CaseID)
+		if err != nil {
+			return fmt.Errorf("failed to reload case after workflow transition: %w", err)
+		}
+
+		// The observer already synced the status and workflow_state.
+		// Update the case reference and set closed_at if needed.
+		c.Status = updatedCase.Status
+		c.WorkflowState = updatedCase.WorkflowState
+		c.Version = updatedCase.Version
+		if updatedCase.Status == domain.CaseStatusClosed {
+			now := time.Now().UTC()
+			c.ClosedAt = &now
 		}
 
 		result = c
@@ -270,12 +282,6 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	result.Status = newCaseStatus
-	if newCaseStatus == domain.CaseStatusClosed {
-		now := time.Now().UTC()
-		result.ClosedAt = &now
 	}
 
 	return result, nil
@@ -426,5 +432,30 @@ func (s *CaseService) SyncCaseStatus(ctx context.Context, tenantID, caseID uuid.
 	if err := c.SyncStatusFromWorkflow(stateKey); err != nil {
 		return err
 	}
+	c.WorkflowState = stateKey
 	return s.repo.UpdateStatus(ctx, tenantID, caseID, c.Status, c.Version)
+}
+
+// OnTransition implements workflowapp.TransitionObserver. It is invoked by
+// the workflow engine within the transition transaction to keep the
+// denormalized case status in sync with the authoritative workflow state.
+// Because the observer runs inside the same transaction, a failure here
+// rolls back the entire transition atomically.
+func (s *CaseService) OnTransition(ctx context.Context, tx *sql.Tx, instance *workflowdomain.WorkflowInstance, transition *workflowdomain.WorkflowTransition) error {
+	if instance == nil {
+		return nil
+	}
+	c, err := s.repo.FindByIDTx(ctx, tx, instance.TenantID, instance.CaseID)
+	if err != nil {
+		return err
+	}
+	if err := c.SyncStatusFromWorkflow(transition.ToState); err != nil {
+		return err
+	}
+	c.WorkflowState = transition.ToState
+	if err := s.repo.UpdateWorkflowStateTx(ctx, tx, instance.TenantID, instance.CaseID, transition.ToState, c.Version); err != nil {
+		return err
+	}
+	c.Version++
+	return nil
 }

@@ -51,6 +51,9 @@ th { color: var(--text-muted); font-weight: 600; }
 .badge.in-progress { background: #ccfbf1; color: #115e59; }
 .badge.follow-up { background: #ffedd5; color: #9a3412; }
 .badge.closed { background: #f1f5f9; color: #475569; }
+.badge.planned { background: #e0e7ff; color: #3730a3; }
+.badge.completed { background: #d1fae5; color: #065f46; }
+.badge.cancelled { background: #fee2e2; color: #991b1b; }
 
 .timeline { position: relative; padding-left: 24px; }
 .timeline::before { content: ''; position: absolute; left: 8px; top: 4px; bottom: 4px; width: 2px; background: var(--border); }
@@ -61,7 +64,27 @@ th { color: var(--text-muted); font-weight: 600; }
 .timeline-item.rejected::before { background: var(--danger); }
 .timeline-title { font-weight: 600; font-size: 0.95rem; }
 .timeline-meta { font-size: 0.85rem; color: var(--text-muted); }
+.timeline-reason { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+.timeline-transition { font-size: 0.8rem; color: var(--text-muted); font-weight: 400; }
 
 .auth-form { max-width: 400px; margin: 60px auto; }
 .hidden { display: none !important; }
 .empty { text-align: center; color: var(--text-muted); padding: 40px; }
+
+.service-banner { display: inline-flex; align-items: center; gap: 8px; }
+.service-icon { font-size: 1.1rem; }
+.service-label { font-size: 0.9rem; }
+
+.workflow-progress { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 8px 0; }
+.workflow-step { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; min-width: 90px; }
+.step-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; background: var(--border); color: var(--text-muted); white-space: nowrap; }
+.workflow-step.active .step-label { background: var(--primary); color: #fff; }
+.workflow-step.completed .step-label { background: var(--success); color: #fff; }
+.workflow-step.pending .step-label { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+.workflow-connector { flex: 0 0 auto; width: 24px; height: 2px; background: var(--border); }
+.workflow-step.completed + .workflow-connector { background: var(--success); }
+
+.section-action-btn { margin-bottom: 8px; }
+.section-hint { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+
+.assistance-status { margin-left: 6px; }

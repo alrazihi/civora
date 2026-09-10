@@ -10,6 +10,7 @@ import (
 
 	"github.com/alrazihi/civora/internal/cases/domain"
 	peopleDomain "github.com/alrazihi/civora/internal/people/domain"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,6 +63,10 @@ func (m *mockCaseRepository) SaveTx(ctx context.Context, tx *sql.Tx, c *domain.C
 }
 
 func (m *mockCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {
+	return m.FindByIDTx(ctx, nil, orgID, id)
+}
+
+func (m *mockCaseRepository) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Case, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	c, ok := m.cases[id]
@@ -151,6 +156,18 @@ func (m *mockCaseRepository) UpdateWorkflowInstanceIDTx(ctx context.Context, tx 
 		return errors.New("not found")
 	}
 	c.WorkflowInstanceID = &instanceID
+	return nil
+}
+
+func (m *mockCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.cases[id]
+	if !ok || c.OrganizationID != orgID {
+		return errors.New("not found")
+	}
+	c.WorkflowState = workflowState
+	c.UpdatedAt = time.Now().UTC()
 	return nil
 }
 
@@ -501,4 +518,125 @@ func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
 		CreatedByID:    userID,
 	})
 	require.Error(t, err, "should fail after exhausting retries")
+}
+
+// TestOnTransition_SyncsCaseStatus verifies that the CaseService implements
+// the workflow TransitionObserver contract and that it keeps the denormalized
+// case status in sync with the authoritative workflow state within the
+// transition transaction.
+func TestOnTransition_SyncsCaseStatus(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	orgID := uuid.New()
+	creator := uuid.New()
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Observer Test",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    creator,
+	})
+	require.NoError(t, err)
+
+	instance := &workflowdomain.WorkflowInstance{
+		ID:           uuid.New(),
+		TenantID:     orgID,
+		CaseID:       c.ID,
+		CurrentState: "NEW",
+	}
+	transition := &workflowdomain.WorkflowTransition{
+		Key:       "open",
+		FromState: "NEW",
+		ToState:   "OPEN",
+	}
+
+	// OnTransition should be a no-op when no case is linked to the instance.
+	assert.NoError(t, svc.OnTransition(context.Background(), nil, nil, transition))
+
+	// When the case is linked, the observer must sync the denormalized status
+	// to the target workflow state within the transaction.
+	assert.NoError(t, svc.OnTransition(context.Background(), nil, instance, transition))
+
+	updated, err := svc.GetCase(context.Background(), orgID, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.CaseStatusOpen, updated.Status,
+		"case status should be synced to the target workflow state")
+}
+
+// TestOnTransition_UnknownStateReturnsContradiction verifies that the observer
+// surfaces a contradiction error when the workflow state cannot be mapped to
+// a case status, which rolls back the transition transaction.
+func TestOnTransition_UnknownStateReturnsContradiction(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	orgID := uuid.New()
+	creator := uuid.New()
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Observer Contradiction Test",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    creator,
+	})
+	require.NoError(t, err)
+
+	instance := &workflowdomain.WorkflowInstance{
+		ID:           uuid.New(),
+		TenantID:     orgID,
+		CaseID:       c.ID,
+		CurrentState: "NEW",
+	}
+	transition := &workflowdomain.WorkflowTransition{
+		Key:       "bogus",
+		FromState: "NEW",
+		ToState:   "BOGUS_STATE",
+	}
+
+	err = svc.OnTransition(context.Background(), nil, instance, transition)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrCaseStatusContradiction)
+
+	// The status must remain unchanged because the observer failed.
+	updated, err := svc.GetCase(context.Background(), orgID, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.CaseStatusNew, updated.Status,
+		"case status must not change when the observer fails")
+}
+
+// TestOnTransition_TenantIsolation verifies that the observer cannot sync a
+// case status for a case that does not belong to the instance's tenant.
+func TestOnTransition_TenantIsolation(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	orgID := uuid.New()
+	creator := uuid.New()
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Observer Tenant Test",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    creator,
+	})
+	require.NoError(t, err)
+
+	// Instance belongs to a different tenant than the case.
+	instance := &workflowdomain.WorkflowInstance{
+		ID:           uuid.New(),
+		TenantID:     uuid.New(),
+		CaseID:       c.ID,
+		CurrentState: "NEW",
+	}
+	transition := &workflowdomain.WorkflowTransition{
+		Key:       "open",
+		FromState: "NEW",
+		ToState:   "OPEN",
+	}
+
+	err = svc.OnTransition(context.Background(), nil, instance, transition)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found",
+		"observer should fail when the case cannot be found in the instance's tenant")
 }

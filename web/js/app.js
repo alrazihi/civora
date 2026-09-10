@@ -1,3 +1,64 @@
+const SERVICE_DOMAIN = {
+  EMERGENCY: {
+    label: 'Emergency Assistance',
+    color: '#dc2626',
+    icon: '🚨',
+    sections: {
+      eligibility: { title: 'Eligibility Check', hint: 'Verify immediate eligibility for emergency response.' },
+      evidence: { title: 'Evidence Collection', hint: 'Gather ID, referral, and situational evidence quickly.' },
+      assessment: { title: 'Needs Assessment', hint: 'Assess immediate needs (food, shelter, transport, safety).' },
+      decision: { title: 'Approval Decision', hint: 'Fast-track decision for emergency response.' },
+      assistance: { title: 'Emergency Assistance', hint: 'Deploy immediate assistance (food, shelter, transport, medical).' },
+      followup: { title: 'Follow-up', hint: 'Schedule follow-up to verify ongoing safety and needs.' }
+    },
+    assistanceTypes: ['FOOD', 'SHELTER', 'TRANSPORT', 'MEDICAL', 'FINANCIAL', 'OTHER']
+  },
+  MEDICAL: {
+    label: 'Medical Assistance',
+    color: '#2563eb',
+    icon: '🏥',
+    sections: {
+      eligibility: { title: 'Medical Eligibility', hint: 'Verify medical eligibility criteria.' },
+      evidence: { title: 'Medical Evidence', hint: 'Collect medical records, referrals, and diagnosis documents.' },
+      assessment: { title: 'Medical Assessment', hint: 'Assess medical needs, treatment plan, and urgency.' },
+      decision: { title: 'Treatment Decision', hint: 'Decision on medical assistance coverage.' },
+      assistance: { title: 'Medical Assistance', hint: 'Arrange medication, transport, treatment, and care.' },
+      followup: { title: 'Medical Follow-up', hint: 'Monitor treatment progress and recovery.' }
+    },
+    assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER']
+  }
+};
+
+const WORKFLOW_STATES = ['NEW', 'OPEN', 'IN_REVIEW', 'ASSESSMENT', 'DECISION_PENDING', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'FOLLOW_UP', 'CLOSED'];
+const TERMINAL_STATES = ['REJECTED', 'CLOSED'];
+
+const SECTION_ACTIONS = {
+  'NEW': ['eligibility', 'evidence'],
+  'OPEN': ['eligibility', 'evidence'],
+  'IN_REVIEW': ['assessment'],
+  'ASSESSMENT': ['decision'],
+  'DECISION_PENDING': ['decision'],
+  'APPROVED': ['assistance'],
+  'REJECTED': [],
+  'IN_PROGRESS': ['followup'],
+  'FOLLOW_UP': ['followup'],
+  'CLOSED': []
+};
+
+function escapeHTML(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getServiceDomain(serviceType) {
+  return SERVICE_DOMAIN[serviceType] || null;
+}
+
 const app = {
   currentCase: null,
   currentWorkflow: null,
@@ -87,11 +148,11 @@ const app = {
       if (!cases.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No cases yet</td></tr>'; return; }
       tbody.innerHTML = cases.map(c => `
         <tr style="cursor:pointer" onclick="router.navigate('case','${c.id}')">
-          <td>${c.case_number}</td>
-          <td>${c.title}</td>
-          <td><span class="badge ${c.status.toLowerCase().replace('_','-')}">${c.status}</span></td>
-          <td>${c.service_type}</td>
-          <td>${c.priority}</td>
+          <td>${escapeHTML(c.case_number)}</td>
+          <td>${escapeHTML(c.title)}</td>
+          <td><span class="badge ${(c.status || '').toLowerCase().replace('_','-')}">${escapeHTML(c.status)}</span></td>
+          <td>${escapeHTML(c.service_type)}</td>
+          <td>${escapeHTML(c.priority)}</td>
         </tr>
       `).join('');
     } catch (err) {
@@ -106,15 +167,18 @@ const app = {
       document.getElementById('case-title').textContent = res.data.title;
       document.getElementById('case-number').textContent = res.data.case_number;
       document.getElementById('case-status').textContent = res.data.status;
-      document.getElementById('case-status').className = `badge ${res.data.status.toLowerCase().replace('_','-')}`;
+      document.getElementById('case-status').className = `badge ${(res.data.status || '').toLowerCase().replace('_','-')}`;
       document.getElementById('case-service').textContent = res.data.service_type;
       document.getElementById('case-priority').textContent = res.data.priority;
       document.getElementById('case-desc').textContent = res.data.description || 'No description';
 
+      this.renderServiceBanner(res.data.service_type);
       await this.loadWorkflow(id);
+      this.renderWorkflowProgress();
       await this.loadCaseSections(id);
-      await this.loadTimeline(id);
+      this.renderSectionActions();
       this.renderActions();
+      await this.loadTimeline(id);
     } catch (err) {
       alert(err.message);
     }
@@ -128,7 +192,9 @@ const app = {
         const inst = this.currentWorkflow.instance;
         const def = this.currentWorkflow.definition;
 
-        // Display current state
+        document.getElementById('workflow-label').classList.remove('hidden');
+        document.getElementById('workflow-label').textContent = def ? `Workflow: ${def.name} (v${def.version || 1})` : '';
+
         const stateBadge = document.getElementById('workflow-state-badge');
         const stateName = document.getElementById('workflow-state-name');
         if (stateBadge && inst.current_state) {
@@ -138,13 +204,107 @@ const app = {
         }
         if (stateName && def) {
           const stateDef = def.states ? def.states.find(s => s.key === inst.current_state) : null;
-          stateName.textContent = stateDef ? stateDef.name : '';
+          stateName.textContent = stateDef ? (stateDef.description || stateDef.name) : '';
         }
+      } else {
+        document.getElementById('workflow-label').classList.add('hidden');
+        const stateBadge = document.getElementById('workflow-state-badge');
+        if (stateBadge) stateBadge.style.display = 'none';
       }
     } catch (err) {
       this.currentWorkflow = null;
+      document.getElementById('workflow-label').classList.add('hidden');
       const stateBadge = document.getElementById('workflow-state-badge');
       if (stateBadge) stateBadge.style.display = 'none';
+    }
+  },
+
+  renderServiceBanner(serviceType) {
+    const domain = getServiceDomain(serviceType);
+    const banner = document.getElementById('service-banner');
+    if (!banner) return;
+    if (!domain) {
+      banner.classList.add('hidden');
+      return;
+    }
+    banner.classList.remove('hidden');
+    banner.innerHTML = `<span class="service-icon">${domain.icon}</span> <span class="service-label">${escapeHTML(domain.label)}</span>`;
+    banner.style.backgroundColor = domain.color + '15';
+    banner.style.color = domain.color;
+    banner.style.borderColor = domain.color + '40';
+  },
+
+  renderWorkflowProgress() {
+    const container = document.getElementById('workflow-progress');
+    if (!container || !this.currentWorkflow || !this.currentWorkflow.instance) {
+      if (container) container.innerHTML = '';
+      return;
+    }
+    const currentState = this.currentWorkflow.instance.current_state;
+    const currentIndex = WORKFLOW_STATES.indexOf(currentState);
+    if (currentIndex < 0) {
+      container.innerHTML = '';
+      return;
+    }
+    const isTerminal = TERMINAL_STATES.includes(currentState);
+    const steps = WORKFLOW_STATES.map((state, idx) => {
+      let cls = 'workflow-step';
+      if (idx < currentIndex) cls += ' completed';
+      else if (idx === currentIndex) cls += ' active';
+      else cls += ' pending';
+      if (isTerminal && idx <= currentIndex) cls += ' completed';
+      return `<div class="${cls}"><span class="step-label">${escapeHTML(state)}</span></div>`;
+    });
+    const connectors = WORKFLOW_STATES.slice(0, -1).map(() => '<div class="workflow-connector"></div>').join('');
+    container.innerHTML = steps.join(connectors ? connectors : '');
+  },
+
+  renderSectionActions() {
+    if (!this.currentCase) return;
+    const state = this.currentWorkflow?.instance?.current_state;
+    const allowed = state ? (SECTION_ACTIONS[state] || []) : [];
+    const containers = {
+      eligibility: document.getElementById('sec-eligibility'),
+      evidence: document.getElementById('sec-evidence'),
+      assessment: document.getElementById('sec-assessment'),
+      decision: document.getElementById('sec-decision'),
+      assistance: document.getElementById('sec-assistance'),
+      followup: document.getElementById('sec-followup')
+    };
+    for (const [name, el] of Object.entries(containers)) {
+      if (!el) continue;
+      el.querySelectorAll('.section-action-btn').forEach(btn => btn.remove());
+      const actionBtn = document.createElement('button');
+      actionBtn.className = 'btn section-action-btn';
+      const domain = getServiceDomain(this.currentCase.service_type);
+      const title = domain ? domain.sections[name]?.title : name.charAt(0).toUpperCase() + name.slice(1);
+      actionBtn.textContent = `Add ${title}`;
+      actionBtn.style.marginBottom = '8px';
+      if (!allowed.includes(name)) {
+        actionBtn.disabled = true;
+        actionBtn.title = 'Not available in current workflow state';
+      } else {
+        actionBtn.onclick = () => this.showSectionForm(name);
+      }
+      el.insertBefore(actionBtn, el.firstChild);
+    }
+  },
+
+  showSectionForm(name) {
+    const map = {
+      eligibility: 'eligibility-modal',
+      evidence: 'evidence-modal',
+      assessment: 'assessment-modal',
+      decision: 'decision-modal',
+      assistance: 'assistance-modal',
+      followup: 'followup-modal'
+    };
+    const modalId = map[name];
+    if (!modalId) return;
+    if (name === 'assistance') {
+      this.loadStaffOptions().then(() => this.showModal(modalId));
+    } else {
+      this.showModal(modalId);
     }
   },
 
@@ -164,46 +324,53 @@ const app = {
       if (!el) return;
       const data = res.data;
       if (!data) { el.innerHTML = '<p class="empty">Not yet recorded</p>'; return; }
+      const domain = getServiceDomain(this.currentCase?.service_type);
+      const hint = domain?.sections[name]?.hint;
+      let hintHTML = hint ? `<p class="section-hint">${escapeHTML(hint)}</p>` : '';
       if (name === 'eligibility') {
-        el.innerHTML = `<strong>Result:</strong> ${data.result}<br><strong>Explanation:</strong> ${data.explanation}`;
+        el.innerHTML = `${hintHTML}<strong>Result:</strong> ${escapeHTML(data.result)}<br><strong>Explanation:</strong> ${escapeHTML(data.explanation)}`;
       } else if (name === 'evidence') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = '<p class="empty">No evidence yet</p>'; return; }
-          el.innerHTML = '<table><thead><tr><th>Type</th><th>Description</th></tr></thead><tbody>' +
-            data.map(e => `<tr><td>${e.type}</td><td>${e.description}</td></tr>`).join('') +
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No evidence yet</p>'; return; }
+          el.innerHTML = hintHTML + '<table><thead><tr><th>Type</th><th>Description</th></tr></thead><tbody>' +
+            data.map(e => `<tr><td>${escapeHTML(e.type)}</td><td>${escapeHTML(e.description)}</td></tr>`).join('') +
             '</tbody></table>';
         } else {
-          el.innerHTML = `<strong>Type:</strong> ${data.type}<br><strong>Description:</strong> ${data.description}`;
+          el.innerHTML = `${hintHTML}<strong>Type:</strong> ${escapeHTML(data.type)}<br><strong>Description:</strong> ${escapeHTML(data.description)}`;
         }
       } else if (name === 'assessment') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = '<p class="empty">No assessment yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No assessment yet</p>'; return; }
           const a = data[0];
-          el.innerHTML = `<strong>Findings:</strong> ${a.findings}<br><strong>Needs:</strong> ${a.needs_identified || 'N/A'}<br><strong>Recommendation:</strong> ${a.recommendation}`;
+          el.innerHTML = `${hintHTML}<strong>Findings:</strong> ${escapeHTML(a.findings)}<br><strong>Needs:</strong> ${escapeHTML(a.needs_identified || 'N/A')}<br><strong>Recommendation:</strong> ${escapeHTML(a.recommendation)}`;
         } else {
-          el.innerHTML = `<strong>Findings:</strong> ${data.findings}<br><strong>Needs:</strong> ${data.needs_identified || 'N/A'}<br><strong>Recommendation:</strong> ${data.recommendation}`;
+          el.innerHTML = `${hintHTML}<strong>Findings:</strong> ${escapeHTML(data.findings)}<br><strong>Needs:</strong> ${escapeHTML(data.needs_identified || 'N/A')}<br><strong>Recommendation:</strong> ${escapeHTML(data.recommendation)}`;
         }
       } else if (name === 'decision') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = '<p class="empty">No decision yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No decision yet</p>'; return; }
           const d = data[0];
-          el.innerHTML = `<strong>Decision:</strong> <span class="badge ${d.decision.toLowerCase().replace('_','-')}">${d.decision}</span><br><strong>Reason:</strong> ${d.reason}`;
+          el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${d.decision.toLowerCase().replace('_','-')}">${escapeHTML(d.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(d.reason)}`;
         } else {
-          el.innerHTML = `<strong>Decision:</strong> <span class="badge ${data.decision.toLowerCase().replace('_','-')}">${data.decision}</span><br><strong>Reason:</strong> ${data.reason}`;
+          el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${data.decision.toLowerCase().replace('_','-')}">${escapeHTML(data.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(data.reason)}`;
         }
       } else if (name === 'assistance') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = '<p class="empty">No assistance yet</p>'; return; }
-          el.innerHTML = data.map(a => `<div><strong>${a.type}</strong> - ${a.status}<br>${a.description}</div>`).join('');
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No assistance yet</p>'; return; }
+          el.innerHTML = hintHTML + data.map(a => {
+            const statusClass = (a.status || '').toLowerCase().replace('_','-');
+            return `<div><strong class="badge ${statusClass}">${escapeHTML(a.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(a.status)}</span><br>${escapeHTML(a.description)}</div>`;
+          }).join('');
         } else {
-          el.innerHTML = `<strong>${data.type}</strong> - ${data.status}<br>${data.description}`;
+          const statusClass = (data.status || '').toLowerCase().replace('_','-');
+          el.innerHTML = `${hintHTML}<strong class="badge ${statusClass}">${escapeHTML(data.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(data.status)}</span><br>${escapeHTML(data.description)}`;
         }
       } else if (name === 'followup') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = '<p class="empty">No follow-up yet</p>'; return; }
-          el.innerHTML = data.map(f => `<div><strong>${f.scheduled_date}</strong> - ${f.outcome}</div>`).join('');
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No follow-up yet</p>'; return; }
+          el.innerHTML = hintHTML + data.map(f => `<div><strong>${escapeHTML(f.scheduled_date)}</strong> - ${escapeHTML(f.outcome)}</div>`).join('');
         } else {
-          el.innerHTML = `<strong>${data.scheduled_date}</strong> - ${data.outcome}`;
+          el.innerHTML = `${hintHTML}<strong>${escapeHTML(data.scheduled_date)}</strong> - ${escapeHTML(data.outcome)}`;
         }
       }
     } catch (err) {
@@ -212,7 +379,7 @@ const app = {
         if (err.message && err.message.includes('404')) {
           el.innerHTML = '<p class="empty">Not yet recorded</p>';
         } else {
-          el.innerHTML = `<p style="color:var(--danger)">Error loading: ${err.message}</p>`;
+          el.innerHTML = `<p style="color:var(--danger)">Error loading: ${escapeHTML(err.message)}</p>`;
         }
       }
     }
@@ -236,21 +403,23 @@ const app = {
     if (!container || !this.currentCase) return;
     this.loadWorkflowTransitions(this.currentCase.id).then(transitions => {
       let html = '';
-      for (const t of transitions) {
-        html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
-      }
-      if (!html) {
-        const state = this.currentWorkflow?.instance?.current_state;
-        if (state) {
-          const isTerminal = this.currentWorkflow?.definition?.states?.find(s => s.key === state)?.terminal;
-          if (isTerminal) {
-            html = '<p class="empty">This case is in a terminal state and no further actions are available.</p>';
-          } else {
-            html = '<p class="empty">No actions available from the current state. The workflow may require conditions to be met.</p>';
-          }
-        } else {
-          html = '<p class="empty">No actions available</p>';
+      if (transitions.length) {
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        for (const t of transitions) {
+          html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
         }
+        html += '</div>';
+      }
+      const state = this.currentWorkflow?.instance?.current_state;
+      if (state) {
+        const isTerminal = TERMINAL_STATES.includes(state);
+        if (isTerminal) {
+          html += `<p class="empty" style="margin-top:8px;">This case is in a terminal state (<strong>${escapeHTML(state)}</strong>) and no further workflow actions are available.</p>`;
+        } else if (!transitions.length) {
+          html += `<p class="empty" style="margin-top:8px;">No actions available from the current state. The workflow may require conditions to be met.</p>`;
+        }
+      } else {
+        html += '<p class="empty" style="margin-top:8px;">No workflow instance available for this case.</p>';
       }
       container.innerHTML = html;
     });
@@ -278,11 +447,13 @@ const app = {
         return;
       }
       container.innerHTML = events.map(ev => {
-        let label = ev.action;
+        let label = escapeHTML(ev.action);
         if (ev.metadata) {
-          if (ev.metadata.to) label += ` → ${ev.metadata.to}`;
-          if (ev.metadata.from) label += ` from ${ev.metadata.from}`;
+          if (ev.metadata.to) label += ` → ${escapeHTML(ev.metadata.to)}`;
+          if (ev.metadata.from) label += ` from ${escapeHTML(ev.metadata.from)}`;
         }
+        if (ev.transition_key) label += ` <span class="timeline-transition">(${escapeHTML(ev.transition_key)})</span>`;
+        if (ev.reason) label += `<div class="timeline-reason">${escapeHTML(ev.reason)}</div>`;
         const time = new Date(ev.timestamp).toLocaleString();
         return `<div class="timeline-item"><div class="timeline-title">${label}</div><div class="timeline-meta">${time}</div></div>`;
       }).join('');
@@ -305,7 +476,39 @@ const app = {
   showEvidenceForm() { this.showModal('evidence-modal'); },
   showAssessmentForm() { this.showModal('assessment-modal'); },
   showDecisionForm() { this.showModal('decision-modal'); },
-  showAssistanceForm() { this.loadStaffOptions().then(() => this.showModal('assistance-modal')); },
+  showAssistanceForm() { this.loadStaffOptions().then(() => { this.filterAssistanceTypes(); this.showModal('assistance-modal'); }); },
+
+  filterAssistanceTypes() {
+    const select = document.getElementById('asst-type');
+    if (!select || !this.currentCase) return;
+    const domain = getServiceDomain(this.currentCase.service_type);
+    const preferred = domain ? domain.assistanceTypes : null;
+    if (!select._originalOptions) {
+      select._originalOptions = Array.from(select.options).map(o => ({ value: o.value, text: o.textContent }));
+    }
+    const original = select._originalOptions;
+    select.innerHTML = '';
+    const seen = new Set();
+    const sorted = preferred ? [...preferred] : original.map(o => o.value);
+    for (const val of sorted) {
+      if (!seen.has(val)) {
+        seen.add(val);
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        select.appendChild(opt);
+      }
+    }
+    for (const o of original) {
+      if (!seen.has(o.value)) {
+        seen.add(o.value);
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.text;
+        select.appendChild(opt);
+      }
+    }
+  },
   showFollowUpForm() { this.showModal('followup-modal'); },
 
   showModal(id) { document.getElementById(id)?.classList.remove('hidden'); },
@@ -318,7 +521,7 @@ const app = {
       const res = await api('GET', this.orgPath('/users?per_page=200'));
       const users = res.data || [];
       select.innerHTML = '<option value="">Select staff...</option>' +
-        users.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('');
+        users.map(u => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join('');
     } catch (err) {
       select.innerHTML = '<option value="">Failed to load users</option>';
     }
@@ -334,6 +537,7 @@ const app = {
       });
       this.hideModal('eligibility-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderSectionActions();
       this.renderActions();
     } catch (err) { alert(err.message); }
   },
@@ -349,6 +553,7 @@ const app = {
       });
       this.hideModal('evidence-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderSectionActions();
       this.renderActions();
     } catch (err) { alert(err.message); }
   },
@@ -364,6 +569,7 @@ const app = {
       });
       this.hideModal('assessment-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderSectionActions();
       this.renderActions();
     } catch (err) { alert(err.message); }
   },
@@ -378,6 +584,7 @@ const app = {
       });
       this.hideModal('decision-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderSectionActions();
       this.renderActions();
     } catch (err) { alert(err.message); }
   },
@@ -393,6 +600,7 @@ const app = {
       });
       this.hideModal('assistance-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderSectionActions();
       this.renderActions();
     } catch (err) { alert(err.message); }
   },
@@ -408,6 +616,7 @@ const app = {
       });
       this.hideModal('followup-modal');
       await this.loadCaseSections(this.currentCase.id);
+      this.renderSectionActions();
       this.renderActions();
     } catch (err) { alert(err.message); }
   },
@@ -455,6 +664,7 @@ router.on('dashboard', async () => {
 });
 
 router.on('case', async (id) => {
+  if (!id) { router.navigate('dashboard'); return; }
   document.getElementById('view-login').classList.add('hidden');
   document.getElementById('view-dashboard').classList.add('hidden');
   document.getElementById('view-case').classList.remove('hidden');

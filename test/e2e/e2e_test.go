@@ -400,24 +400,46 @@ func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.
 		{ID: uuid.New(), TenantID: orgID, Key: "complete", Name: "Complete", FromState: "FOLLOW_UP", ToState: "CLOSED", Active: true, CreatedAt: now},
 	}
 
-	def, err := svc.CreateWorkflowDefinition(ctx, application.CreateWorkflowDefinitionParams{
-		TenantID:     orgID,
-		ActorID:      uuid.Nil,
-		Key:          "emergency_assistance",
-		Name:         "Emergency Assistance",
-		Description:  "Emergency assistance request workflow",
-		Version:      1,
-		InitialState: "NEW",
-		States:       states,
-		Transitions:  transitions,
-		Metadata:     map[string]interface{}{},
-	})
-	require.NoError(t, err)
+	// The generic workflow definitions are shared across service types: the
+	// emergency_assistance workflow is the primary lifecycle, and the
+	// general_assistance workflow is the default for cases whose service type
+	// does not map to a specialized workflow (e.g. GENERAL). Both use the
+	// same state machine so the case lifecycle is consistent.
+	for _, key := range []string{"emergency_assistance", "general_assistance"} {
+		statesCopy := make([]workflowdomain.WorkflowState, len(states))
+		copy(statesCopy, states)
+		for i := range statesCopy {
+			statesCopy[i].ID = uuid.New()
+		}
+		transitionsCopy := make([]workflowdomain.WorkflowTransition, len(transitions))
+		copy(transitionsCopy, transitions)
+		for i := range transitionsCopy {
+			transitionsCopy[i].ID = uuid.New()
+		}
 
-	err = svc.ActivateWorkflowDefinition(ctx, orgID, def.ID, uuid.Nil)
-	require.NoError(t, err)
+		def, err := svc.CreateWorkflowDefinition(ctx, application.CreateWorkflowDefinitionParams{
+			TenantID:     orgID,
+			ActorID:      uuid.Nil,
+			Key:          key,
+			Name:         "Emergency Assistance",
+			Description:  "Emergency assistance request workflow",
+			Version:      1,
+			InitialState: "NEW",
+			States:       statesCopy,
+			Transitions:  transitionsCopy,
+			Metadata:     map[string]interface{}{},
+		})
+		require.NoError(t, err)
 
-	return def.ID
+		err = svc.ActivateWorkflowDefinition(ctx, orgID, def.ID, uuid.Nil)
+		require.NoError(t, err)
+
+		if key == "emergency_assistance" {
+			return def.ID
+		}
+	}
+
+	return uuid.Nil
 }
 
 func TestEmergencyAssistanceRequestLifecycle(t *testing.T) {

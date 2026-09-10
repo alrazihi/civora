@@ -5,20 +5,20 @@ import (
 	"testing"
 	"time"
 
+	assessmentpostgres "github.com/alrazihi/civora/internal/assessment/infrastructure/postgres"
+	assistancepostgres "github.com/alrazihi/civora/internal/assistance/infrastructure/postgres"
+	auditapp "github.com/alrazihi/civora/internal/audit/application"
+	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/cases/application"
 	caseDomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/config"
-	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
-	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
-	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
-	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
-	auditapp "github.com/alrazihi/civora/internal/audit/application"
-	assistancepostgres "github.com/alrazihi/civora/internal/assistance/infrastructure/postgres"
-	assessmentpostgres "github.com/alrazihi/civora/internal/assessment/infrastructure/postgres"
 	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
 	eligibilitypostgres "github.com/alrazihi/civora/internal/eligibility/infrastructure/postgres"
 	evidencepostgres "github.com/alrazihi/civora/internal/evidence/infrastructure/postgres"
 	followuppostgres "github.com/alrazihi/civora/internal/followup/infrastructure/postgres"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
+	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -505,4 +505,89 @@ func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
 
 	err = updatedCase.ValidateConsistency(instance.CurrentState)
 	assert.NoError(t, err, "case status and workflow state must not contradict")
+}
+
+// TestRegression_ServiceTypeToWorkflowKeyMapping verifies that every declared
+// service type maps to a non-empty, stable workflow definition key. This is
+// the contract that binds service types to authoritative workflow definitions
+// at case creation time.
+func TestRegression_ServiceTypeToWorkflowKeyMapping(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping regression test")
+	}
+
+	mapping := map[caseDomain.ServiceType]string{
+		caseDomain.ServiceTypeEmergency: "emergency_assistance",
+		caseDomain.ServiceTypeMedical:   "medical_assistance",
+		caseDomain.ServiceTypeFinancial: "financial_assistance",
+		caseDomain.ServiceTypeFood:      "food_assistance",
+		caseDomain.ServiceTypeShelter:   "shelter_assistance",
+		caseDomain.ServiceTypeEducation: "education_assistance",
+		caseDomain.ServiceTypeTransport: "transport_assistance",
+		caseDomain.ServiceTypeGeneral:   "general_assistance",
+	}
+
+	for serviceType, expectedKey := range mapping {
+		got := caseDomain.WorkflowKeyForServiceType(serviceType)
+		assert.Equal(t, expectedKey, got,
+			"service type %s must map to workflow key %s", serviceType, expectedKey)
+	}
+
+	// Unknown service types must fall back to the generic workflow so that
+	// every case is bound to an authoritative workflow definition.
+	assert.Equal(t, "general_assistance", caseDomain.WorkflowKeyForServiceType("UNKNOWN"))
+	assert.Equal(t, "general_assistance", caseDomain.WorkflowKeyForServiceType(""))
+}
+
+// TestRegression_AuthoritativeWorkflowStateIsExposed verifies that the case
+// API exposes the authoritative workflow state alongside the denormalized
+// status field, and that the two stay in sync after a transition.
+func TestRegression_AuthoritativeWorkflowStateIsExposed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping regression test")
+	}
+
+	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	ctx := context.Background()
+	helpers.SeedDefaultRoles(db, workflowOrgID)
+	actorID := helpers.SeedUser(db, workflowOrgID)
+
+	c, err := caseSvc.CreateCase(ctx, application.CreateCaseParams{
+		OrganizationID: workflowOrgID,
+		Title:          "Authoritative State Test",
+		Description:    "Test",
+		ServiceType:    caseDomain.ServiceTypeEmergency,
+		Priority:       caseDomain.PriorityNormal,
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	// The denormalized status and the authoritative workflow state must
+	// agree immediately after case creation.
+	assert.Equal(t, caseDomain.CaseStatusNew, c.Status)
+	assert.Equal(t, "NEW", c.WorkflowState)
+
+	workflowSvc := caseSvc.GetWorkflowService()
+	require.NotNil(t, workflowSvc)
+
+	instance, err := workflowSvc.GetInstanceByCaseID(ctx, workflowOrgID, c.ID)
+	require.NoError(t, err)
+
+	_, err = workflowSvc.ExecuteTransition(ctx, workflowapp.ExecuteTransitionParams{
+		TenantID:      workflowOrgID,
+		InstanceID:    instance.ID,
+		TransitionKey: "open",
+		ActorID:       actorID,
+		ActorRole:     "",
+		Reason:        "",
+	})
+	require.NoError(t, err)
+
+	updatedCase, err := caseSvc.GetCase(ctx, workflowOrgID, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, caseDomain.CaseStatusOpen, updatedCase.Status)
+	assert.Equal(t, "OPEN", updatedCase.WorkflowState,
+		"workflow_state must be the authoritative lifecycle state")
+	assert.Equal(t, updatedCase.WorkflowState, string(updatedCase.Status),
+		"denormalized status and authoritative workflow state must stay in sync")
 }

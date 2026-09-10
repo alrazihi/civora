@@ -185,3 +185,72 @@ func TestGenerateCaseNumber_Unique(t *testing.T) {
 	}
 	assert.Len(t, numbers, 1000, "all 1000 generated case numbers should be unique")
 }
+
+func TestSyncStatusFromWorkflow(t *testing.T) {
+	t.Run("syncs each valid workflow state", func(t *testing.T) {
+		states := []CaseStatus{
+			CaseStatusNew, CaseStatusOpen, CaseStatusInReview, CaseStatusAssessment,
+			CaseStatusDecisionPending, CaseStatusApproved, CaseStatusRejected,
+			CaseStatusInProgress, CaseStatusFollowUp, CaseStatusClosed,
+		}
+		for _, st := range states {
+			c := &Case{Status: CaseStatusOpen}
+			err := c.SyncStatusFromWorkflow(string(st))
+			assert.NoError(t, err, "state %s should sync", st)
+			assert.Equal(t, st, c.Status, "case status should match workflow state %s", st)
+			if st == CaseStatusClosed {
+				assert.NotNil(t, c.ClosedAt, "closed state should set closed_at")
+			}
+		}
+	})
+
+	t.Run("unknown state returns contradiction", func(t *testing.T) {
+		c := &Case{Status: CaseStatusOpen}
+		err := c.SyncStatusFromWorkflow("UNKNOWN_STATE")
+		assert.ErrorIs(t, err, ErrCaseStatusContradiction)
+	})
+
+	t.Run("empty state is a no-op", func(t *testing.T) {
+		c := &Case{Status: CaseStatusOpen}
+		err := c.SyncStatusFromWorkflow("")
+		assert.NoError(t, err)
+		assert.Equal(t, CaseStatusOpen, c.Status)
+	})
+}
+
+func TestValidateConsistency(t *testing.T) {
+	t.Run("no workflow instance is consistent", func(t *testing.T) {
+		c := &Case{Status: CaseStatusOpen, WorkflowInstanceID: nil}
+		assert.NoError(t, c.ValidateConsistency("OPEN"))
+	})
+
+	t.Run("empty workflow state is a no-op", func(t *testing.T) {
+		c := &Case{Status: CaseStatusOpen, WorkflowInstanceID: &uuid.UUID{}}
+		assert.NoError(t, c.ValidateConsistency(""))
+	})
+
+	t.Run("matching state is consistent", func(t *testing.T) {
+		c := &Case{Status: CaseStatusClosed, WorkflowInstanceID: &uuid.UUID{}}
+		assert.NoError(t, c.ValidateConsistency("CLOSED"))
+	})
+
+	t.Run("mismatched state is a contradiction", func(t *testing.T) {
+		c := &Case{Status: CaseStatusOpen, WorkflowInstanceID: &uuid.UUID{}}
+		err := c.ValidateConsistency("CLOSED")
+		assert.ErrorIs(t, err, ErrCaseStatusContradiction)
+	})
+}
+
+func TestStatusFromWorkflowState(t *testing.T) {
+	for _, st := range []CaseStatus{
+		CaseStatusNew, CaseStatusOpen, CaseStatusInReview, CaseStatusAssessment,
+		CaseStatusDecisionPending, CaseStatusApproved, CaseStatusRejected,
+		CaseStatusInProgress, CaseStatusFollowUp, CaseStatusClosed,
+	} {
+		got, err := StatusFromWorkflowState(string(st))
+		assert.NoError(t, err)
+		assert.Equal(t, st, got)
+	}
+	_, err := StatusFromWorkflowState("BOGUS")
+	assert.Error(t, err)
+}
