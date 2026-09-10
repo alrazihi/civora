@@ -116,15 +116,19 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 				if params.Decision == decisionsdomain.DecisionTypeRejected {
 					transitionKey = "reject"
 				}
-				_, _ = s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+				if _, err := s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
 					TenantID:      params.OrganizationID,
 					InstanceID:    instance.ID,
 					TransitionKey: transitionKey,
 					ActorID:       params.ActorID,
 					Reason:        params.Reason,
-				})
+				}); err != nil {
+					return fmt.Errorf("workflow transition failed: %w", err)
+				}
 			}
-		} else if s.caseUpdater != nil {
+		}
+
+		if s.caseUpdater != nil {
 			if err := s.caseUpdater.UpdateStatusTx(ctx, tx, params.OrganizationID, params.ServiceRequestID, newCaseStatus, c.Version); err != nil {
 				return fmt.Errorf("failed to update case status: %w", err)
 			}

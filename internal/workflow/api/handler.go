@@ -343,16 +343,16 @@ func (h *Handler) GetWorkflowHistory(w http.ResponseWriter, r *http.Request) {
 	result := make([]map[string]interface{}, len(histories))
 	for i, h := range histories {
 		result[i] = map[string]interface{}{
-			"id":                 h.ID,
+			"id":                   h.ID,
 			"workflow_instance_id": h.WorkflowInstanceID,
-			"case_id":            h.CaseID,
-			"from_state":         h.FromState,
-			"to_state":           h.ToState,
-			"transition_key":     h.TransitionKey,
-			"actor_id":           h.ActorID,
-			"occurred_at":        h.OccurredAt,
-			"reason":             h.Reason,
-			"metadata":           h.Metadata,
+			"case_id":              h.CaseID,
+			"from_state":           h.FromState,
+			"to_state":             h.ToState,
+			"transition_key":       h.TransitionKey,
+			"actor_id":             h.ActorID,
+			"occurred_at":          h.OccurredAt,
+			"reason":               h.Reason,
+			"metadata":             h.Metadata,
 		}
 	}
 	shared.WriteSuccess(w, http.StatusOK, result, nil)

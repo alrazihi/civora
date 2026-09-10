@@ -49,6 +49,10 @@ import (
 	peoplapp "github.com/alrazihi/civora/internal/people/application"
 	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/server"
+	workflowapi "github.com/alrazihi/civora/internal/workflow/api"
+	"github.com/alrazihi/civora/internal/workflow/application"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
+	"github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/migrations"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -109,6 +113,11 @@ func SetupTestServer(t *testing.T) *TestServer {
 		TRUNCATE TABLE
 			follow_ups, assistance, decisions, assessments,
 			evidence, eligibilities, people,
+			workflow_transition_history,
+			workflow_instances,
+			workflow_transitions,
+			workflow_states,
+			workflow_definitions,
 			audit.audit_events, cases, users, roles, organizations
 		RESTART IDENTITY CASCADE
 	`)
@@ -134,12 +143,25 @@ func SetupTestServer(t *testing.T) *TestServer {
 	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
 	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
-	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo)
+
+	workflowDefRepo := postgres.NewPostgresWorkflowDefinitionRepository(db.DB)
+	workflowStateRepo := postgres.NewPostgresWorkflowStateRepository(db.DB)
+	workflowTransitionRepo := postgres.NewPostgresWorkflowTransitionRepository(db.DB)
+	workflowInstanceRepo := postgres.NewPostgresWorkflowInstanceRepository(db.DB)
+	workflowHistoryRepo := postgres.NewPostgresWorkflowTransitionHistoryRepository(db.DB)
+	workflowService := application.NewWorkflowService(
+		workflowDefRepo, workflowStateRepo, workflowTransitionRepo,
+		workflowInstanceRepo, workflowHistoryRepo, auditService,
+	)
+
+	seedEmergencyAssistanceWorkflow(t, db.DB, workflowService)
+
+	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowService)
 	personService := peoplapp.NewPersonService(personRepo, auditService)
 	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	followUpService := followupapp.NewFollowUpService(followUpRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 
@@ -156,6 +178,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	assistanceHandler := assistanceapi.NewHandler(assistanceService)
 	followUpHandler := followupapi.NewHandler(followUpService)
 	auditHandler := auditapi.NewHandler(auditService)
+	workflowHandler := workflowapi.NewHandler(workflowService)
 
 	srv := server.New(cfg, db.DB)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)
@@ -169,6 +192,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	assistanceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 
 	return &TestServer{
 		srv: srv,
@@ -254,6 +278,61 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.WorkflowService) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+	var orgID uuid.UUID
+	err := db.QueryRowContext(ctx, "SELECT id FROM organizations LIMIT 1").Scan(&orgID)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	states := []workflowdomain.WorkflowState{
+		{ID: uuid.New(), TenantID: orgID, Key: "NEW", Name: "New Request", Terminal: false, DisplayOrder: 0, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "OPEN", Name: "Open", Terminal: false, DisplayOrder: 1, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "IN_REVIEW", Name: "In Review", Terminal: false, DisplayOrder: 2, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "ASSESSMENT", Name: "Assessment", Terminal: false, DisplayOrder: 3, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "DECISION_PENDING", Name: "Decision Pending", Terminal: false, DisplayOrder: 4, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "APPROVED", Name: "Approved", Terminal: false, DisplayOrder: 5, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "REJECTED", Name: "Rejected", Terminal: false, DisplayOrder: 6, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "IN_PROGRESS", Name: "In Progress", Terminal: false, DisplayOrder: 7, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "FOLLOW_UP", Name: "Follow-up", Terminal: false, DisplayOrder: 8, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "CLOSED", Name: "Closed", Terminal: true, DisplayOrder: 9, CreatedAt: now},
+	}
+
+	transitions := []workflowdomain.WorkflowTransition{
+		{ID: uuid.New(), TenantID: orgID, Key: "open", Name: "Open", FromState: "NEW", ToState: "OPEN", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "review", Name: "Review", FromState: "NEW", ToState: "IN_REVIEW", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "reopen", Name: "Reopen", FromState: "IN_REVIEW", ToState: "OPEN", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "assess", Name: "Assess", FromState: "OPEN", ToState: "IN_REVIEW", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "assess2", Name: "Assess", FromState: "IN_REVIEW", ToState: "ASSESSMENT", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "decide", Name: "Decide", FromState: "ASSESSMENT", ToState: "DECISION_PENDING", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "approve", Name: "Approve", FromState: "DECISION_PENDING", ToState: "APPROVED", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "reject", Name: "Reject", FromState: "DECISION_PENDING", ToState: "REJECTED", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "start_assistance", Name: "Start Assistance", FromState: "APPROVED", ToState: "IN_PROGRESS", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "close_rejected", Name: "Close Rejected", FromState: "REJECTED", ToState: "CLOSED", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "follow_up", Name: "Follow Up", FromState: "IN_PROGRESS", ToState: "FOLLOW_UP", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "complete", Name: "Complete", FromState: "FOLLOW_UP", ToState: "CLOSED", Active: true, CreatedAt: now},
+	}
+
+	def, err := svc.CreateWorkflowDefinition(ctx, application.CreateWorkflowDefinitionParams{
+		TenantID:     orgID,
+		Key:          "emergency_assistance",
+		Name:         "Emergency Assistance",
+		Description:  "Emergency assistance request workflow",
+		Version:      1,
+		InitialState: "NEW",
+		States:       states,
+		Transitions:  transitions,
+		Metadata:     map[string]interface{}{},
+	})
+	require.NoError(t, err)
+
+	err = svc.ActivateWorkflowDefinition(ctx, orgID, def.ID)
+	require.NoError(t, err)
+
+	return def.ID
 }
 
 func TestEmergencyAssistanceRequestLifecycle(t *testing.T) {
@@ -744,4 +823,220 @@ func TestAuditTrailForServiceRequest(t *testing.T) {
 	assert.True(t, actions["case.created"], "audit should contain case.created")
 	assert.True(t, actions["case.transition"], "audit should contain case.transition")
 	assert.True(t, actions["decision.made"], "audit should contain decision.made")
+}
+
+func TestWorkflowInstanceCreatedWithCase(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "wf-instance-"+uuid.New().String()[:8], "Workflow Instance Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
+		"title":        "Workflow Instance Test",
+		"service_type": "EMERGENCY",
+		"priority":     "HIGH",
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
+
+	var caseResp struct {
+		Data struct {
+			ID                 string `json:"id"`
+			WorkflowInstanceID string `json:"workflow_instance_id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
+	caseID := caseResp.Data.ID
+	require.NotEmpty(t, caseResp.Data.WorkflowInstanceID, "case should have a workflow instance")
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow", token, nil)
+	require.Equal(t, http.StatusOK, resp.Code, "response body: %s", resp.Body.String())
+
+	var workflowResp struct {
+		Data struct {
+			Instance struct {
+				CurrentState string `json:"current_state"`
+			} `json:"instance"`
+			Definition struct {
+				InitialState string `json:"initial_state"`
+			} `json:"definition"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &workflowResp))
+	assert.Equal(t, "NEW", workflowResp.Data.Instance.CurrentState)
+	assert.Equal(t, "NEW", workflowResp.Data.Definition.InitialState)
+}
+
+func TestWorkflowTransitionViaGenericAPI(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "wf-transitions-"+uuid.New().String()[:8], "Workflow Transitions Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
+		"title":        "Workflow Transition Test",
+		"service_type": "EMERGENCY",
+		"priority":     "HIGH",
+	})
+	require.Equal(t, http.StatusCreated, resp.Code)
+
+	var caseResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
+	caseID := caseResp.Data.ID
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions", token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var transitionsResp []map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &transitionsResp))
+	require.NotEmpty(t, transitionsResp)
+
+	transitionKeys := make([]string, 0, len(transitionsResp))
+	for _, t := range transitionsResp {
+		transitionKeys = append(transitionKeys, t["key"].(string))
+	}
+	assert.Contains(t, transitionKeys, "open")
+
+	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/open", token, map[string]interface{}{
+		"reason": "Opening case for processing",
+	})
+	require.Equal(t, http.StatusOK, resp.Code, "response body: %s", resp.Body.String())
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow", token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var workflowResp struct {
+		Data struct {
+			Instance struct {
+				CurrentState string `json:"current_state"`
+			} `json:"instance"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &workflowResp))
+	assert.Equal(t, "OPEN", workflowResp.Data.Instance.CurrentState)
+
+	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/invalid_transition", token, nil)
+	require.Equal(t, http.StatusConflict, resp.Code, "invalid transition should be rejected")
+}
+
+func TestWorkflowHistoryRecorded(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "wf-history-"+uuid.New().String()[:8], "Workflow History Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
+		"title":        "Workflow History Test",
+		"service_type": "EMERGENCY",
+		"priority":     "HIGH",
+	})
+	require.Equal(t, http.StatusCreated, resp.Code)
+
+	var caseResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
+	caseID := caseResp.Data.ID
+
+	ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/open", token, nil)
+	ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/assess", token, nil)
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/history", token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var history []map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &history))
+	assert.Len(t, history, 2, "should have 2 transition history entries")
+	assert.Equal(t, "NEW", history[0]["from_state"])
+	assert.Equal(t, "OPEN", history[0]["to_state"])
+	assert.Equal(t, "open", history[0]["transition_key"])
+	assert.Equal(t, "OPEN", history[1]["from_state"])
+	assert.Equal(t, "IN_REVIEW", history[1]["to_state"])
+	assert.Equal(t, "assess", history[1]["transition_key"])
+}
+
+func TestWorkflowTerminalStateBlocksTransitions(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "wf-terminal-"+uuid.New().String()[:8], "Workflow Terminal Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
+		"title":        "Terminal State Test",
+		"service_type": "EMERGENCY",
+		"priority":     "HIGH",
+	})
+	require.Equal(t, http.StatusCreated, resp.Code)
+
+	var caseResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &caseResp))
+	caseID := caseResp.Data.ID
+
+	transitions := []string{"open", "assess", "decide", "approve", "start_assistance", "follow_up", "complete"}
+	for _, tr := range transitions {
+		ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/"+tr, token, nil)
+	}
+
+	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/open", token, nil)
+	require.Equal(t, http.StatusConflict, resp.Code, "terminal state should block further transitions")
+}
+
+func TestWorkflowDefinitionActivation(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "wf-def-"+uuid.New().String()[:8], "Workflow Definition Org")
+	ts.registerUser(t, orgID, "admin@example.com", "Test Admin", "securepass1234")
+	token := ts.login(t, orgID, "admin@example.com", "securepass1234")
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/workflows", token, map[string]interface{}{
+		"key":           "custom_workflow",
+		"name":          "Custom Workflow",
+		"version":       1,
+		"initial_state": "START",
+		"states": []map[string]interface{}{
+			{"key": "START", "name": "Start", "terminal": false, "display_order": 0},
+			{"key": "END", "name": "End", "terminal": true, "display_order": 1},
+		},
+		"transitions": []map[string]interface{}{
+			{"key": "finish", "name": "Finish", "from_state": "START", "to_state": "END", "active": true},
+		},
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
+
+	var defResp struct {
+		Data struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &defResp))
+	defID := defResp.Data.ID
+	assert.Equal(t, "DRAFT", defResp.Data.Status)
+
+	resp = ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/workflows/"+defID+"/activate", token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/workflows/"+defID, token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var activatedResp struct {
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &activatedResp))
+	assert.Equal(t, "ACTIVE", activatedResp.Data.Status)
 }

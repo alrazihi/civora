@@ -148,7 +148,10 @@ type (
 	TerminalStateError            struct{ State string }
 	ErrWorkflowInstanceExists     struct{ CaseID uuid.UUID }
 	ErrTransitionNotFound         struct{ FromState, ToState string }
-	ErrUnauthorizedTransition     struct{ TransitionKey string; AllowedRoles []string }
+	ErrUnauthorizedTransition     struct {
+		TransitionKey string
+		AllowedRoles  []string
+	}
 )
 
 func (e ErrWorkflowInstanceNotFound) Error() string {

@@ -56,16 +56,16 @@ communicate through:
 |--------|------|-------------------|
 | **Identity** | Users, credentials, sessions, tokens, authz policies | Organizations (for tenant-scoped auth) |
 | **Organizations** | Tenants, settings, organization-level config | Identity (auth context) |
-| **Cases** | Cases, case status, case assignments | Workflow, Tasks, Documents |
-| **Workflow** | Workflow definitions, workflow instances, state machines | Cases, Tasks, Forms, Documents, Policy |
-| **Forms** | Form definitions, form submissions | Workflow (rendering in task steps) |
-| **Documents** | Uploaded files, metadata, evidence chains | Cases, Forms, Workflow, Audit |
-| **Tasks** | Tasks, task assignments, deadlines | Cases, Workflow, Notifications |
-| **Notifications** | Notification templates, delivery, channels | Tasks, Cases, Workflow |
+| **Cases** | Cases, case status, case assignments | Workflow (state machine) |
+| **Workflow** | Workflow definitions, instances, state machines, transition history | Cases, Audit |
 | **Audit** | Immutable audit log, event records | All modules (writes); external consumers (reads) |
-| **Policy** | Policy definitions, rule evaluation | Workflow (gate conditions), Tasks (assignment rules) |
-| **AI** | AI recommendation providers, prompt templates | (stubbed; activated in milestone 0.7) |
-| **Integrations** | Adapter registry, external service connectors | Identity, Documents, Notifications |
+| **Eligibility** | Eligibility assessments | Cases |
+| **Evidence** | Evidence items, document references | Cases |
+| **Assessments** | Needs assessments, recommendations | Cases |
+| **Decisions** | Human decisions, rationale | Cases, Workflow |
+| **Assistance** | Assistance actions, service delivery | Cases |
+| **Follow-ups** | Follow-up scheduling, completion | Cases |
+| **People** | Person records, contact details | Cases |
 
 ### Communication rules
 
@@ -168,6 +168,79 @@ direct writes. Examples:
 - Email/SMS providers
 - Storage backends
 - AI model providers (future)
+
+---
+
+## Workflow Engine
+
+CIVORA includes a first-class **configurable workflow engine** that allows
+organizations to define service-delivery workflows as data rather than code.
+
+### Core concepts
+
+- **Workflow Definition** — a versioned, tenant-scoped template describing
+  a service-delivery process. Contains states, transitions, and metadata.
+  Statuses: `DRAFT`, `ACTIVE`, `ARCHIVED`.
+- **Workflow State** — a named stage in a workflow definition. Has a key,
+  display order, terminal flag, and optional responsible role.
+- **Workflow Transition** — an explicit, validated move between two states.
+  Has a key, optional conditions, optional allowed roles, and an active flag.
+- **Workflow Instance** — the execution of a Workflow Definition for a specific
+  Case. Retains the definition/version it started with.
+- **Workflow Transition History** — immutable record of every transition
+  executed on a workflow instance.
+
+### Key properties
+
+1. **Workflow Instance is the source of truth for case workflow state.**
+   The Case table stores a `workflow_instance_id` foreign key. All state
+   changes go through the workflow engine.
+
+2. **Definitions are versioned.** Existing cases retain the definition/version
+   they started with. New cases use the latest active version.
+
+3. **Transition execution is centralized.** All state changes go through
+   `WorkflowService.ExecuteTransition`. No module bypasses the engine.
+
+4. **Tenant isolation is enforced.** Definitions and instances are scoped by
+   `organization_id`. Cross-tenant access is prevented at the repository and
+   service layers.
+
+5. **Authorization is data-driven.** Transitions can declare `allowed_roles`.
+   The workflow service checks the actor's role against this list.
+
+6. **Conditions are extension points only.** The current implementation
+   supports the data model for conditions but does not execute arbitrary code.
+   No eval-like functionality is permitted.
+
+7. **Audit integration is native.** Every transition creates an audit event
+   using the existing audit vocabulary (`workflow.transitioned`).
+
+8. **Concurrency is safe.** Optimistic concurrency control (version column)
+   prevents conflicting simultaneous transitions.
+
+### Emergency Assistance as the first workflow
+
+The Emergency Assistance workflow is now a seeded Workflow Definition:
+
+```
+NEW → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING
+                                             ├── APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
+                                             └── REJECTED → CLOSED
+```
+
+This means:
+
+- The Emergency Assistance flow is **configuration, not code**.
+- New workflows (e.g., Education Assistance, Health Services) can be added
+  by creating new Workflow Definitions without changing core code.
+- The frontend renders transitions dynamically from the API.
+- Audit and history are consistent across all workflows.
+
+### API
+
+The workflow engine exposes REST endpoints for managing definitions and
+executing transitions. See `api/openapi/openapi.yaml` for the full specification.
 
 ---
 
