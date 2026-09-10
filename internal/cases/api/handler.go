@@ -352,6 +352,11 @@ func serializeCase(c *domain.Case) map[string]interface{} {
 	} else {
 		result["closed_at"] = nil
 	}
+	if c.WorkflowInstanceID != nil {
+		result["workflow_instance_id"] = c.WorkflowInstanceID
+	} else {
+		result["workflow_instance_id"] = nil
+	}
 	return result
 }
 

@@ -279,14 +279,8 @@ const app = {
   async workflowTransition(transitionKey) {
     if (!this.currentCase) return;
     try {
-      const res = await api('POST', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions/${transitionKey}`), {});
-      this.currentCase.status = res.data.status || this.currentCase.status;
-      document.getElementById('case-status').textContent = this.currentCase.status;
-      document.getElementById('case-status').className = `badge ${this.currentCase.status.toLowerCase().replace('_','-')}`;
-      await this.loadWorkflow(this.currentCase.id);
-      await this.loadTimeline(this.currentCase.id);
-      this.renderActions();
-      await this.loadCaseSections(this.currentCase.id);
+      await api('POST', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions/${transitionKey}`), {});
+      await this.loadCase(this.currentCase.id);
     } catch (err) {
       alert(err.message);
     }
