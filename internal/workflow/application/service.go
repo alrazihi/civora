@@ -97,6 +97,9 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 			return fmt.Errorf("failed to save workflow definition: %w", err)
 		}
 		for i := range def.States {
+			if def.States[i].ID == uuid.Nil {
+				def.States[i].ID = uuid.New()
+			}
 			def.States[i].WorkflowDefID = def.ID
 			def.States[i].TenantID = def.TenantID
 		}
@@ -104,6 +107,9 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 			return fmt.Errorf("failed to save workflow states: %w", err)
 		}
 		for i := range def.Transitions {
+			if def.Transitions[i].ID == uuid.Nil {
+				def.Transitions[i].ID = uuid.New()
+			}
 			def.Transitions[i].WorkflowDefID = def.ID
 			def.Transitions[i].TenantID = def.TenantID
 		}
@@ -122,6 +128,9 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) error {
 	def, err := s.defRepo.FindByID(ctx, tenantID, id)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+		}
 		return fmt.Errorf("workflow definition not found: %w", err)
 	}
 	if def.Status != domain.WorkflowStatusDraft {
@@ -138,6 +147,9 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) error {
 	def, err := s.defRepo.FindByID(ctx, tenantID, id)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+		}
 		return fmt.Errorf("workflow definition not found: %w", err)
 	}
 	if def.Status != domain.WorkflowStatusActive {

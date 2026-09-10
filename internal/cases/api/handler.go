@@ -11,6 +11,7 @@ import (
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -368,6 +369,8 @@ func writeCaseError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
 	case errors.Is(err, application.ErrCaseTransition), errors.Is(err, domain.ErrInvalidStateTransition):
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "invalid state transition")
+	case errors.Is(err, workflowdomain.ErrWorkflowInstanceNotFound{}):
+		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow instance not found")
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}

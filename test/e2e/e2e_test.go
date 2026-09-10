@@ -54,6 +54,7 @@ import (
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/migrations"
+	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
@@ -61,8 +62,9 @@ import (
 )
 
 type TestServer struct {
-	srv *server.Server
-	db  *sql.DB
+	srv             *server.Server
+	db              *sql.DB
+	workflowService *application.WorkflowService
 }
 
 func SetupTestServer(t *testing.T) *TestServer {
@@ -104,6 +106,9 @@ func SetupTestServer(t *testing.T) *TestServer {
 	dsn := database.BuildDSN(cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode)
 	db, err := database.NewDatabase(dsn, cfg.Database.Driver)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		db.DB.Close()
+	})
 
 	migrator := database.NewMigrator(db.DB, migrations.FS)
 	require.NoError(t, migrator.LoadMigrations())
@@ -154,7 +159,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 		workflowInstanceRepo, workflowHistoryRepo, auditService,
 	)
 
-	seedEmergencyAssistanceWorkflow(t, db.DB, workflowService)
+	orgID := helpers.SeedOrg(db.DB)
+	seedEmergencyAssistanceWorkflow(t, db.DB, workflowService, orgID)
 
 	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowService)
 	personService := peoplapp.NewPersonService(personRepo, auditService)
@@ -195,8 +201,9 @@ func SetupTestServer(t *testing.T) *TestServer {
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 
 	return &TestServer{
-		srv: srv,
-		db:  db.DB,
+		srv:             srv,
+		db:              db.DB,
+		workflowService: workflowService,
 	}
 }
 
@@ -235,6 +242,7 @@ func (ts *TestServer) createOrg(t *testing.T, slug, name string) uuid.UUID {
 	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
 	orgID, _ := uuid.Parse(result.Data.ID)
+	seedEmergencyAssistanceWorkflow(t, ts.db, ts.workflowService, orgID)
 	return orgID
 }
 
@@ -280,13 +288,89 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.WorkflowService) uuid.UUID {
+func (ts *TestServer) createPerson(t *testing.T, orgID uuid.UUID, token, firstName, lastName, language string) string {
+	t.Helper()
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/people", token, map[string]interface{}{
+		"first_name":         firstName,
+		"last_name":          lastName,
+		"preferred_language": language,
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
+	var result struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
+	return result.Data.ID
+}
+
+func (ts *TestServer) createCase(t *testing.T, orgID uuid.UUID, token, title, description, serviceType, priority, personID string) string {
+	t.Helper()
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases", token, map[string]interface{}{
+		"title":        title,
+		"description":  description,
+		"service_type": serviceType,
+		"priority":     priority,
+		"person_id":    personID,
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
+	var result struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
+	return result.Data.ID
+}
+
+func (ts *TestServer) createAssistance(t *testing.T, orgID uuid.UUID, token, caseID, assistanceType, description, staffID string) string {
+	t.Helper()
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/assistance", token, map[string]interface{}{
+		"service_request_id": caseID,
+		"type":               assistanceType,
+		"description":        description,
+		"responsible_staff":  staffID,
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
+	var result struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
+	return result.Data.ID
+}
+
+func (ts *TestServer) createFollowUp(t *testing.T, orgID uuid.UUID, token, caseID, scheduledDate, outcome, notes string) string {
+	t.Helper()
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/follow-ups", token, map[string]interface{}{
+		"service_request_id": caseID,
+		"scheduled_date":     scheduledDate,
+		"outcome":            outcome,
+		"notes":              notes,
+	})
+	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
+	var result struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
+	return result.Data.ID
+}
+
+func (ts *TestServer) transitionCase(t *testing.T, orgID uuid.UUID, caseID, token, status string) {
+	t.Helper()
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/transitions", token, map[string]interface{}{
+		"status": status,
+	})
+	require.Equal(t, http.StatusOK, resp.Code, "response body: %s", resp.Body.String())
+}
+
+func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.WorkflowService, orgID uuid.UUID) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
-	var orgID uuid.UUID
-	err := db.QueryRowContext(ctx, "SELECT id FROM organizations LIMIT 1").Scan(&orgID)
-	require.NoError(t, err)
-
 	now := time.Now().UTC()
 	states := []workflowdomain.WorkflowState{
 		{ID: uuid.New(), TenantID: orgID, Key: "NEW", Name: "New Request", Terminal: false, DisplayOrder: 0, CreatedAt: now},
@@ -892,12 +976,14 @@ func TestWorkflowTransitionViaGenericAPI(t *testing.T) {
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions", token, nil)
 	require.Equal(t, http.StatusOK, resp.Code)
 
-	var transitionsResp []map[string]interface{}
+	var transitionsResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &transitionsResp))
-	require.NotEmpty(t, transitionsResp)
+	require.NotEmpty(t, transitionsResp.Data)
 
-	transitionKeys := make([]string, 0, len(transitionsResp))
-	for _, t := range transitionsResp {
+	transitionKeys := make([]string, 0, len(transitionsResp.Data))
+	for _, t := range transitionsResp.Data {
 		transitionKeys = append(transitionKeys, t["key"].(string))
 	}
 	assert.Contains(t, transitionKeys, "open")
@@ -952,8 +1038,11 @@ func TestWorkflowHistoryRecorded(t *testing.T) {
 	resp = ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/history", token, nil)
 	require.Equal(t, http.StatusOK, resp.Code)
 
-	var history []map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &history))
+	var historyResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &historyResp))
+	history := historyResp.Data
 	assert.Len(t, history, 2, "should have 2 transition history entries")
 	assert.Equal(t, "NEW", history[0]["from_state"])
 	assert.Equal(t, "OPEN", history[0]["to_state"])
@@ -1039,4 +1128,172 @@ func TestWorkflowDefinitionActivation(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &activatedResp))
 	assert.Equal(t, "ACTIVE", activatedResp.Data.Status)
+}
+
+func TestEvidenceByServiceRequest(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "evidence-sr-"+uuid.New().String()[:8], "Evidence SR Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	personID := ts.createPerson(t, orgID, token, "Evidence", "Person", "en")
+	caseID := ts.createCase(t, orgID, token, "Evidence SR Case", "Testing evidence by service request", "EMERGENCY", "HIGH", personID)
+
+	ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/evidence", token, map[string]interface{}{
+		"service_request_id": caseID,
+		"type":               "IDENTITY_DOCUMENT",
+		"description":        "Passport scan",
+		"storage_reference":  "s3://civora-evidence/passport-001",
+	})
+
+	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/evidence/by-service-request/"+caseID, token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var evidenceResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &evidenceResp))
+	assert.Len(t, evidenceResp.Data, 1)
+	assert.Equal(t, "IDENTITY_DOCUMENT", evidenceResp.Data[0]["type"])
+}
+
+func TestEligibilityByServiceRequest(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "eligibility-sr-"+uuid.New().String()[:8], "Eligibility SR Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	personID := ts.createPerson(t, orgID, token, "Eligibility", "Person", "en")
+	caseID := ts.createCase(t, orgID, token, "Eligibility SR Case", "Testing eligibility by service request", "GENERAL", "NORMAL", personID)
+
+	ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/eligibilities", token, map[string]interface{}{
+		"service_request_id": caseID,
+		"criteria": map[string]interface{}{
+			"income_verified":    true,
+			"residency_verified": true,
+			"household_size":     3,
+		},
+		"explanation": "All criteria verified",
+	})
+
+	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/eligibilities/by-service-request/"+caseID, token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var eligibilityResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &eligibilityResp))
+	assert.Equal(t, "REQUIRES_MORE_INFORMATION", eligibilityResp.Data["result"])
+}
+
+func TestAssistanceByServiceRequest(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "assistance-sr-"+uuid.New().String()[:8], "Assistance SR Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	personID := ts.createPerson(t, orgID, token, "Assistance", "Person", "en")
+	caseID := ts.createCase(t, orgID, token, "Assistance SR Case", "Testing assistance by service request", "SHELTER", "HIGH", personID)
+	staffID := ts.registerUser(t, orgID, "staff2@example.com", "Staff Two", "securepass1234")
+
+	assistanceID := ts.createAssistance(t, orgID, token, caseID, "SHELTER", "Emergency shelter placement", staffID.String())
+
+	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/assistance/by-service-request/"+caseID, token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var assistanceResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &assistanceResp))
+	assert.Len(t, assistanceResp.Data, 1)
+	assert.Equal(t, assistanceID, assistanceResp.Data[0]["id"])
+}
+
+func TestFollowUpByServiceRequest(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "followup-sr-"+uuid.New().String()[:8], "Follow-up SR Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	personID := ts.createPerson(t, orgID, token, "FollowUp", "Person", "en")
+	caseID := ts.createCase(t, orgID, token, "Follow-up SR Case", "Testing follow-up by service request", "GENERAL", "NORMAL", personID)
+	ts.transitionCase(t, orgID, caseID, token, "OPEN")
+	ts.transitionCase(t, orgID, caseID, token, "IN_REVIEW")
+	ts.transitionCase(t, orgID, caseID, token, "ASSESSMENT")
+	ts.transitionCase(t, orgID, caseID, token, "DECISION_PENDING")
+	ts.transitionCase(t, orgID, caseID, token, "APPROVED")
+	ts.transitionCase(t, orgID, caseID, token, "IN_PROGRESS")
+
+	followUpID := ts.createFollowUp(t, orgID, token, caseID, "2026-10-20", "Client doing well", "Weekly check-in completed")
+
+	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/follow-ups/by-service-request/"+caseID, token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var followUpResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &followUpResp))
+	assert.Len(t, followUpResp.Data, 1)
+	assert.Equal(t, followUpID, followUpResp.Data[0]["id"])
+}
+
+func TestDecisionByServiceRequest(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "decision-sr-"+uuid.New().String()[:8], "Decision SR Org")
+	ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	token := ts.login(t, orgID, "staff@example.com", "securepass1234")
+
+	personID := ts.createPerson(t, orgID, token, "Decision", "Person", "en")
+	caseID := ts.createCase(t, orgID, token, "Decision SR Case", "Testing decision by service request", "GENERAL", "NORMAL", personID)
+	ts.transitionCase(t, orgID, caseID, token, "OPEN")
+	ts.transitionCase(t, orgID, caseID, token, "IN_REVIEW")
+	ts.transitionCase(t, orgID, caseID, token, "ASSESSMENT")
+	ts.transitionCase(t, orgID, caseID, token, "DECISION_PENDING")
+
+	ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/decisions", token, map[string]interface{}{
+		"service_request_id": caseID,
+		"decision":           "APPROVED",
+		"reason":             "Meets all criteria",
+	})
+
+	resp := ts.makeRequest(t, "GET", "/api/v1/organizations/"+orgID.String()+"/decisions/by-service-request/"+caseID, token, nil)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var decisionResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &decisionResp))
+	require.NotNil(t, decisionResp.Data)
+	assert.Equal(t, "APPROVED", decisionResp.Data["decision"])
+}
+
+func TestCaseAssignmentWorkflow(t *testing.T) {
+	ts := SetupTestServer(t)
+
+	orgID := ts.createOrg(t, "case-assign-"+uuid.New().String()[:8], "Case Assign Org")
+	staffID := ts.registerUser(t, orgID, "staff@example.com", "Test Staff", "securepass1234")
+	_ = ts.registerUser(t, orgID, "admin@example.com", "Test Admin", "securepass1234")
+	adminToken := ts.login(t, orgID, "admin@example.com", "securepass1234")
+
+	personID := ts.createPerson(t, orgID, adminToken, "Assign", "Person", "en")
+	caseID := ts.createCase(t, orgID, adminToken, "Assignment Case", "Testing case assignment", "GENERAL", "NORMAL", personID)
+
+	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/assign", adminToken, map[string]interface{}{
+		"user_id": staffID.String(),
+	})
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var assignResp struct {
+		Data struct {
+			AssignedTo *string `json:"assigned_to"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &assignResp))
+	require.NotNil(t, assignResp.Data.AssignedTo)
+	assert.Equal(t, staffID.String(), *assignResp.Data.AssignedTo)
 }

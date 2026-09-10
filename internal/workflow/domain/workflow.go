@@ -45,7 +45,7 @@ type WorkflowState struct {
 	Description     string
 	Category        string
 	Terminal        bool
-	DisplayOrder    int
+	DisplayOrder    int `json:"display_order"`
 	ResponsibleRole string
 	CreatedAt       time.Time
 }
@@ -57,8 +57,8 @@ type WorkflowTransition struct {
 	TenantID      uuid.UUID
 	Key           string
 	Name          string
-	FromState     string
-	ToState       string
+	FromState     string `json:"from_state"`
+	ToState       string `json:"to_state"`
 	Description   string
 	Conditions    []TransitionCondition
 	AllowedRoles  []string
@@ -158,28 +158,63 @@ func (e ErrWorkflowInstanceNotFound) Error() string {
 	return "workflow instance not found: " + e.InstanceID.String()
 }
 
+func (e ErrWorkflowInstanceNotFound) Is(target error) bool {
+	_, ok := target.(ErrWorkflowInstanceNotFound)
+	return ok
+}
+
 func (e ErrWorkflowDefinitionNotFound) Error() string {
 	return "workflow definition not found: " + e.DefID.String()
+}
+
+func (e ErrWorkflowDefinitionNotFound) Is(target error) bool {
+	_, ok := target.(ErrWorkflowDefinitionNotFound)
+	return ok
 }
 
 func (e ErrTenantViolation) Error() string {
 	return "tenant violation: resource belongs to a different organization"
 }
 
+func (e ErrTenantViolation) Is(target error) bool {
+	_, ok := target.(ErrTenantViolation)
+	return ok
+}
+
 func (e TerminalStateError) Error() string {
 	return "cannot transition from terminal state: " + e.State
+}
+
+func (e TerminalStateError) Is(target error) bool {
+	_, ok := target.(TerminalStateError)
+	return ok
 }
 
 func (e ErrWorkflowInstanceExists) Error() string {
 	return "workflow instance already exists for case: " + e.CaseID.String()
 }
 
+func (e ErrWorkflowInstanceExists) Is(target error) bool {
+	_, ok := target.(ErrWorkflowInstanceExists)
+	return ok
+}
+
 func (e ErrTransitionNotFound) Error() string {
 	return "no valid transition from " + e.FromState + " to " + e.ToState
 }
 
+func (e ErrTransitionNotFound) Is(target error) bool {
+	_, ok := target.(ErrTransitionNotFound)
+	return ok
+}
+
 func (e ErrUnauthorizedTransition) Error() string {
 	return "unauthorized for transition " + e.TransitionKey + ": required roles " + fmt.Sprintf("%v", e.AllowedRoles)
+}
+
+func (e ErrUnauthorizedTransition) Is(target error) bool {
+	_, ok := target.(ErrUnauthorizedTransition)
+	return ok
 }
 
 // ValidateWorkflowDefinition validates a workflow definition for internal consistency.
