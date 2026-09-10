@@ -134,6 +134,9 @@ func (c *Case) RegenerateCaseNumber() {
 	c.CaseNumber = GenerateCaseNumber(time.Now().UTC())
 }
 
+// transitionRules is a legacy fallback for cases that do not have an
+// associated workflow instance. The authoritative transition mechanism
+// is the configurable workflow engine. Do not add new logic here.
 var transitionRules = map[CaseStatus][]CaseStatus{
 	CaseStatusNew:             {CaseStatusOpen, CaseStatusInReview},
 	CaseStatusOpen:            {CaseStatusInReview},
