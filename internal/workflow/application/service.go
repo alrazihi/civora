@@ -8,6 +8,7 @@ import (
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
+	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/google/uuid"
@@ -48,6 +49,7 @@ func NewWorkflowService(
 // CreateWorkflowDefinitionParams holds parameters for creating a workflow definition.
 type CreateWorkflowDefinitionParams struct {
 	TenantID     uuid.UUID
+	ActorID      uuid.UUID
 	Key          string
 	Name         string
 	Description  string
@@ -116,6 +118,26 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 		if err := s.transitionRepo.SaveBatchTx(ctx, tx, def.Transitions); err != nil {
 			return fmt.Errorf("failed to save workflow transitions: %w", err)
 		}
+
+		if s.auditor != nil {
+			defIDStr := def.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: def.TenantID,
+				ActorID:        &params.ActorID,
+				Action:         "workflow.definition_created",
+				Resource:       "workflow_definition",
+				ResourceID:     &defIDStr,
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key":     def.Key,
+					"version": def.Version,
+					"status":  string(def.Status),
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -125,7 +147,7 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 }
 
 // ActivateWorkflowDefinition activates a draft workflow definition.
-func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) error {
+func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
 	def, err := s.defRepo.FindByID(ctx, tenantID, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -140,11 +162,34 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 	def.Status = domain.WorkflowStatusActive
 	def.UpdatedAt = time.Now().UTC()
 
-	return s.defRepo.UpdateStatus(ctx, tenantID, id, domain.WorkflowStatusActive, def.Version)
+	if err := s.defRepo.UpdateStatus(ctx, tenantID, id, domain.WorkflowStatusActive, def.Version); err != nil {
+		return fmt.Errorf("failed to activate workflow definition: %w", err)
+	}
+
+	defer func() {
+		if s.auditor != nil {
+			defIDStr := def.ID.String()
+			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+				OrganizationID: tenantID,
+				ActorID:        &actorID,
+				Action:         "workflow.definition_activated",
+				Resource:       "workflow_definition",
+				ResourceID:     &defIDStr,
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key":     def.Key,
+					"version": def.Version,
+				},
+			})
+		}
+	}()
+
+	return nil
 }
 
 // ArchiveWorkflowDefinition archives an active workflow definition.
-func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) error {
+func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
 	def, err := s.defRepo.FindByID(ctx, tenantID, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -159,7 +204,30 @@ func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantI
 	def.Status = domain.WorkflowStatusArchived
 	def.UpdatedAt = time.Now().UTC()
 
-	return s.defRepo.UpdateStatus(ctx, tenantID, id, domain.WorkflowStatusArchived, def.Version)
+	if err := s.defRepo.UpdateStatus(ctx, tenantID, id, domain.WorkflowStatusArchived, def.Version); err != nil {
+		return fmt.Errorf("failed to archive workflow definition: %w", err)
+	}
+
+	defer func() {
+		if s.auditor != nil {
+			defIDStr := def.ID.String()
+			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+				OrganizationID: tenantID,
+				ActorID:        &actorID,
+				Action:         "workflow.definition_archived",
+				Resource:       "workflow_definition",
+				ResourceID:     &defIDStr,
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key":     def.Key,
+					"version": def.Version,
+				},
+			})
+		}
+	}()
+
+	return nil
 }
 
 // GetWorkflowDefinition retrieves a workflow definition with its states and transitions.
@@ -222,7 +290,7 @@ func (s *WorkflowService) FindLatestActiveByKey(ctx context.Context, tenantID uu
 }
 
 // CreateInstanceForCase creates a workflow instance for a case.
-func (s *WorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string) (*domain.WorkflowInstance, error) {
+func (s *WorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
 	def, err := s.FindLatestActiveByKey(ctx, tenantID, workflowDefKey)
 	if err != nil {
 		return nil, fmt.Errorf("workflow definition not found for key %s: %w", workflowDefKey, err)
@@ -244,6 +312,27 @@ func (s *WorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, c
 	if err := s.instanceRepo.Save(ctx, instance); err != nil {
 		return nil, fmt.Errorf("failed to create workflow instance: %w", err)
 	}
+
+	defer func() {
+		if s.auditor != nil {
+			instanceIDStr := instance.ID.String()
+			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+				OrganizationID: tenantID,
+				ActorID:        &actorID,
+				Action:         "workflow.instance_created",
+				Resource:       "workflow_instance",
+				ResourceID:     &instanceIDStr,
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"workflow_definition_id":      def.ID.String(),
+					"workflow_definition_version": def.Version,
+					"case_id":                     caseID.String(),
+					"initial_state":               def.InitialState,
+				},
+			})
+		}
+	}()
 
 	instance.Definition = def
 	return instance, nil
@@ -347,10 +436,11 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 	auditParams := auditdomain.RecordEventParams{
 		OrganizationID: params.TenantID,
 		ActorID:        &params.ActorID,
-		Action:         "case.transition",
+		Action:         "workflow.transition",
 		Resource:       "workflow_instance",
 		ResourceID:     shared.StrPtr(instance.ID.String()),
 		Outcome:        "success",
+		RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 		Metadata: map[string]interface{}{
 			"workflow_instance_id": instance.ID.String(),
 			"transition":           transition.Key,

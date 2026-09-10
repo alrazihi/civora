@@ -402,6 +402,7 @@ func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.
 
 	def, err := svc.CreateWorkflowDefinition(ctx, application.CreateWorkflowDefinitionParams{
 		TenantID:     orgID,
+		ActorID:      uuid.Nil,
 		Key:          "emergency_assistance",
 		Name:         "Emergency Assistance",
 		Description:  "Emergency assistance request workflow",
@@ -413,7 +414,7 @@ func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.
 	})
 	require.NoError(t, err)
 
-	err = svc.ActivateWorkflowDefinition(ctx, orgID, def.ID)
+	err = svc.ActivateWorkflowDefinition(ctx, orgID, def.ID, uuid.Nil)
 	require.NoError(t, err)
 
 	return def.ID
@@ -905,7 +906,7 @@ func TestAuditTrailForServiceRequest(t *testing.T) {
 
 	assert.True(t, actions["person.created"], "audit should contain person.created")
 	assert.True(t, actions["case.created"], "audit should contain case.created")
-	assert.True(t, actions["case.transition"], "audit should contain case.transition")
+	assert.True(t, actions["workflow.transition"], "audit should contain workflow.transition")
 	assert.True(t, actions["decision.made"], "audit should contain decision.made")
 }
 

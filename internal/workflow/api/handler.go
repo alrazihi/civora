@@ -17,20 +17,21 @@ import (
 )
 
 type Handler struct {
-	svc *application.WorkflowService
+	svc WorkflowService
 }
 
-func NewHandler(svc *application.WorkflowService) *Handler {
+func NewHandler(svc WorkflowService) *Handler {
 	return &Handler{svc: svc}
 }
 
 type WorkflowService interface {
 	CreateWorkflowDefinition(ctx context.Context, params application.CreateWorkflowDefinitionParams) (*domain.WorkflowDefinition, error)
-	ActivateWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) error
-	ArchiveWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) error
+	ActivateWorkflowDefinition(ctx context.Context, tenantID, id, actorID uuid.UUID) error
+	ArchiveWorkflowDefinition(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	GetWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error)
 	ListWorkflowDefinitions(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error)
-	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string) (*domain.WorkflowInstance, error)
+	FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error)
+	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error)
 	ExecuteTransition(ctx context.Context, params application.ExecuteTransitionParams) (*domain.WorkflowInstance, error)
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params application.ExecuteTransitionParams) (*domain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error)
@@ -43,10 +44,14 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
 		r.Get("/", h.ListWorkflowDefinitions)
-		r.Post("/", h.CreateWorkflowDefinition)
 		r.Get("/{workflowId}", h.GetWorkflowDefinition)
-		r.Post("/{workflowId}/activate", h.ActivateWorkflowDefinition)
-		r.Post("/{workflowId}/archive", h.ArchiveWorkflowDefinition)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin"))
+			r.Post("/", h.CreateWorkflowDefinition)
+			r.Post("/{workflowId}/activate", h.ActivateWorkflowDefinition)
+			r.Post("/{workflowId}/archive", h.ArchiveWorkflowDefinition)
+		})
 	})
 
 	r.Route("/api/v1/organizations/{orgId}/cases/{caseId}/workflow", func(r chi.Router) {
@@ -85,8 +90,15 @@ func (h *Handler) CreateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 		req.Version = 1
 	}
 
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
 	def, err := h.svc.CreateWorkflowDefinition(r.Context(), application.CreateWorkflowDefinitionParams{
 		TenantID:     orgID,
+		ActorID:      actorID,
 		Key:          req.Key,
 		Name:         req.Name,
 		Description:  req.Description,
@@ -170,7 +182,9 @@ func (h *Handler) ActivateWorkflowDefinition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.svc.ActivateWorkflowDefinition(r.Context(), orgID, workflowID); err != nil {
+	actorID := getUserID(r)
+
+	if err := h.svc.ActivateWorkflowDefinition(r.Context(), orgID, workflowID, actorID); err != nil {
 		writeWorkflowError(w, err)
 		return
 	}
@@ -190,7 +204,9 @@ func (h *Handler) ArchiveWorkflowDefinition(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.svc.ArchiveWorkflowDefinition(r.Context(), orgID, workflowID); err != nil {
+	actorID := getUserID(r)
+
+	if err := h.svc.ArchiveWorkflowDefinition(r.Context(), orgID, workflowID, actorID); err != nil {
 		writeWorkflowError(w, err)
 		return
 	}

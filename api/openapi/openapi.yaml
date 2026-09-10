@@ -267,6 +267,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        workflow_instance_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Linked workflow instance ID for generic workflow-driven state transitions
 
     CreateCaseRequest:
       type: object
@@ -911,6 +916,9 @@ components:
           format: uuid
         current_state:
           type: string
+        version:
+          type: integer
+          description: Optimistic concurrency version; incremented on each transition
         started_at:
           type: string
           format: date-time
@@ -925,6 +933,12 @@ components:
     WorkflowTransition:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
         key:
           type: string
         name:
@@ -933,8 +947,21 @@ components:
           type: string
         to_state:
           type: string
+        conditions:
+          type: array
+          items:
+            type: object
+          nullable: true
+        allowed_roles:
+          type: array
+          items:
+            type: string
+          nullable: true
         active:
           type: boolean
+        created_at:
+          type: string
+          format: date-time
 
     WorkflowTransitionHistory:
       type: object
@@ -1799,6 +1826,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /organizations/{orgId}/cases/{caseId}/workflow/transitions/{transitionKey}:
     post:
       operationId: executeCaseWorkflowTransition
       tags: [Workflows]

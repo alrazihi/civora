@@ -30,7 +30,7 @@ var (
 
 // WorkflowTransitionExecutor abstracts the workflow engine for the case service.
 type WorkflowTransitionExecutor interface {
-	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string) (*workflowdomain.WorkflowInstance, error)
+	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
@@ -138,15 +138,15 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 
 	if s.workflowSvc != nil {
 		workflowKey := "emergency_assistance"
-		instance, err := s.workflowSvc.CreateInstanceForCase(ctx, c.OrganizationID, c.ID, workflowKey)
-		if err == nil {
-			instanceID := instance.ID
-			c.WorkflowInstanceID = &instanceID
-			if err := s.repo.UpdateWorkflowInstanceID(ctx, c.OrganizationID, c.ID, instanceID); err != nil {
-				return nil, fmt.Errorf("failed to link workflow instance: %w", err)
-			}
+		instance, err := s.workflowSvc.CreateInstanceForCase(ctx, c.OrganizationID, c.ID, workflowKey, c.CreatedByID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create workflow instance for case: %w", err)
 		}
-		_ = intmid.RequestIDFromContext
+		instanceID := instance.ID
+		c.WorkflowInstanceID = &instanceID
+		if err := s.repo.UpdateWorkflowInstanceID(ctx, c.OrganizationID, c.ID, instanceID); err != nil {
+			return nil, fmt.Errorf("failed to link workflow instance: %w", err)
+		}
 	}
 
 	return result, nil
@@ -157,6 +157,7 @@ type ChangeCaseStatusParams struct {
 	CaseID         uuid.UUID
 	Status         domain.CaseStatus
 	ActorID        uuid.UUID
+	ActorRole      string
 }
 
 func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusParams) (*domain.Case, error) {
@@ -242,6 +243,7 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 			InstanceID:    instance.ID,
 			TransitionKey: targetTransition.Key,
 			ActorID:       params.ActorID,
+			ActorRole:     params.ActorRole,
 			Reason:        "",
 		})
 		if err != nil {
@@ -250,24 +252,6 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 
 		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, params.CaseID, newCaseStatus, c.Version); err != nil {
 			return fmt.Errorf("failed to update case status: %w", err)
-		}
-
-		if s.auditor != nil {
-			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
-				OrganizationID: c.OrganizationID,
-				ActorID:        &params.ActorID,
-				Action:         "case.transition",
-				Resource:       "case",
-				ResourceID:     shared.StrPtr(c.ID.String()),
-				Outcome:        "success",
-				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
-				Metadata: map[string]interface{}{
-					"from": string(c.Status),
-					"to":   string(newCaseStatus),
-				},
-			}); err != nil {
-				return fmt.Errorf("failed to record audit event: %w", err)
-			}
 		}
 
 		result = c

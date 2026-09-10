@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"sync"
 	"testing"
+	"time"
 
 	assistanceapp "github.com/alrazihi/civora/internal/assistance/application"
 	assistancedomain "github.com/alrazihi/civora/internal/assistance/domain"
@@ -26,6 +27,9 @@ import (
 	orgdomain "github.com/alrazihi/civora/internal/organizations/domain"
 	orgpostgres "github.com/alrazihi/civora/internal/organizations/infrastructure/postgres"
 	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
+	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -236,4 +240,111 @@ func setupConcurrencyOrg(ctx context.Context, db *sql.DB, t *testing.T) (*orgdom
 		Description: "",
 		Slug:        "conc-org-" + uuid.NewString()[:8],
 	})
+}
+
+func seedWorkflowDefinitionForConcurrency(ctx context.Context, db *sql.DB, t *testing.T, orgID uuid.UUID, caseID uuid.UUID) (*workflowapp.WorkflowService, uuid.UUID, *workflowdomain.WorkflowInstance) {
+	t.Helper()
+	defRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db)
+	stateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db)
+	transitionRepo := workflowpostgres.NewPostgresWorkflowTransitionRepository(db)
+	instanceRepo := workflowpostgres.NewPostgresWorkflowInstanceRepository(db)
+	historyRepo := workflowpostgres.NewPostgresWorkflowTransitionHistoryRepository(db)
+	auditRepo := auditpostgres.NewPostgresAuditRepository(db)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
+
+	workflowSvc := workflowapp.NewWorkflowService(defRepo, stateRepo, transitionRepo, instanceRepo, historyRepo, auditService)
+
+	now := time.Now().UTC()
+	states := []workflowdomain.WorkflowState{
+		{ID: uuid.New(), TenantID: orgID, Key: "NEW", Name: "New Request", Terminal: false, DisplayOrder: 0, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "OPEN", Name: "Open", Terminal: false, DisplayOrder: 1, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "CLOSED", Name: "Closed", Terminal: true, DisplayOrder: 2, CreatedAt: now},
+	}
+
+	transitions := []workflowdomain.WorkflowTransition{
+		{ID: uuid.New(), TenantID: orgID, Key: "open", Name: "Open", FromState: "NEW", ToState: "OPEN", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "close", Name: "Close", FromState: "OPEN", ToState: "CLOSED", Active: true, CreatedAt: now},
+	}
+
+	def, err := workflowSvc.CreateWorkflowDefinition(ctx, workflowapp.CreateWorkflowDefinitionParams{
+		TenantID:     orgID,
+		ActorID:      uuid.Nil,
+		Key:          "concurrent_test",
+		Name:         "Concurrent Test",
+		Description:  "Workflow for concurrency testing",
+		Version:      1,
+		InitialState: "NEW",
+		States:       states,
+		Transitions:  transitions,
+		Metadata:     map[string]interface{}{},
+	})
+	require.NoError(t, err)
+
+	err = workflowSvc.ActivateWorkflowDefinition(ctx, orgID, def.ID, uuid.Nil)
+	require.NoError(t, err)
+
+	instance, err := workflowSvc.CreateInstanceForCase(ctx, orgID, caseID, def.Key, uuid.Nil)
+	require.NoError(t, err)
+
+	return workflowSvc, orgID, instance
+}
+
+func TestConcurrentWorkflowInstanceTransitions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping concurrency test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+	ctx := context.Background()
+
+	org, err := setupConcurrencyOrg(ctx, db, t)
+	require.NoError(t, err)
+
+	actorID := helpers.SeedUser(db, org.ID)
+
+	caseID := uuid.New()
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, created_by, assigned_to, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
+		caseID, org.ID, "CONC-WF-001", "Concurrency Workflow Case", "", "NEW", "GENERAL", "NORMAL", actorID, nil,
+	)
+	require.NoError(t, err)
+
+	workflowSvc, _, instance := seedWorkflowDefinitionForConcurrency(ctx, db, t, org.ID, caseID)
+
+	var successCount int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+		_, err := workflowSvc.ExecuteTransition(ctx, workflowapp.ExecuteTransitionParams{
+			TenantID:      org.ID,
+			InstanceID:    instance.ID,
+			TransitionKey: "open",
+			ActorID:       actorID,
+			ActorRole:     "",
+			Reason:        "",
+		})
+			if err != nil {
+				t.Logf("ExecuteTransition error: %v", err)
+			}
+			mu.Lock()
+			if err == nil {
+				successCount++
+			}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+
+	assert.Equal(t, 1, successCount,
+		"exactly one concurrent workflow transition should succeed; got %d", successCount)
+
+	updated, err := workflowSvc.GetInstanceByCaseID(ctx, org.ID, instance.CaseID)
+	require.NoError(t, err)
+	assert.Equal(t, "OPEN", updated.CurrentState)
 }

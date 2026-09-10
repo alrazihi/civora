@@ -72,6 +72,7 @@ func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowServ
 
 	def, err := workflowSvc.CreateWorkflowDefinition(context.Background(), workflowapp.CreateWorkflowDefinitionParams{
 		TenantID:     orgID,
+		ActorID:      uuid.Nil,
 		Key:          "emergency_assistance",
 		Name:         "Emergency Assistance",
 		Description:  "Emergency assistance request workflow",
@@ -83,7 +84,7 @@ func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowServ
 	})
 	require.NoError(t, err)
 
-	err = workflowSvc.ActivateWorkflowDefinition(context.Background(), orgID, def.ID)
+	err = workflowSvc.ActivateWorkflowDefinition(context.Background(), orgID, def.ID, uuid.Nil)
 	require.NoError(t, err)
 
 	return workflowSvc, orgID
@@ -299,15 +300,8 @@ func TestCaseTenantIsolation(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, caseSvc, db, _ := setupAppServices(t)
+	orgSvc, caseSvc, db, workflowOrgID := setupAppServices(t)
 	ctx := context.Background()
-
-	org1, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
-		Name:        "Org One",
-		Description: "",
-		Slug:        "iso-org-1-" + uuid.NewString()[:8],
-	})
-	require.NoError(t, err)
 
 	org2, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
 		Name:        "Org Two",
@@ -316,10 +310,10 @@ func TestCaseTenantIsolation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	actorID := helpers.SeedUser(db, org1.ID)
+	actorID := helpers.SeedUser(db, workflowOrgID)
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
-		OrganizationID: org1.ID,
-		Title:          "Case in Org 1",
+		OrganizationID: workflowOrgID,
+		Title:          "Case in workflow org",
 		Description:    "Description",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
@@ -362,7 +356,7 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition')", workflowOrgID).Scan(&count)
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit.audit_events WHERE organization_id = $1 AND action IN ('case.created', 'case.transition', 'workflow.transition')", workflowOrgID).Scan(&count)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, 2, "should have at least 2 audit events")
 

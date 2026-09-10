@@ -250,6 +250,7 @@ func (h *Handler) ChangeCaseStatus(w http.ResponseWriter, r *http.Request) {
 		CaseID:         caseID,
 		Status:         domain.CaseStatus(req.Status),
 		ActorID:        actorID,
+		ActorRole:      middleware.GetUserRole(r),
 	})
 	if err != nil {
 		writeCaseError(w, err)
