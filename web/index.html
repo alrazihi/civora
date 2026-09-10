@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CIVORA - Emergency Assistance</title>
+  <title>CIVORA - Service Delivery</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <div class="auth-form">
       <div class="card">
         <h1 style="text-align:center;margin-bottom:16px">CIVORA</h1>
-        <p style="text-align:center;color:var(--text-muted);margin-bottom:20px">Emergency Assistance Request</p>
+        <p style="text-align:center;color:var(--text-muted);margin-bottom:20px">Public Service Delivery</p>
         <form id="login-form" onsubmit="app.login(event)">
           <label>Organization Slug</label>
           <input id="login-org" required placeholder="e.g. emergency-response">
@@ -44,7 +44,7 @@
       <div class="header">
         <div>
           <h1>Cases</h1>
-          <p style="color:var(--text-muted)">Emergency Assistance Requests</p>
+          <p style="color:var(--text-muted)">Service Requests</p>
         </div>
         <nav>
           <button class="btn" onclick="router.navigate('new-case')">New Request</button>
@@ -66,6 +66,7 @@
         <div>
           <h1 id="case-title"></h1>
           <p style="color:var(--text-muted)"><span id="case-number"></span> · <span id="case-status" class="badge"></span> · <span id="case-service"></span> · Priority: <span id="case-priority"></span></p>
+          <p id="workflow-label" class="hidden" style="color:var(--text-muted);font-size:0.9rem;margin-top:4px"></p>
         </div>
         <nav>
           <button class="btn secondary" onclick="router.navigate('dashboard')">Dashboard</button>
@@ -118,7 +119,7 @@
   <div id="view-new-case" class="hidden">
     <div class="container">
       <div class="header">
-        <h1>New Assistance Request</h1>
+        <h1>New Service Request</h1>
         <nav><button class="btn secondary" onclick="router.navigate('dashboard')">Back</button></nav>
       </div>
       <div class="card">

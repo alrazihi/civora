@@ -124,8 +124,22 @@ const app = {
     try {
       const res = await api('GET', this.orgPath(`/cases/${caseId}/workflow`));
       this.currentWorkflow = res.data;
+      if (this.currentWorkflow && this.currentWorkflow.instance) {
+        const inst = this.currentWorkflow.instance;
+        const def = this.currentWorkflow.definition;
+        const wfLabel = document.getElementById('workflow-label');
+        if (wfLabel) {
+          const parts = [];
+          if (def && def.name) parts.push(def.name);
+          if (inst && inst.current_state) parts.push(`State: ${inst.current_state}`);
+          wfLabel.textContent = parts.join(' · ') || 'Workflow';
+          wfLabel.classList.remove('hidden');
+        }
+      }
     } catch (err) {
       this.currentWorkflow = null;
+      const wfLabel = document.getElementById('workflow-label');
+      if (wfLabel) wfLabel.classList.add('hidden');
     }
   },
 
