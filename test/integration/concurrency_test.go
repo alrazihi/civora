@@ -320,14 +320,14 @@ func TestConcurrentWorkflowInstanceTransitions(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-		_, err := workflowSvc.ExecuteTransition(ctx, workflowapp.ExecuteTransitionParams{
-			TenantID:      org.ID,
-			InstanceID:    instance.ID,
-			TransitionKey: "open",
-			ActorID:       actorID,
-			ActorRole:     "",
-			Reason:        "",
-		})
+			_, err := workflowSvc.ExecuteTransition(ctx, workflowapp.ExecuteTransitionParams{
+				TenantID:      org.ID,
+				InstanceID:    instance.ID,
+				TransitionKey: "open",
+				ActorID:       actorID,
+				ActorRole:     "",
+				Reason:        "",
+			})
 			if err != nil {
 				t.Logf("ExecuteTransition error: %v", err)
 			}
