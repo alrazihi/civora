@@ -51,7 +51,13 @@ var (
 	ErrCaseInvalidInput       = errors.New("invalid case input")
 	ErrCaseNumberConflict     = errors.New("case number conflict")
 	ErrCaseTenantViolation    = errors.New("person does not belong to organization")
+	ErrCaseStatusContradiction = errors.New("case status contradicts workflow state")
 )
+
+// ErrCaseStatusContradiction is returned when a Case's status field and its
+// linked WorkflowInstance.CurrentState disagree. The workflow current state
+// is authoritative for lifecycle state; the Case.Status field is a denormalized
+// mirror that must always match.
 
 type Case struct {
 	ID                 uuid.UUID   `json:"id"`
@@ -125,6 +131,57 @@ func (c *Case) TransitionTo(status CaseStatus) error {
 	return nil
 }
 
+// ValidateConsistency verifies that the Case status matches the linked
+// workflow instance's current state. When no workflow instance is linked,
+// the check is skipped (the legacy transition rules apply).
+//
+// The authoritative lifecycle state is the workflow current state. The
+// Case.Status field is a denormalized mirror that must always agree.
+// This function returns ErrCaseStatusContradiction when they disagree.
+func (c *Case) ValidateConsistency(workflowState string) error {
+	if c.WorkflowInstanceID == nil {
+		return nil
+	}
+	if workflowState == "" {
+		return nil
+	}
+	if string(c.Status) != workflowState {
+		return fmt.Errorf("%w: case status %s does not match workflow state %s",
+			ErrCaseStatusContradiction, c.Status, workflowState)
+	}
+	return nil
+}
+
+// StatusFromWorkflowState returns the CaseStatus derived from a workflow
+// state key. This is the single place where workflow state keys are mapped
+// to case status values, ensuring consistency across the domain.
+func StatusFromWorkflowState(state string) (CaseStatus, error) {
+	switch state {
+	case string(CaseStatusNew):
+		return CaseStatusNew, nil
+	case string(CaseStatusOpen):
+		return CaseStatusOpen, nil
+	case string(CaseStatusInReview):
+		return CaseStatusInReview, nil
+	case string(CaseStatusAssessment):
+		return CaseStatusAssessment, nil
+	case string(CaseStatusDecisionPending):
+		return CaseStatusDecisionPending, nil
+	case string(CaseStatusApproved):
+		return CaseStatusApproved, nil
+	case string(CaseStatusRejected):
+		return CaseStatusRejected, nil
+	case string(CaseStatusInProgress):
+		return CaseStatusInProgress, nil
+	case string(CaseStatusFollowUp):
+		return CaseStatusFollowUp, nil
+	case string(CaseStatusClosed):
+		return CaseStatusClosed, nil
+	default:
+		return "", fmt.Errorf("unknown workflow state: %s", state)
+	}
+}
+
 func (c *Case) AssignTo(userID uuid.UUID) {
 	c.AssignedToID = &userID
 	c.UpdatedAt = time.Now().UTC()
@@ -132,6 +189,24 @@ func (c *Case) AssignTo(userID uuid.UUID) {
 
 func (c *Case) RegenerateCaseNumber() {
 	c.CaseNumber = GenerateCaseNumber(time.Now().UTC())
+}
+
+// SyncStatusFromWorkflow updates the Case status to match the given workflow
+// state. This is called after a workflow transition to keep the denormalized
+// status field in sync with the authoritative workflow state.
+// Returns ErrCaseStatusContradiction if the workflow state is unknown.
+func (c *Case) SyncStatusFromWorkflow(state string) error {
+	status, err := StatusFromWorkflowState(state)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCaseStatusContradiction, err)
+	}
+	c.Status = status
+	c.UpdatedAt = time.Now().UTC()
+	if status == CaseStatusClosed {
+		closedAt := time.Now().UTC()
+		c.ClosedAt = &closedAt
+	}
+	return nil
 }
 
 // transitionRules is a legacy fallback for cases that do not have an

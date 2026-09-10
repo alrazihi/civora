@@ -173,7 +173,7 @@ func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx,
 func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
 	query := `
 		UPDATE cases
-		SET status = $1, version = version + 1, updated_at = now()
+		SET status = $1, version = version + 1, updated_at = now(), closed_at = CASE WHEN $1 = 'CLOSED' THEN now() ELSE closed_at END
 		WHERE organization_id = $2 AND id = $3 AND version = $4
 	`
 	result, err := e.ExecContext(ctx, query, status, orgID, id, version)

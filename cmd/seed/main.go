@@ -111,11 +111,20 @@ func main() {
 		log.Fatalf("failed to create person: %v", err)
 	}
 
-	caseID := uuid.New()
+	// CASE A — ACTIVE (at IN_REVIEW)
+	caseAID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`,
-		caseID, orgID, "CAS-20260909-DEMO001", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID)
+		caseAID, orgID, "CAS-20260909-DEMO-ACT", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "IN_REVIEW", "EMERGENCY", "URGENT", &personID, adminID)
 	if err != nil {
-		log.Fatalf("failed to create case: %v", err)
+		log.Fatalf("failed to create case A: %v", err)
+	}
+
+	// CASE B — COMPLETED (full lifecycle)
+	caseBID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at, closed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW(),NOW())`,
+		caseBID, orgID, "CAS-20260909-DEMO-CMP", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID)
+	if err != nil {
+		log.Fatalf("failed to create case B: %v", err)
 	}
 
 	workflowDefID := uuid.New()
@@ -164,20 +173,36 @@ func main() {
 		}
 	}
 
-	instanceID := uuid.New()
+	// CASE A — ACTIVE (at IN_REVIEW) with available actions
+	instanceAID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		instanceID, orgID, workflowDefID, 1, caseID, "CLOSED", now, now, `{}`, 1)
+		instanceAID, orgID, workflowDefID, 1, caseAID, "IN_REVIEW", now, nil, `{}`, 1)
 	if err != nil {
-		log.Fatalf("failed to create workflow instance: %v", err)
+		log.Fatalf("failed to create workflow instance A: %v", err)
+	}
+	_, err = db.DB.ExecContext(ctx, `UPDATE cases SET workflow_instance_id = $1 WHERE id = $2`, instanceAID, caseAID)
+	if err != nil {
+		log.Fatalf("failed to link workflow instance A to case: %v", err)
 	}
 
-	_, err = db.DB.ExecContext(ctx, `UPDATE cases SET workflow_instance_id = $1 WHERE id = $2`, instanceID, caseID)
+	// CASE A — ACTIVE (at IN_REVIEW): no final decision yet
+	// No eligibility/evidence/assessment for case A to demonstrate the
+	// actual worker experience at IN_REVIEW.
+
+	// CASE B — COMPLETED (full lifecycle)
+	instanceBID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		instanceBID, orgID, workflowDefID, 1, caseBID, "CLOSED", now, now, `{}`, 1)
 	if err != nil {
-		log.Fatalf("failed to link workflow instance to case: %v", err)
+		log.Fatalf("failed to create workflow instance B: %v", err)
+	}
+	_, err = db.DB.ExecContext(ctx, `UPDATE cases SET workflow_instance_id = $1 WHERE id = $2`, instanceBID, caseBID)
+	if err != nil {
+		log.Fatalf("failed to link workflow instance B to case: %v", err)
 	}
 
-	historyInsert := `INSERT INTO workflow_transition_history (id, organization_id, workflow_instance_id, case_id, from_state, to_state, transition_key, actor_id, occurred_at, reason, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
-	historyEntries := []struct {
+	historyBInsert := `INSERT INTO workflow_transition_history (id, organization_id, workflow_instance_id, case_id, from_state, to_state, transition_key, actor_id, occurred_at, reason, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
+	historyBEntries := []struct {
 		id            uuid.UUID
 		from, to, key string
 		actor         *uuid.UUID
@@ -191,56 +216,56 @@ func main() {
 		{uuid.New(), "IN_PROGRESS", "FOLLOW_UP", "follow_up", &staffID},
 		{uuid.New(), "FOLLOW_UP", "CLOSED", "complete", &adminID},
 	}
-	for _, h := range historyEntries {
-		_, err = db.DB.ExecContext(ctx, historyInsert, h.id, orgID, instanceID, caseID, h.from, h.to, h.key, h.actor, now, "", `{}`)
+	for _, h := range historyBEntries {
+		_, err = db.DB.ExecContext(ctx, historyBInsert, h.id, orgID, instanceBID, caseBID, h.from, h.to, h.key, h.actor, now, "", `{}`)
 		if err != nil {
-			log.Fatalf("failed to create workflow transition history: %v", err)
+			log.Fatalf("failed to create workflow transition history B: %v", err)
 		}
 	}
 
 	eligibilityID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO eligibilities (id, organization_id, service_request_id, criteria, result, explanation, assessed_by, assessed_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
-		eligibilityID, orgID, caseID, `{"displaced":true,"verified":true}`, "ELIGIBLE", "All criteria verified with documentation", adminID)
+		eligibilityID, orgID, caseBID, `{"displaced":true,"verified":true}`, "ELIGIBLE", "All criteria verified with documentation", adminID)
 	if err != nil {
 		log.Fatalf("failed to create eligibility: %v", err)
 	}
 
 	evidenceIDs := []uuid.UUID{uuid.New(), uuid.New()}
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO evidence (id, organization_id, service_request_id, type, description, storage_reference, uploaded_by, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
-		evidenceIDs[0], orgID, caseID, "IDENTITY_DOCUMENT", "Government-issued ID for household head", "s3://civora-evidence/demo-id-001", adminID)
+		evidenceIDs[0], orgID, caseBID, "IDENTITY_DOCUMENT", "Government-issued ID for household head", "s3://civora-evidence/demo-id-001", adminID)
 	if err != nil {
 		log.Fatalf("failed to create evidence: %v", err)
 	}
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO evidence (id, organization_id, service_request_id, type, description, storage_reference, uploaded_by, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
-		evidenceIDs[1], orgID, caseID, "PROOF_OF_RESIDENCE", "Utility bill showing damaged residence", "s3://civora-evidence/demo-res-001", adminID)
+		evidenceIDs[1], orgID, caseBID, "PROOF_OF_RESIDENCE", "Utility bill showing damaged residence", "s3://civora-evidence/demo-res-001", adminID)
 	if err != nil {
 		log.Fatalf("failed to create evidence: %v", err)
 	}
 
 	assessmentID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO assessments (id, organization_id, service_request_id, findings, needs_identified, recommendation, assessor, assessed_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
-		assessmentID, orgID, caseID, "Household of 4 displaced by flood. Verified identity and residence documents. Income below threshold.", "Emergency food, temporary shelter, clothing", "Approve emergency shelter placement and food package", staffID)
+		assessmentID, orgID, caseBID, "Household of 4 displaced by flood. Verified identity and residence documents. Income below threshold.", "Emergency food, temporary shelter, clothing", "Approve emergency shelter placement and food package", staffID)
 	if err != nil {
 		log.Fatalf("failed to create assessment: %v", err)
 	}
 
 	decisionID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO decisions (id, organization_id, service_request_id, decision, reason, decision_maker, decided_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
-		decisionID, orgID, caseID, "APPROVED", "Meets all eligibility criteria. Assessment supports immediate shelter and food assistance.", adminID)
+		decisionID, orgID, caseBID, "APPROVED", "Meets all eligibility criteria. Assessment supports immediate shelter and food assistance.", adminID)
 	if err != nil {
 		log.Fatalf("failed to create decision: %v", err)
 	}
 
 	assistanceID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO assistance (id, organization_id, service_request_id, type, description, status, responsible_staff, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
-		assistanceID, orgID, caseID, "SHELTER", "Emergency shelter placement at City Shelter Center for 30 days", "COMPLETED", staffID)
+		assistanceID, orgID, caseBID, "SHELTER", "Emergency shelter placement at City Shelter Center for 30 days", "COMPLETED", staffID)
 	if err != nil {
 		log.Fatalf("failed to create assistance: %v", err)
 	}
 
 	followUpID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO follow_ups (id, organization_id, service_request_id, scheduled_date, outcome, notes, performed_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
-		followUpID, orgID, caseID, "2026-10-15", "Family stably housed and receiving ongoing support", "Weekly check-ins scheduled with case manager", staffID)
+		followUpID, orgID, caseBID, "2026-10-15", "Family stably housed and receiving ongoing support", "Weekly check-ins scheduled with case manager", staffID)
 	if err != nil {
 		log.Fatalf("failed to create follow-up: %v", err)
 	}
@@ -249,6 +274,7 @@ func main() {
 	fmt.Printf("Organization: %s (slug: %s)\n", orgID, slug)
 	fmt.Printf("Admin: admin@demo.org / demopass1234 (id: %s)\n", adminID)
 	fmt.Printf("Staff: staff@demo.org / demopass1234 (id: %s)\n", staffID)
-	fmt.Printf("Case ID: %s\n", caseID)
+	fmt.Printf("Case A (ACTIVE): %s\n", caseAID)
+	fmt.Printf("Case B (COMPLETED): %s\n", caseBID)
 	fmt.Println("Use these credentials to log in at http://localhost:8080")
 }

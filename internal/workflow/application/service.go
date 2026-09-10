@@ -18,6 +18,13 @@ type sqlExecer interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
+// CaseStatusSyncer is called after a workflow transition to keep the
+// associated case status in sync with the new workflow state. The workflow
+// engine remains generic; this hook is provided by the case layer.
+type CaseStatusSyncer interface {
+	SyncCaseStatus(ctx context.Context, tenantID, caseID uuid.UUID, stateKey string) error
+}
+
 // WorkflowService manages workflow definitions, instances, and transitions.
 type WorkflowService struct {
 	defRepo        domain.WorkflowDefinitionRepository
@@ -26,6 +33,7 @@ type WorkflowService struct {
 	instanceRepo   domain.WorkflowInstanceRepository
 	historyRepo    domain.WorkflowTransitionHistoryRepository
 	auditor        auditdomain.EventRecorder
+	caseStatusSyncer CaseStatusSyncer
 }
 
 func NewWorkflowService(
@@ -44,6 +52,12 @@ func NewWorkflowService(
 		historyRepo:    historyRepo,
 		auditor:        auditor,
 	}
+}
+
+// SetCaseStatusSyncer registers an optional hook that is invoked after every
+// successful workflow transition to keep the related case status in sync.
+func (s *WorkflowService) SetCaseStatusSyncer(syncer CaseStatusSyncer) {
+	s.caseStatusSyncer = syncer
 }
 
 // CreateWorkflowDefinitionParams holds parameters for creating a workflow definition.
@@ -490,6 +504,12 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 			return nil
 		}); err != nil {
 			return nil, err
+		}
+
+		if s.caseStatusSyncer != nil {
+			if err := s.caseStatusSyncer.SyncCaseStatus(ctx, params.TenantID, instance.CaseID, transition.ToState); err != nil {
+				return nil, err
+			}
 		}
 	}
 

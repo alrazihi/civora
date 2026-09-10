@@ -80,13 +80,19 @@
       </div>
 
       <div class="card">
-        <h2>Workflow Progress</h2>
-        <div id="timeline" class="timeline"></div>
-      </div>
-
-      <div class="card">
-        <h2>Actions</h2>
-        <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <h2>Workflow</h2>
+        <div id="workflow-current-state" style="margin-bottom:16px;">
+          <span class="badge" id="workflow-state-badge" style="font-size:1rem;padding:6px 12px;"></span>
+          <span id="workflow-state-name" style="margin-left:8px;color:var(--text-muted);"></span>
+        </div>
+        <div id="workflow-actions" style="margin-bottom:16px;">
+          <h3 style="margin:0 0 8px 0;font-size:0.95rem;">Available Actions</h3>
+          <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px 0;font-size:0.95rem;">Workflow Timeline</h3>
+          <div id="timeline" class="timeline"></div>
+        </div>
       </div>
 
       <div class="card">

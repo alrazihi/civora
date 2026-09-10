@@ -62,7 +62,7 @@ func NewCaseService(
 	if len(workflowSvc) > 0 {
 		wf = workflowSvc[0]
 	}
-	return &CaseService{
+	svc := &CaseService{
 		repo:         repo,
 		personFinder: personFinder,
 		userChecker:  userChecker,
@@ -70,6 +70,10 @@ func NewCaseService(
 		auditRepo:    auditRepo,
 		workflowSvc:  wf,
 	}
+	if ws, ok := wf.(*workflowapp.WorkflowService); ok {
+		ws.SetCaseStatusSyncer(svc)
+	}
+	return svc
 }
 
 type CreateCaseParams struct {
@@ -144,8 +148,23 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 		}
 		instanceID := instance.ID
 		c.WorkflowInstanceID = &instanceID
-		if err := s.repo.UpdateWorkflowInstanceID(ctx, c.OrganizationID, c.ID, instanceID); err != nil {
-			return nil, fmt.Errorf("failed to link workflow instance: %w", err)
+		// Sync case status to the workflow initial state so the denormalized
+		// status field always reflects the authoritative workflow state.
+		if err := c.SyncStatusFromWorkflow(instance.CurrentState); err != nil {
+			return nil, fmt.Errorf("failed to sync case status from workflow: %w", err)
+		}
+		// Persist the workflow instance link and synced status atomically.
+		if err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+			if err := s.repo.UpdateWorkflowInstanceIDTx(ctx, tx, c.OrganizationID, c.ID, instanceID); err != nil {
+				return fmt.Errorf("failed to link workflow instance: %w", err)
+			}
+			if err := s.repo.UpdateStatusTx(ctx, tx, c.OrganizationID, c.ID, c.Status, c.Version); err != nil {
+				return fmt.Errorf("failed to update case status: %w", err)
+			}
+			c.Version++
+			return nil
+		}); err != nil {
+			return nil, err
 		}
 	}
 
@@ -388,4 +407,32 @@ func (s *CaseService) GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UU
 	}
 
 	return timeline, nil
+}
+
+// GetWorkflowService returns the underlying workflow service for testing
+// and advanced use cases.
+func (s *CaseService) GetWorkflowService() WorkflowTransitionExecutor {
+	return s.workflowSvc
+}
+
+// GetWorkflowInstance returns the workflow instance associated with a case.
+func (s *CaseService) GetWorkflowInstance(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	if s.workflowSvc == nil {
+		return nil, ErrWorkflowNotAvailable
+	}
+	return s.workflowSvc.GetInstanceByCaseID(ctx, tenantID, caseID)
+}
+
+// SyncCaseStatus updates the case status to match the given workflow state.
+// It implements workflowapp.CaseStatusSyncer so the workflow engine can keep
+// the denormalized case status in sync after each transition.
+func (s *CaseService) SyncCaseStatus(ctx context.Context, tenantID, caseID uuid.UUID, stateKey string) error {
+	c, err := s.repo.FindByID(ctx, tenantID, caseID)
+	if err != nil {
+		return err
+	}
+	if err := c.SyncStatusFromWorkflow(stateKey); err != nil {
+		return err
+	}
+	return s.repo.UpdateStatus(ctx, tenantID, caseID, c.Status, c.Version)
 }

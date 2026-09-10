@@ -127,19 +127,24 @@ const app = {
       if (this.currentWorkflow && this.currentWorkflow.instance) {
         const inst = this.currentWorkflow.instance;
         const def = this.currentWorkflow.definition;
-        const wfLabel = document.getElementById('workflow-label');
-        if (wfLabel) {
-          const parts = [];
-          if (def && def.name) parts.push(def.name);
-          if (inst && inst.current_state) parts.push(`State: ${inst.current_state}`);
-          wfLabel.textContent = parts.join(' · ') || 'Workflow';
-          wfLabel.classList.remove('hidden');
+
+        // Display current state
+        const stateBadge = document.getElementById('workflow-state-badge');
+        const stateName = document.getElementById('workflow-state-name');
+        if (stateBadge && inst.current_state) {
+          stateBadge.textContent = inst.current_state;
+          stateBadge.className = `badge ${inst.current_state.toLowerCase().replace('_','-')}`;
+          stateBadge.style.display = 'inline-block';
+        }
+        if (stateName && def) {
+          const stateDef = def.states ? def.states.find(s => s.key === inst.current_state) : null;
+          stateName.textContent = stateDef ? stateDef.name : '';
         }
       }
     } catch (err) {
       this.currentWorkflow = null;
-      const wfLabel = document.getElementById('workflow-label');
-      if (wfLabel) wfLabel.classList.add('hidden');
+      const stateBadge = document.getElementById('workflow-state-badge');
+      if (stateBadge) stateBadge.style.display = 'none';
     }
   },
 
@@ -234,7 +239,19 @@ const app = {
       for (const t of transitions) {
         html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
       }
-      if (!html) html = '<p class="empty">No actions available</p>';
+      if (!html) {
+        const state = this.currentWorkflow?.instance?.current_state;
+        if (state) {
+          const isTerminal = this.currentWorkflow?.definition?.states?.find(s => s.key === state)?.terminal;
+          if (isTerminal) {
+            html = '<p class="empty">This case is in a terminal state and no further actions are available.</p>';
+          } else {
+            html = '<p class="empty">No actions available from the current state. The workflow may require conditions to be met.</p>';
+          }
+        } else {
+          html = '<p class="empty">No actions available</p>';
+        }
+      }
       container.innerHTML = html;
     });
   },
@@ -243,11 +260,7 @@ const app = {
     const container = document.getElementById('timeline');
     if (!container) return;
     try {
-      const [caseRes, workflowRes] = await Promise.all([
-        api('GET', this.orgPath(`/cases/${id}/timeline`)),
-        api('GET', this.orgPath(`/cases/${id}/workflow/history`)).catch(() => ({ data: [] })),
-      ]);
-      const caseEvents = caseRes.data || [];
+      const workflowRes = await api('GET', this.orgPath(`/cases/${id}/workflow/history`)).catch(() => ({ data: [] }));
       const workflowEvents = (workflowRes.data || []).map(ev => ({
         ...ev,
         action: ev.transition_key ? `workflow.transition` : ev.action,
@@ -259,28 +272,16 @@ const app = {
         },
         timestamp: ev.occurred_at,
       }));
-      const events = [...caseEvents, ...workflowEvents].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const events = workflowEvents.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       if (!events.length) {
-        container.innerHTML = '<p class="empty">No timeline events yet</p>';
+        container.innerHTML = '<p class="empty">No workflow history yet</p>';
         return;
       }
-      const decisionEvents = events.filter(e => e.action === 'decision.made');
-      const approved = decisionEvents.find(e => {
-        const d = (e.metadata && e.metadata.decision) || '';
-        return d === 'APPROVED';
-      });
-      const rejected = decisionEvents.find(e => {
-        const d = (e.metadata && e.metadata.decision) || '';
-        return d === 'REJECTED';
-      });
       container.innerHTML = events.map(ev => {
         let label = ev.action;
         if (ev.metadata) {
-          if (ev.metadata.decision) label += ` (${ev.metadata.decision})`;
           if (ev.metadata.to) label += ` → ${ev.metadata.to}`;
           if (ev.metadata.from) label += ` from ${ev.metadata.from}`;
-          if (ev.metadata.assistance_type) label += ` (${ev.metadata.assistance_type})`;
-          if (ev.metadata.action && ev.resource === 'assistance') label += ` (${ev.metadata.action})`;
         }
         const time = new Date(ev.timestamp).toLocaleString();
         return `<div class="timeline-item"><div class="timeline-title">${label}</div><div class="timeline-meta">${time}</div></div>`;
