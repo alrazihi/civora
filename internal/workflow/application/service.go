@@ -64,6 +64,7 @@ type ExecuteTransitionParams struct {
 	InstanceID    uuid.UUID
 	TransitionKey string
 	ActorID       uuid.UUID
+	ActorRole     string
 	Reason        string
 }
 
@@ -298,6 +299,19 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 		return nil, domain.ErrTransitionNotFound{FromState: instance.CurrentState, ToState: ""}
 	}
 
+	if len(transition.AllowedRoles) > 0 && params.ActorRole != "" {
+		allowed := false
+		for _, role := range transition.AllowedRoles {
+			if role == params.ActorRole {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return nil, domain.ErrUnauthorizedTransition{TransitionKey: transition.Key, AllowedRoles: transition.AllowedRoles}
+		}
+	}
+
 	targetState, exists := statesMap[transition.ToState]
 	if !exists {
 		return nil, fmt.Errorf("transition targets unknown state: %s", transition.ToState)
@@ -430,4 +444,13 @@ func (s *WorkflowService) GetValidTransitions(ctx context.Context, tenantID, ins
 		}
 	}
 	return valid, nil
+}
+
+// GetWorkflowHistoryByCaseID returns workflow transition history for a case.
+func (s *WorkflowService) GetWorkflowHistoryByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) ([]domain.WorkflowTransitionHistory, error) {
+	histories, err := s.historyRepo.FindByCaseID(ctx, tenantID, caseID, 100, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load workflow history: %w", err)
+	}
+	return histories, nil
 }

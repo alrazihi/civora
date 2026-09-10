@@ -113,6 +113,77 @@ Once the follow-up is complete and all obligations are satisfied, the case is mo
 
 Every state transition, evidence addition, assessment, decision, assistance action, and follow-up is recorded in an immutable, hash-chained audit log. The audit trail can be reviewed at any time to verify who did what, when, and why.
 
+## Configurable Workflow Engine
+
+CIVORA includes a **configurable workflow engine** that allows organizations to define service-delivery workflows without modifying core code.
+
+### Workflow Definitions
+
+A **Workflow Definition** describes how a service-delivery process operates. It is a versioned, tenant-scoped configuration that includes:
+
+- **States** — the stages a case can be in (e.g., `NEW`, `OPEN`, `IN_REVIEW`, `APPROVED`, `CLOSED`)
+- **Transitions** — explicit, validated moves between states (e.g., `OPEN` → `IN_REVIEW`)
+- **Branching** — support for decision points like `DECISION_PENDING` → `APPROVED` or `REJECTED`
+- **Terminal states** — states that cannot transition further (e.g., `CLOSED`)
+- **Authorization metadata** — optional role requirements per transition
+
+### Workflow Instances
+
+A **Workflow Instance** is the execution of a Workflow Definition for a specific Case. The instance retains the definition/version it started with, so existing cases are never affected by definition changes.
+
+### Emergency Assistance as a Workflow
+
+The existing Emergency Assistance workflow is now represented as a real Workflow Definition:
+
+```
+REQUESTED → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING
+                                                    ├── APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
+                                                    └── REJECTED → CLOSED
+```
+
+This means:
+
+- The Emergency Assistance flow is **configuration, not code**.
+- New workflows (e.g., Education Assistance, Health Services) can be added by creating new Workflow Definitions.
+- The core case engine remains unchanged.
+
+### API
+
+The workflow engine exposes REST endpoints for:
+
+- `GET /api/v1/organizations/{orgId}/workflows` — list definitions
+- `POST /api/v1/organizations/{orgId}/workflows` — create definition
+- `GET /api/v1/organizations/{orgId}/workflows/{id}` — get definition
+- `POST /api/v1/organizations/{orgId}/workflows/{id}/activate` — activate definition
+- `POST /api/v1/organizations/{orgId}/workflows/{id}/archive` — archive definition
+- `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow` — get case workflow instance
+- `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow/transitions` — list valid transitions
+- `POST /api/v1/organizations/{orgId}/cases/{caseId}/workflow/transitions/{key}` — execute transition
+- `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow/history` — get transition history
+
+### Frontend
+
+The frontend consumes the generic workflow API to:
+
+- Display the current workflow state
+- Show only valid available transitions
+- Execute transitions through the backend
+- Refresh workflow state after transitions
+- Display transition history
+
+The backend remains the sole authority for workflow state and transition validation.
+
+### Versioning
+
+Workflow Definitions are versioned. When a new version is created, existing cases continue using the version they started with. Only new cases use the latest active version.
+
+### Security
+
+- All workflow operations require authentication.
+- Transitions can optionally require specific roles (`AllowedRoles`).
+- Tenant isolation is enforced at the data and service layers.
+- Invalid transitions are rejected server-side with appropriate error codes.
+
 ## Documentation
 
 | Topic | Location |

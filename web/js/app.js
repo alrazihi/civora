@@ -1,5 +1,6 @@
 const app = {
   currentCase: null,
+  currentWorkflow: null,
 
   orgPath(path) {
     return `/organizations/${orgId}${path}`;
@@ -110,11 +111,21 @@ const app = {
       document.getElementById('case-priority').textContent = res.data.priority;
       document.getElementById('case-desc').textContent = res.data.description || 'No description';
 
+      await this.loadWorkflow(id);
       await this.loadCaseSections(id);
       await this.loadTimeline(id);
-      this.renderActions(res.data.status);
+      this.renderActions();
     } catch (err) {
       alert(err.message);
+    }
+  },
+
+  async loadWorkflow(caseId) {
+    try {
+      const res = await api('GET', this.orgPath(`/cases/${caseId}/workflow`));
+      this.currentWorkflow = res.data;
+    } catch (err) {
+      this.currentWorkflow = null;
     }
   },
 
@@ -192,50 +203,49 @@ const app = {
     return `<button class="btn" onclick="app.${onclick}">${label}</button>`;
   },
 
-  renderActions(status) {
+  async loadWorkflowTransitions(caseId) {
+    try {
+      const res = await api('GET', this.orgPath(`/cases/${caseId}/workflow/transitions`));
+      return res.data || [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  renderActions() {
     const container = document.getElementById('case-actions');
-    if (!container) return;
-    let html = '';
-    if (status === 'NEW') html += this.btn('Open Case', `transition('OPEN')`);
-    if (status === 'OPEN') html += this.btn('Start Review', `transition('IN_REVIEW')`);
-    if (status === 'IN_REVIEW') {
-      html += this.btn('Move to Assessment', `transition('ASSESSMENT')`);
-      html += `<button class="btn secondary" onclick="app.showEligibilityForm()">Add Eligibility</button>`;
-      html += `<button class="btn secondary" onclick="app.showEvidenceForm()">Add Evidence</button>`;
-    }
-    if (status === 'ASSESSMENT') {
-      html += this.btn('Request Decision', `transition('DECISION_PENDING')`);
-      html += `<button class="btn secondary" onclick="app.showAssessmentForm()">Add Assessment</button>`;
-    }
-    if (status === 'DECISION_PENDING') {
-      html += this.btn('Approve Case', `transition('APPROVED')`);
-      html += this.btn('Reject Case', `transition('REJECTED')`);
-      html += `<button class="btn secondary" onclick="app.showDecisionForm()">Record Decision</button>`;
-    }
-    if (status === 'APPROVED') {
-      html += this.btn('Start Assistance', `transition('IN_PROGRESS')`);
-    }
-    if (status === 'REJECTED') {
-      html += this.btn('Close Case', `transition('CLOSED')`);
-    }
-    if (status === 'IN_PROGRESS') {
-      html += this.btn('Schedule Follow-up', `transition('FOLLOW_UP')`);
-      html += `<button class="btn secondary" onclick="app.showAssistanceForm()">Add Assistance</button>`;
-    }
-    if (status === 'FOLLOW_UP') {
-      html += this.btn('Close Case', `transition('CLOSED')`);
-      html += `<button class="btn secondary" onclick="app.showFollowUpForm()">Add Follow-up</button>`;
-    }
-    if (!html) html = '<p class="empty">No actions available</p>';
-    container.innerHTML = html;
+    if (!container || !this.currentCase) return;
+    this.loadWorkflowTransitions(this.currentCase.id).then(transitions => {
+      let html = '';
+      for (const t of transitions) {
+        html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
+      }
+      if (!html) html = '<p class="empty">No actions available</p>';
+      container.innerHTML = html;
+    });
   },
 
   async loadTimeline(id) {
     const container = document.getElementById('timeline');
     if (!container) return;
     try {
-      const res = await api('GET', this.orgPath(`/cases/${id}/timeline`));
-      const events = res.data || [];
+      const [caseRes, workflowRes] = await Promise.all([
+        api('GET', this.orgPath(`/cases/${id}/timeline`)),
+        api('GET', this.orgPath(`/cases/${id}/workflow/history`)).catch(() => ({ data: [] })),
+      ]);
+      const caseEvents = caseRes.data || [];
+      const workflowEvents = (workflowRes.data || []).map(ev => ({
+        ...ev,
+        action: ev.transition_key ? `workflow.transition` : ev.action,
+        metadata: {
+          ...ev.metadata,
+          from: ev.from_state,
+          to: ev.to_state,
+          transition: ev.transition_key,
+        },
+        timestamp: ev.occurred_at,
+      }));
+      const events = [...caseEvents, ...workflowEvents].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       if (!events.length) {
         container.innerHTML = '<p class="empty">No timeline events yet</p>';
         return;
@@ -266,20 +276,17 @@ const app = {
     }
   },
 
-  btn(label, onclick) {
-    return `<button class="btn" onclick="app.${onclick}">${label}</button>`;
-  },
-
-  async transition(status) {
+  async workflowTransition(transitionKey) {
     if (!this.currentCase) return;
     try {
-      const res = await api('POST', this.orgPath(`/cases/${this.currentCase.id}/transitions`), { status });
-      this.currentCase = res.data;
-      document.getElementById('case-status').textContent = res.data.status;
-      document.getElementById('case-status').className = `badge ${res.data.status.toLowerCase().replace('_','-')}`;
-      await this.loadTimeline(res.data.id);
-      this.renderActions(res.data.status);
-      await this.loadCaseSections(res.data.id);
+      const res = await api('POST', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions/${transitionKey}`), {});
+      this.currentCase.status = res.data.status || this.currentCase.status;
+      document.getElementById('case-status').textContent = this.currentCase.status;
+      document.getElementById('case-status').className = `badge ${this.currentCase.status.toLowerCase().replace('_','-')}`;
+      await this.loadWorkflow(this.currentCase.id);
+      await this.loadTimeline(this.currentCase.id);
+      this.renderActions();
+      await this.loadCaseSections(this.currentCase.id);
     } catch (err) {
       alert(err.message);
     }
@@ -318,7 +325,7 @@ const app = {
       });
       this.hideModal('eligibility-modal');
       await this.loadCaseSections(this.currentCase.id);
-      this.renderActions(this.currentCase.status);
+      this.renderActions();
     } catch (err) { alert(err.message); }
   },
 
@@ -333,7 +340,7 @@ const app = {
       });
       this.hideModal('evidence-modal');
       await this.loadCaseSections(this.currentCase.id);
-      this.renderActions(this.currentCase.status);
+      this.renderActions();
     } catch (err) { alert(err.message); }
   },
 
@@ -348,7 +355,7 @@ const app = {
       });
       this.hideModal('assessment-modal');
       await this.loadCaseSections(this.currentCase.id);
-      this.renderActions(this.currentCase.status);
+      this.renderActions();
     } catch (err) { alert(err.message); }
   },
 
@@ -362,7 +369,7 @@ const app = {
       });
       this.hideModal('decision-modal');
       await this.loadCaseSections(this.currentCase.id);
-      this.renderActions(this.currentCase.status);
+      this.renderActions();
     } catch (err) { alert(err.message); }
   },
 
@@ -377,7 +384,7 @@ const app = {
       });
       this.hideModal('assistance-modal');
       await this.loadCaseSections(this.currentCase.id);
-      this.renderActions(this.currentCase.status);
+      this.renderActions();
     } catch (err) { alert(err.message); }
   },
 
@@ -392,7 +399,7 @@ const app = {
       });
       this.hideModal('followup-modal');
       await this.loadCaseSections(this.currentCase.id);
-      this.renderActions(this.currentCase.status);
+      this.renderActions();
     } catch (err) { alert(err.message); }
   },
 

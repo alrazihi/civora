@@ -96,9 +96,16 @@ The conceptual domain model distinguishes between **entities**,
 - **Case** — a container for a service-delivery process. Belongs to
   one organization.
 - **Workflow Definition** — the template/blueprint for a workflow.
-  Belongs to one organization.
+   Belongs to one organization. Versioned. Contains states, transitions,
+   and metadata.
+- **Workflow State** — a named stage in a workflow definition. Has a key,
+   display order, terminal flag, and optional responsible role.
+- **Workflow Transition** — an explicit, validated move between two states.
+   Has a key, optional conditions, and optional allowed roles.
 - **Workflow Instance** — a running execution of a Workflow Definition.
-  Associated with a Case.
+   Associated with a Case. Retains the definition/version it started with.
+- **Workflow Transition History** — an immutable record of every transition
+   executed on a workflow instance.
 - **Task** — a unit of work within a Workflow Instance. Has assignments,
   deadlines, and status.
 - **Form Definition** — a schema for collecting structured data.
@@ -124,6 +131,8 @@ in the audit log via synchronous calls from each module (no event bus).
 Audit event types include:
 
 - `case.created`, `case.status_changed`, `case.closed`, `case.assigned`
+- `workflow.definition.created`, `workflow.definition.activated`, `workflow.definition.archived`
+- `workflow.instance.created`, `workflow.transitioned`, `workflow.completed`
 - `user.created`, `auth.success`, `auth.failed`
 - `organization.created`
 - (Future) additional event types as features are implemented

@@ -59,6 +59,8 @@ tags:
     description: Follow-up scheduling and completion
   - name: Audit
     description: Immutable audit event log
+  - name: Workflows
+    description: Configurable workflow definitions, instances, and transitions
   - name: System
     description: Health and readiness checks
 
@@ -801,6 +803,201 @@ components:
           type: string
           example: ready
 
+    WorkflowDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        initial_state:
+          type: string
+        states:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              key:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+                nullable: true
+              category:
+                type: string
+                nullable: true
+              terminal:
+                type: boolean
+              display_order:
+                type: integer
+              responsible_role:
+                type: string
+                nullable: true
+        transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              key:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+                nullable: true
+              from_state:
+                type: string
+              to_state:
+                type: string
+              conditions:
+                type: array
+                items:
+                  type: object
+                nullable: true
+              allowed_roles:
+                type: array
+                items:
+                  type: string
+                nullable: true
+              active:
+                type: boolean
+        metadata:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WorkflowInstance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        workflow_definition_id:
+          type: string
+          format: uuid
+        workflow_definition_version:
+          type: integer
+        case_id:
+          type: string
+          format: uuid
+        current_state:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+
+    WorkflowTransition:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        from_state:
+          type: string
+        to_state:
+          type: string
+        active:
+          type: boolean
+
+    WorkflowTransitionHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflow_instance_id:
+          type: string
+          format: uuid
+        case_id:
+          type: string
+          format: uuid
+        from_state:
+          type: string
+        to_state:
+          type: string
+        transition_key:
+          type: string
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+        occurred_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+
+    CreateWorkflowDefinitionRequest:
+      type: object
+      required: [key, name, version, initial_state, states, transitions]
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+        initial_state:
+          type: string
+        states:
+          type: array
+          items:
+            type: object
+          minItems: 1
+        transitions:
+          type: array
+          items:
+            type: object
+          minItems: 0
+        metadata:
+          type: object
+          nullable: true
+
   responses:
     BadRequest:
       description: Bad request
@@ -1340,6 +1537,361 @@ paths:
                 $ref: '#/components/schemas/Case'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/workflows:
+    get:
+      operationId: listOrgWorkflows
+      tags: [Workflows]
+      summary: List workflow definitions
+      description: Lists workflow definitions for the organization. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of workflow definitions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowDefinition'
+                  meta:
+                    type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createOrgWorkflow
+      tags: [Workflows]
+      summary: Create workflow definition
+      description: Creates a new draft workflow definition. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowDefinitionRequest'
+      responses:
+        '201':
+          description: Workflow definition created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/workflows/{workflowId}:
+    get:
+      operationId: getOrgWorkflow
+      tags: [Workflows]
+      summary: Get workflow definition
+      description: Retrieves a workflow definition with states and transitions. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDefinition'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/workflows/{workflowId}/activate:
+    post:
+      operationId: activateOrgWorkflow
+      tags: [Workflows]
+      summary: Activate workflow definition
+      description: Activates a draft workflow definition so it can be instantiated. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow definition activated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: activated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/workflows/{workflowId}/archive:
+    post:
+      operationId: archiveOrgWorkflow
+      tags: [Workflows]
+      summary: Archive workflow definition
+      description: Archives an active workflow definition. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow definition archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: archived
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/cases/{caseId}/workflow:
+    get:
+      operationId: getCaseWorkflow
+      tags: [Workflows]
+      summary: Get case workflow instance
+      description: Retrieves the workflow instance and definition for a case. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow instance and definition
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  instance:
+                    $ref: '#/components/schemas/WorkflowInstance'
+                  definition:
+                    $ref: '#/components/schemas/WorkflowDefinition'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/cases/{caseId}/workflow/transitions:
+    get:
+      operationId: getCaseWorkflowTransitions
+      tags: [Workflows]
+      summary: List valid workflow transitions
+      description: Lists valid transitions from the current workflow state. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of valid transitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowTransition'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: executeCaseWorkflowTransition
+      tags: [Workflows]
+      summary: Execute workflow transition
+      description: Executes a workflow transition by key. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: transitionKey
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Transition executed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  case_id:
+                    type: string
+                    format: uuid
+                  transition:
+                    type: string
+                  status:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid state transition or terminal state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /organizations/{orgId}/cases/{caseId}/workflow/history:
+    get:
+      operationId: getCaseWorkflowHistory
+      tags: [Workflows]
+      summary: Get workflow transition history
+      description: Retrieves the transition history for a case workflow instance. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of workflow transition history events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowTransitionHistory'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

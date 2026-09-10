@@ -35,6 +35,7 @@ type WorkflowService interface {
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params application.ExecuteTransitionParams) (*domain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error)
 	GetValidTransitions(ctx context.Context, tenantID, instanceID uuid.UUID) ([]domain.WorkflowTransition, error)
+	GetWorkflowHistoryByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) ([]domain.WorkflowTransitionHistory, error)
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
@@ -54,6 +55,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Get("/", h.GetCaseWorkflow)
 		r.Get("/transitions", h.GetValidTransitions)
 		r.Post("/transitions/{transitionKey}", h.ExecuteTransition)
+		r.Get("/history", h.GetWorkflowHistory)
 	})
 }
 
@@ -287,6 +289,7 @@ func (h *Handler) ExecuteTransition(w http.ResponseWriter, r *http.Request) {
 		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
 		return
 	}
+	actorRole := middleware.GetUserRole(r)
 
 	var req struct {
 		Reason string `json:"reason"`
@@ -304,6 +307,7 @@ func (h *Handler) ExecuteTransition(w http.ResponseWriter, r *http.Request) {
 		InstanceID:    instance.ID,
 		TransitionKey: transitionKey,
 		ActorID:       actorID,
+		ActorRole:     actorRole,
 		Reason:        req.Reason,
 	})
 	if err != nil {
@@ -316,6 +320,42 @@ func (h *Handler) ExecuteTransition(w http.ResponseWriter, r *http.Request) {
 		"transition": transitionKey,
 		"status":     "success",
 	}, nil)
+}
+
+func (h *Handler) GetWorkflowHistory(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	histories, err := h.svc.GetWorkflowHistoryByCaseID(r.Context(), orgID, caseID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+
+	result := make([]map[string]interface{}, len(histories))
+	for i, h := range histories {
+		result[i] = map[string]interface{}{
+			"id":                 h.ID,
+			"workflow_instance_id": h.WorkflowInstanceID,
+			"case_id":            h.CaseID,
+			"from_state":         h.FromState,
+			"to_state":           h.ToState,
+			"transition_key":     h.TransitionKey,
+			"actor_id":           h.ActorID,
+			"occurred_at":        h.OccurredAt,
+			"reason":             h.Reason,
+			"metadata":           h.Metadata,
+		}
+	}
+	shared.WriteSuccess(w, http.StatusOK, result, nil)
 }
 
 func parseUUID(r *http.Request, name string) (uuid.UUID, bool) {
@@ -410,6 +450,8 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, err.Error())
 	case errors.Is(err, domain.ErrTransitionNotFound{}):
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, err.Error())
+	case errors.Is(err, domain.ErrUnauthorizedTransition{}):
+		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, err.Error())
 	case errors.Is(err, domain.ErrWorkflowInstanceExists{}):
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, err.Error())
 	default:

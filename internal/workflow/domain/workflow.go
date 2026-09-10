@@ -148,6 +148,7 @@ type (
 	TerminalStateError            struct{ State string }
 	ErrWorkflowInstanceExists     struct{ CaseID uuid.UUID }
 	ErrTransitionNotFound         struct{ FromState, ToState string }
+	ErrUnauthorizedTransition     struct{ TransitionKey string; AllowedRoles []string }
 )
 
 func (e ErrWorkflowInstanceNotFound) Error() string {
@@ -172,6 +173,10 @@ func (e ErrWorkflowInstanceExists) Error() string {
 
 func (e ErrTransitionNotFound) Error() string {
 	return "no valid transition from " + e.FromState + " to " + e.ToState
+}
+
+func (e ErrUnauthorizedTransition) Error() string {
+	return "unauthorized for transition " + e.TransitionKey + ": required roles " + fmt.Sprintf("%v", e.AllowedRoles)
 }
 
 // ValidateWorkflowDefinition validates a workflow definition for internal consistency.
