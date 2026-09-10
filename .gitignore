@@ -33,3 +33,4 @@ Thumbs.db
 
 # Terraform
 .terraform/
+.kilo/kilo.jsonc

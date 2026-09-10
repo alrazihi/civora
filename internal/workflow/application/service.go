@@ -18,11 +18,14 @@ type sqlExecer interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
-// CaseStatusSyncer is called after a workflow transition to keep the
-// associated case status in sync with the new workflow state. The workflow
-// engine remains generic; this hook is provided by the case layer.
-type CaseStatusSyncer interface {
-	SyncCaseStatus(ctx context.Context, tenantID, caseID uuid.UUID, stateKey string) error
+// TransitionObserver is an optional generic extension point for applications
+// that need to react to a transition before it commits.
+type TransitionObserver interface {
+	OnTransition(ctx context.Context, tx *sql.Tx, instance *domain.WorkflowInstance, transition *domain.WorkflowTransition) error
+}
+
+type TransitionObserverRegistrar interface {
+	SetTransitionObserver(observer TransitionObserver)
 }
 
 // WorkflowService manages workflow definitions, instances, and transitions.
@@ -33,7 +36,7 @@ type WorkflowService struct {
 	instanceRepo   domain.WorkflowInstanceRepository
 	historyRepo    domain.WorkflowTransitionHistoryRepository
 	auditor        auditdomain.EventRecorder
-	caseStatusSyncer CaseStatusSyncer
+	observer       TransitionObserver
 }
 
 func NewWorkflowService(
@@ -54,10 +57,10 @@ func NewWorkflowService(
 	}
 }
 
-// SetCaseStatusSyncer registers an optional hook that is invoked after every
-// successful workflow transition to keep the related case status in sync.
-func (s *WorkflowService) SetCaseStatusSyncer(syncer CaseStatusSyncer) {
-	s.caseStatusSyncer = syncer
+// SetTransitionObserver registers an optional observer invoked before a
+// transition commits. Observers run in the same transaction as the transition.
+func (s *WorkflowService) SetTransitionObserver(observer TransitionObserver) {
+	s.observer = observer
 }
 
 // CreateWorkflowDefinitionParams holds parameters for creating a workflow definition.
@@ -305,6 +308,24 @@ func (s *WorkflowService) FindLatestActiveByKey(ctx context.Context, tenantID uu
 
 // CreateInstanceForCase creates a workflow instance for a case.
 func (s *WorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
+	var instance *domain.WorkflowInstance
+	err := database.InTransaction(ctx, s.instanceRepo.DB(), func(tx *sql.Tx) error {
+		var err error
+		instance, err = s.createInstanceForCase(ctx, tx, tenantID, caseID, workflowDefKey, actorID)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return instance, nil
+}
+
+// CreateInstanceForCaseTx creates a workflow instance within an existing transaction.
+func (s *WorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
+	return s.createInstanceForCase(ctx, tx, tenantID, caseID, workflowDefKey, actorID)
+}
+
+func (s *WorkflowService) createInstanceForCase(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
 	def, err := s.FindLatestActiveByKey(ctx, tenantID, workflowDefKey)
 	if err != nil {
 		return nil, fmt.Errorf("workflow definition not found for key %s: %w", workflowDefKey, err)
@@ -323,30 +344,30 @@ func (s *WorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, c
 		Version:            1,
 	}
 
-	if err := s.instanceRepo.Save(ctx, instance); err != nil {
+	if err := s.instanceRepo.SaveTx(ctx, tx, instance); err != nil {
 		return nil, fmt.Errorf("failed to create workflow instance: %w", err)
 	}
 
-	defer func() {
-		if s.auditor != nil {
-			instanceIDStr := instance.ID.String()
-			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
-				OrganizationID: tenantID,
-				ActorID:        &actorID,
-				Action:         "workflow.instance_created",
-				Resource:       "workflow_instance",
-				ResourceID:     &instanceIDStr,
-				Outcome:        "success",
-				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
-				Metadata: map[string]interface{}{
-					"workflow_definition_id":      def.ID.String(),
-					"workflow_definition_version": def.Version,
-					"case_id":                     caseID.String(),
-					"initial_state":               def.InitialState,
-				},
-			})
+	if s.auditor != nil {
+		instanceIDStr := instance.ID.String()
+		if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			OrganizationID: tenantID,
+			ActorID:        &actorID,
+			Action:         "workflow.instance_created",
+			Resource:       "workflow_instance",
+			ResourceID:     &instanceIDStr,
+			Outcome:        "success",
+			RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+			Metadata: map[string]interface{}{
+				"workflow_definition_id":      def.ID.String(),
+				"workflow_definition_version": def.Version,
+				"case_id":                     caseID.String(),
+				"initial_state":               def.InitialState,
+			},
+		}); err != nil {
+			return nil, fmt.Errorf("failed to record audit event: %w", err)
 		}
-	}()
+	}
 
 	instance.Definition = def
 	return instance, nil
@@ -483,6 +504,11 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 				return nil, fmt.Errorf("failed to record audit event: %w", err)
 			}
 		}
+		if s.observer != nil {
+			if err := s.observer.OnTransition(ctx, tx, instance, transition); err != nil {
+				return nil, fmt.Errorf("workflow transition observer failed: %w", err)
+			}
+		}
 	} else {
 		if err := database.InTransaction(ctx, s.instanceRepo.DB(), func(tx *sql.Tx) error {
 			if err := s.instanceRepo.UpdateStateTx(ctx, tx, params.TenantID, instance.ID, transition.ToState, instance.Version); err != nil {
@@ -501,15 +527,14 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 					return fmt.Errorf("failed to record audit event: %w", err)
 				}
 			}
+			if s.observer != nil {
+				if err := s.observer.OnTransition(ctx, tx, instance, transition); err != nil {
+					return fmt.Errorf("workflow transition observer failed: %w", err)
+				}
+			}
 			return nil
 		}); err != nil {
 			return nil, err
-		}
-
-		if s.caseStatusSyncer != nil {
-			if err := s.caseStatusSyncer.SyncCaseStatus(ctx, params.TenantID, instance.CaseID, transition.ToState); err != nil {
-				return nil, err
-			}
 		}
 	}
 

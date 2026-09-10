@@ -111,12 +111,42 @@ func main() {
 		log.Fatalf("failed to create person: %v", err)
 	}
 
-	// CASE A — ACTIVE (at IN_REVIEW)
+	// CASE A — ACTIVE (at IN_REVIEW) with person, eligibility, evidence, assessment but NO final decision
 	caseAID := uuid.New()
 	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`,
 		caseAID, orgID, "CAS-20260909-DEMO-ACT", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "IN_REVIEW", "EMERGENCY", "URGENT", &personID, adminID)
 	if err != nil {
 		log.Fatalf("failed to create case A: %v", err)
+	}
+
+	// Case A: Eligibility (pending - requires more info)
+	eligibilityAID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO eligibilities (id, organization_id, service_request_id, criteria, result, explanation, assessed_by, assessed_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
+		eligibilityAID, orgID, caseAID, `{"displaced":true,"income_verified":false,"household_size":4}`, "REQUIRES_MORE_INFORMATION", "Income verification pending; household size and displacement confirmed", staffID)
+	if err != nil {
+		log.Fatalf("failed to create eligibility for case A: %v", err)
+	}
+
+	// Case A: Evidence
+	evidenceAID1 := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO evidence (id, organization_id, service_request_id, type, description, storage_reference, uploaded_by, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+		evidenceAID1, orgID, caseAID, "IDENTITY_DOCUMENT", "Government-issued ID for household head", "s3://civora-evidence/demo-act-id-001", adminID)
+	if err != nil {
+		log.Fatalf("failed to create evidence for case A: %v", err)
+	}
+	evidenceAID2 := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO evidence (id, organization_id, service_request_id, type, description, storage_reference, uploaded_by, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+		evidenceAID2, orgID, caseAID, "PROOF_OF_RESIDENCE", "Utility bill showing damaged residence address", "s3://civora-evidence/demo-act-res-001", adminID)
+	if err != nil {
+		log.Fatalf("failed to create evidence for case A: %v", err)
+	}
+
+	// Case A: Assessment (completed but no decision yet)
+	assessmentAID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO assessments (id, organization_id, service_request_id, findings, needs_identified, recommendation, assessor, assessed_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())`,
+		assessmentAID, orgID, caseAID, "Household of 4 displaced by flood. Identity and residence verified. Income documentation incomplete.", "Emergency food, temporary shelter, clothing, income verification", "Recommend proceeding to decision pending income verification", staffID)
+	if err != nil {
+		log.Fatalf("failed to create assessment for case A: %v", err)
 	}
 
 	// CASE B — COMPLETED (full lifecycle)
@@ -134,6 +164,14 @@ func main() {
 		log.Fatalf("failed to create workflow definition: %v", err)
 	}
 
+	// Medical Assistance workflow definition (separate key, same generic infrastructure)
+	medicalWorkflowDefID := uuid.New()
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO workflow_definitions (id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())`,
+		medicalWorkflowDefID, orgID, "medical_assistance", "Medical Assistance", "Medical assistance request workflow", 1, "ACTIVE", "NEW", `{}`)
+	if err != nil {
+		log.Fatalf("failed to create medical workflow definition: %v", err)
+	}
+
 	now := time.Now().UTC()
 	stateIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}
 	stateInsert := `INSERT INTO workflow_states (id, workflow_definition_id, organization_id, key, name, description, category, terminal, display_order, responsible_role, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
@@ -145,6 +183,19 @@ func main() {
 		_, err = db.DB.ExecContext(ctx, stateInsert, stateIDs[i], workflowDefID, orgID, stateKey, stateKey, "", "", terminal, i, "", now)
 		if err != nil {
 			log.Fatalf("failed to create workflow state %s: %v", stateKey, err)
+		}
+	}
+
+	// Medical workflow states (same state keys, separate definition)
+	medicalStateIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+	for i, stateKey := range []string{"NEW", "OPEN", "IN_REVIEW", "ASSESSMENT", "DECISION_PENDING", "APPROVED", "REJECTED", "IN_PROGRESS", "FOLLOW_UP", "CLOSED"} {
+		terminal := "false"
+		if stateKey == "REJECTED" || stateKey == "CLOSED" {
+			terminal = "true"
+		}
+		_, err = db.DB.ExecContext(ctx, stateInsert, medicalStateIDs[i], medicalWorkflowDefID, orgID, stateKey, stateKey, "", "", terminal, i, "", now)
+		if err != nil {
+			log.Fatalf("failed to create medical workflow state %s: %v", stateKey, err)
 		}
 	}
 
@@ -170,6 +221,31 @@ func main() {
 		_, err = db.DB.ExecContext(ctx, transitionInsert, t.id, workflowDefID, orgID, t.key, t.key, t.from, t.to, "", "[]", "[]", true, now)
 		if err != nil {
 			log.Fatalf("failed to create workflow transition %s: %v", t.key, err)
+		}
+	}
+
+	// Medical workflow transitions (same pattern, separate definition)
+	medicalTransitions := []struct {
+		id            uuid.UUID
+		key, from, to string
+	}{
+		{uuid.New(), "open", "NEW", "OPEN"},
+		{uuid.New(), "review", "NEW", "IN_REVIEW"},
+		{uuid.New(), "reopen", "IN_REVIEW", "OPEN"},
+		{uuid.New(), "assess", "OPEN", "IN_REVIEW"},
+		{uuid.New(), "assess2", "IN_REVIEW", "ASSESSMENT"},
+		{uuid.New(), "decide", "ASSESSMENT", "DECISION_PENDING"},
+		{uuid.New(), "approve", "DECISION_PENDING", "APPROVED"},
+		{uuid.New(), "reject", "DECISION_PENDING", "REJECTED"},
+		{uuid.New(), "start_assistance", "APPROVED", "IN_PROGRESS"},
+		{uuid.New(), "close_rejected", "REJECTED", "CLOSED"},
+		{uuid.New(), "follow_up", "IN_PROGRESS", "FOLLOW_UP"},
+		{uuid.New(), "complete", "FOLLOW_UP", "CLOSED"},
+	}
+	for _, t := range medicalTransitions {
+		_, err = db.DB.ExecContext(ctx, transitionInsert, t.id, medicalWorkflowDefID, orgID, t.key, t.key, t.from, t.to, "", "[]", "[]", true, now)
+		if err != nil {
+			log.Fatalf("failed to create medical workflow transition %s: %v", t.key, err)
 		}
 	}
 

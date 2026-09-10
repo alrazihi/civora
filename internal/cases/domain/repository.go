@@ -12,6 +12,7 @@ type CaseRepository interface {
 	Save(ctx context.Context, c *Case) error
 	SaveTx(ctx context.Context, tx *sql.Tx, c *Case) error
 	FindByID(ctx context.Context, orgID, id uuid.UUID) (*Case, error)
+	FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*Case, error)
 	FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*Case, error)
 	FindByOrganizationWithFilter(ctx context.Context, orgID uuid.UUID, limit, offset int, filter CaseFilter) ([]*Case, error)
 	CountByOrganization(ctx context.Context, orgID uuid.UUID, filter CaseFilter) (int, error)

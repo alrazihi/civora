@@ -78,6 +78,10 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 }
 
 func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error) {
+	return r.FindByIDTx(ctx, r.db, orgID, id)
+}
+
+func (r *PostgresCaseRepository) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Case, error) {
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
@@ -85,7 +89,15 @@ func (r *PostgresCaseRepository) FindByID(ctx context.Context, orgID, id uuid.UU
 		FROM cases
 		WHERE organization_id = $1 AND id = $2
 	`
-	return r.scanCase(r.db.QueryRowContext(ctx, query, orgID, id))
+	var row interface {
+		Scan(dest ...any) error
+	}
+	if tx != nil {
+		row = tx.QueryRowContext(ctx, query, orgID, id)
+	} else {
+		row = r.db.QueryRowContext(ctx, query, orgID, id)
+	}
+	return r.scanCase(row)
 }
 
 func (r *PostgresCaseRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Case, error) {

@@ -46,11 +46,11 @@ const (
 )
 
 var (
-	ErrInvalidStateTransition = errors.New("invalid state transition")
-	ErrCaseNotFound           = errors.New("case not found")
-	ErrCaseInvalidInput       = errors.New("invalid case input")
-	ErrCaseNumberConflict     = errors.New("case number conflict")
-	ErrCaseTenantViolation    = errors.New("person does not belong to organization")
+	ErrInvalidStateTransition  = errors.New("invalid state transition")
+	ErrCaseNotFound            = errors.New("case not found")
+	ErrCaseInvalidInput        = errors.New("invalid case input")
+	ErrCaseNumberConflict      = errors.New("case number conflict")
+	ErrCaseTenantViolation     = errors.New("person does not belong to organization")
 	ErrCaseStatusContradiction = errors.New("case status contradicts workflow state")
 )
 
@@ -66,16 +66,17 @@ type Case struct {
 	Title              string      `json:"title"`
 	Description        string      `json:"description"`
 	Status             CaseStatus  `json:"status"`
+	WorkflowState      string      `json:"workflow_state,omitempty"`
 	ServiceType        ServiceType `json:"service_type"`
 	Priority           Priority    `json:"priority"`
 	PersonID           *uuid.UUID  `json:"person_id"`
+	AssignedToID       *uuid.UUID  `json:"assigned_to_id"`
 	CreatedByID        uuid.UUID   `json:"created_by"`
-	AssignedToID       *uuid.UUID  `json:"assigned_to"`
 	CreatedAt          time.Time   `json:"created_at"`
 	UpdatedAt          time.Time   `json:"updated_at"`
 	ClosedAt           *time.Time  `json:"closed_at"`
+	WorkflowInstanceID *uuid.UUID  `json:"workflow_instance_id"`
 	Version            int         `json:"version"`
-	WorkflowInstanceID *uuid.UUID  `json:"workflow_instance_id,omitempty"`
 }
 
 const (

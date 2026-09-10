@@ -31,6 +31,7 @@ var (
 // WorkflowTransitionExecutor abstracts the workflow engine for the case service.
 type WorkflowTransitionExecutor interface {
 	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
@@ -70,8 +71,8 @@ func NewCaseService(
 		auditRepo:    auditRepo,
 		workflowSvc:  wf,
 	}
-	if ws, ok := wf.(*workflowapp.WorkflowService); ok {
-		ws.SetCaseStatusSyncer(svc)
+	if ws, ok := wf.(workflowapp.TransitionObserverRegistrar); ok {
+		ws.SetTransitionObserver(svc)
 	}
 	return svc
 }
@@ -132,40 +133,31 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 				}
 			}
 
+			if s.workflowSvc != nil {
+				instance, err := s.workflowSvc.CreateInstanceForCaseTx(ctx, tx, c.OrganizationID, c.ID, workflowKeyForServiceType(c.ServiceType), c.CreatedByID)
+				if err != nil {
+					return fmt.Errorf("failed to create workflow instance for case: %w", err)
+				}
+				instanceID := instance.ID
+				c.WorkflowInstanceID = &instanceID
+				if err := c.SyncStatusFromWorkflow(instance.CurrentState); err != nil {
+					return fmt.Errorf("failed to sync case status from workflow: %w", err)
+				}
+				if err := s.repo.UpdateWorkflowInstanceIDTx(ctx, tx, c.OrganizationID, c.ID, instanceID); err != nil {
+					return fmt.Errorf("failed to link workflow instance: %w", err)
+				}
+				if err := s.repo.UpdateStatusTx(ctx, tx, c.OrganizationID, c.ID, c.Status, c.Version); err != nil {
+					return fmt.Errorf("failed to update case status: %w", err)
+				}
+				c.Version++
+			}
+
 			result = c
 			return nil
 		}
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	if s.workflowSvc != nil {
-		workflowKey := "emergency_assistance"
-		instance, err := s.workflowSvc.CreateInstanceForCase(ctx, c.OrganizationID, c.ID, workflowKey, c.CreatedByID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create workflow instance for case: %w", err)
-		}
-		instanceID := instance.ID
-		c.WorkflowInstanceID = &instanceID
-		// Sync case status to the workflow initial state so the denormalized
-		// status field always reflects the authoritative workflow state.
-		if err := c.SyncStatusFromWorkflow(instance.CurrentState); err != nil {
-			return nil, fmt.Errorf("failed to sync case status from workflow: %w", err)
-		}
-		// Persist the workflow instance link and synced status atomically.
-		if err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-			if err := s.repo.UpdateWorkflowInstanceIDTx(ctx, tx, c.OrganizationID, c.ID, instanceID); err != nil {
-				return fmt.Errorf("failed to link workflow instance: %w", err)
-			}
-			if err := s.repo.UpdateStatusTx(ctx, tx, c.OrganizationID, c.ID, c.Status, c.Version); err != nil {
-				return fmt.Errorf("failed to update case status: %w", err)
-			}
-			c.Version++
-			return nil
-		}); err != nil {
-			return nil, err
-		}
 	}
 
 	return result, nil
