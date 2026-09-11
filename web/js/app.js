@@ -965,7 +965,7 @@ const app = {
     this.renderWorkflowCreateForm();
   },
 
-  showWorkflowEditView(id) {
+  async showWorkflowEditView(id) {
     if (!currentUserIsAdmin()) {
       showToast('Only administrators can edit workflow definitions', 'error');
       return;
@@ -977,7 +977,7 @@ const app = {
     if (!container) return;
     container.innerHTML = '<p class="empty">Loading workflow definition…</p>';
     try {
-      const res = this.wfGet(id);
+      const res = await this.wfGet(id);
       this.workflowDraft = {
         key: res.data.key,
         name: res.data.name,

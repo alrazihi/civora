@@ -113,8 +113,8 @@ func main() {
 
 	// CASE A — ACTIVE (at IN_REVIEW) with person, eligibility, evidence, assessment but NO final decision
 	caseAID := uuid.New()
-	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`,
-		caseAID, orgID, "CAS-20260909-DEMO-ACT", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "IN_REVIEW", "EMERGENCY", "URGENT", &personID, adminID)
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, workflow_state, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())`,
+		caseAID, orgID, "CAS-20260909-DEMO-ACT", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "IN_REVIEW", "EMERGENCY", "URGENT", &personID, adminID, "IN_REVIEW")
 	if err != nil {
 		log.Fatalf("failed to create case A: %v", err)
 	}
@@ -151,8 +151,8 @@ func main() {
 
 	// CASE B — COMPLETED (full lifecycle)
 	caseBID := uuid.New()
-	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at, closed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW(),NOW())`,
-		caseBID, orgID, "CAS-20260909-DEMO-CMP", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID)
+	_, err = db.DB.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, workflow_state, created_at, updated_at, closed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW(),NOW())`,
+		caseBID, orgID, "CAS-20260909-DEMO-CMP", "Emergency Food and Shelter Assistance", "Family of 4 displaced by flooding, needs immediate food and shelter support", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID, "CLOSED")
 	if err != nil {
 		log.Fatalf("failed to create case B: %v", err)
 	}
