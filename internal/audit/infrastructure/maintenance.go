@@ -89,7 +89,10 @@ func (s *AuditMaintenanceService) VerifyOrganization(ctx context.Context, orgID 
 		events[i], events[j] = events[j], events[i]
 	}
 
-	verified, failed = domain.VerifyChain(events)
+	verified, failed, err = domain.VerifyChain(events)
+	if err != nil {
+		return 0, failed, fmt.Errorf("audit chain verification failed for organization %s: %w", orgID, err)
+	}
 	if failed > 0 {
 		s.logger.Printf("AUDIT INTEGRITY FAILURE: organization %s has %d events that failed verification", orgID, failed)
 	}

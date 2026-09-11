@@ -7,55 +7,55 @@ import (
 	"fmt"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
-	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
 	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrDecisionNotFound  = errors.New("decision not found")
-	ErrDecisionInput     = errors.New("invalid decision input")
-	ErrCaseNotFound      = errors.New("case not found")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrInvalidCaseStatus = errors.New("case is not in DECISION_PENDING status")
+	ErrDecisionNotFound     = errors.New("decision not found")
+	ErrDecisionInput        = errors.New("invalid decision input")
+	ErrCaseNotFound         = errors.New("case not found")
+	ErrUserNotFound         = errors.New("user not found")
+	ErrWorkflowNotAvailable = errors.New("workflow engine not available for this operation")
+	ErrCaseTransition       = errors.New("invalid state transition")
 )
 
 type UserChecker interface {
 	BelongsToOrganization(ctx context.Context, orgID, userID uuid.UUID) (bool, error)
 }
 
+type WorkflowExecutor interface {
+	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	GetValidTransitions(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error)
+	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
+}
+
 type DecisionService struct {
 	repo        decisionsdomain.DecisionRepository
-	caseUpdater shared.CaseUpdater
 	caseFinder  shared.CaseFinder
 	userChecker UserChecker
 	auditor     auditdomain.EventRecorder
-	workflowSvc *workflowapp.WorkflowService
+	workflowSvc WorkflowExecutor
 }
 
 func NewDecisionService(
 	repo decisionsdomain.DecisionRepository,
-	caseUpdater shared.CaseUpdater,
 	caseFinder shared.CaseFinder,
 	userChecker UserChecker,
 	auditor auditdomain.EventRecorder,
-	workflowSvc ...*workflowapp.WorkflowService,
+	workflowSvc WorkflowExecutor,
 ) *DecisionService {
-	var wf *workflowapp.WorkflowService
-	if len(workflowSvc) > 0 {
-		wf = workflowSvc[0]
-	}
 	return &DecisionService{
 		repo:        repo,
-		caseUpdater: caseUpdater,
 		caseFinder:  caseFinder,
 		userChecker: userChecker,
 		auditor:     auditor,
-		workflowSvc: wf,
+		workflowSvc: workflowSvc,
 	}
 }
 
@@ -89,13 +89,34 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 		return nil, ErrUserNotFound
 	}
 
-	if c.Status != casesdomain.CaseStatusDecisionPending {
-		return nil, ErrInvalidCaseStatus
+	if s.workflowSvc == nil {
+		return nil, ErrWorkflowNotAvailable
 	}
 
-	newCaseStatus := casesdomain.CaseStatusApproved
+	instance, err := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("workflow instance not found: %w", err)
+	}
+
+	validTransitions, err := s.workflowSvc.GetValidTransitions(ctx, params.OrganizationID, instance.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get valid transitions: %w", err)
+	}
+
+	transitionKey := "approve"
 	if params.Decision == decisionsdomain.DecisionTypeRejected {
-		newCaseStatus = casesdomain.CaseStatusRejected
+		transitionKey = "reject"
+	}
+
+	var targetTransition *workflowdomain.WorkflowTransition
+	for i := range validTransitions {
+		if validTransitions[i].Key == transitionKey {
+			targetTransition = &validTransitions[i]
+			break
+		}
+	}
+	if targetTransition == nil {
+		return nil, fmt.Errorf("%w: no valid transition for decision %s from state %s", ErrCaseTransition, params.Decision, instance.CurrentState)
 	}
 
 	d, err := decisionsdomain.NewDecision(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Decision, params.Reason)
@@ -109,29 +130,16 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 			return fmt.Errorf("failed to save decision: %w", err)
 		}
 
-		if s.workflowSvc != nil {
-			instance, err := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, params.ServiceRequestID)
-			if err == nil {
-				transitionKey := "approve"
-				if params.Decision == decisionsdomain.DecisionTypeRejected {
-					transitionKey = "reject"
-				}
-				if _, err := s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
-					TenantID:      params.OrganizationID,
-					InstanceID:    instance.ID,
-					TransitionKey: transitionKey,
-					ActorID:       params.ActorID,
-					Reason:        params.Reason,
-				}); err != nil {
-					return fmt.Errorf("workflow transition failed: %w", err)
-				}
-			}
-		}
-
-		if s.caseUpdater != nil {
-			if err := s.caseUpdater.UpdateStatusTx(ctx, tx, params.OrganizationID, params.ServiceRequestID, newCaseStatus, c.Version); err != nil {
-				return fmt.Errorf("failed to update case status: %w", err)
-			}
+		_, err = s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+			TenantID:      params.OrganizationID,
+			InstanceID:    instance.ID,
+			TransitionKey: targetTransition.Key,
+			ActorID:       params.ActorID,
+			ActorRole:     "",
+			Reason:        params.Reason,
+		})
+		if err != nil {
+			return fmt.Errorf("workflow transition failed: %w", err)
 		}
 
 		if s.auditor != nil {

@@ -161,7 +161,7 @@ func main() {
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assessmentHandler := assessmentapi.NewHandler(assessmentService)
 
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
 	decisionHandler := decisionsapi.NewHandler(decisionService)
 
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)

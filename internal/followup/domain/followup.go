@@ -57,12 +57,3 @@ func (f *FollowUp) Complete(completedDate time.Time) {
 	f.CompletedDate = &completedDate
 	f.UpdatedAt = time.Now().UTC()
 }
-
-func IsValidCaseStatusForFollowUp(status string) bool {
-	switch status {
-	case "APPROVED", "IN_PROGRESS", "FOLLOW_UP":
-		return true
-	default:
-		return false
-	}
-}

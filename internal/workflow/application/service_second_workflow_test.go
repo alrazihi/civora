@@ -62,6 +62,9 @@ func (s *stubDefRepo) UpdateStatus(ctx context.Context, tenantID, id uuid.UUID, 
 func (s *stubDefRepo) UpdateStatusTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID, status domain.WorkflowDefinitionStatus, version int) error {
 	return s.UpdateStatus(ctx, tenantID, id, status, version)
 }
+func (s *stubDefRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error) {
+	return s.FindByID(ctx, tenantID, id)
+}
 
 type stubStateRepo struct {
 	states map[uuid.UUID][]domain.WorkflowState
@@ -136,6 +139,15 @@ func (s *stubInstanceRepo) FindByCaseID(ctx context.Context, tenantID, caseID uu
 }
 func (s *stubInstanceRepo) FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID, limit, offset int) ([]*domain.WorkflowInstance, int, error) {
 	return nil, 0, nil
+}
+func (s *stubInstanceRepo) CountActiveByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) (int, error) {
+	count := 0
+	for _, i := range s.instances {
+		if i.TenantID == tenantID && i.WorkflowDefID == defID && i.CompletedAt == nil {
+			count++
+		}
+	}
+	return count, nil
 }
 func (s *stubInstanceRepo) UpdateState(ctx context.Context, tenantID, id uuid.UUID, state string, version int) error {
 	if i, ok := s.instances[id]; ok {

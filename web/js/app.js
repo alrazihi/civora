@@ -11,7 +11,15 @@ const SERVICE_DOMAIN = {
       assistance: { title: 'Emergency Assistance', hint: 'Deploy immediate assistance (food, shelter, transport, medical).' },
       followup: { title: 'Follow-up', hint: 'Schedule follow-up to verify ongoing safety and needs.' }
     },
-    assistanceTypes: ['FOOD', 'SHELTER', 'TRANSPORT', 'MEDICAL', 'FINANCIAL', 'OTHER']
+    assistanceTypes: ['FOOD', 'SHELTER', 'TRANSPORT', 'MEDICAL', 'FINANCIAL', 'OTHER'],
+    sectionActionStates: {
+      eligibility: ['NEW', 'OPEN'],
+      evidence: ['NEW', 'OPEN'],
+      assessment: ['IN_REVIEW', 'ASSESSMENT'],
+      decision: ['ASSESSMENT', 'DECISION_PENDING'],
+      assistance: ['APPROVED', 'IN_PROGRESS'],
+      followup: ['IN_PROGRESS', 'FOLLOW_UP']
+    }
   },
   MEDICAL: {
     label: 'Medical Assistance',
@@ -25,35 +33,55 @@ const SERVICE_DOMAIN = {
       assistance: { title: 'Medical Assistance', hint: 'Arrange medication, transport, treatment, and care.' },
       followup: { title: 'Medical Follow-up', hint: 'Monitor treatment progress and recovery.' }
     },
-    assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER']
+    assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER'],
+    sectionActionStates: {
+      eligibility: ['NEW', 'OPEN'],
+      evidence: ['NEW', 'OPEN'],
+      assessment: ['IN_REVIEW', 'ASSESSMENT'],
+      decision: ['ASSESSMENT', 'DECISION_PENDING'],
+      assistance: ['APPROVED', 'IN_PROGRESS'],
+      followup: ['IN_PROGRESS', 'FOLLOW_UP']
+    }
   }
 };
 
-const WORKFLOW_STATES = ['NEW', 'OPEN', 'IN_REVIEW', 'ASSESSMENT', 'DECISION_PENDING', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'FOLLOW_UP', 'CLOSED'];
-const TERMINAL_STATES = ['REJECTED', 'CLOSED'];
-
-const SECTION_ACTIONS = {
-  'NEW': ['eligibility', 'evidence'],
-  'OPEN': ['eligibility', 'evidence'],
-  'IN_REVIEW': ['assessment'],
-  'ASSESSMENT': ['decision'],
-  'DECISION_PENDING': ['decision'],
-  'APPROVED': ['assistance'],
-  'REJECTED': [],
-  'IN_PROGRESS': ['followup'],
-  'FOLLOW_UP': ['followup'],
-  'CLOSED': []
-};
+const DEFAULT_TERMINAL_STATES = ['REJECTED', 'CLOSED'];
 
 function escapeHTML(str) {
   if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
     .replace(/'/g, '&#039;');
 }
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container') || (() => {
+    const c = document.createElement('div');
+    c.id = 'toast-container';
+    c.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px;';
+    document.body.appendChild(c);
+    return c;
+  })();
+  const toast = document.createElement('div');
+  const bg = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : 'var(--primary)';
+  toast.style.cssText = `background:${bg};color:#fff;padding:12px 16px;border-radius:var(--radius);box-shadow:var(--shadow);max-width:320px;animation:slideIn 0.3s ease;`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+const styleEl = document.createElement('style');
+styleEl.textContent = `
+@keyframes slideIn { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }
+@keyframes slideOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(100%); } }
+`;
+document.head.appendChild(styleEl);
 
 function getServiceDomain(serviceType) {
   return SERVICE_DOMAIN[serviceType] || null;
@@ -81,9 +109,10 @@ const app = {
     try {
       const res = await api('POST', `/organizations/${org}/auth/login`, { email, password });
       setAuth(res.data.token, res.data.user.organization_id);
+      showToast('Signed in successfully', 'success');
       router.navigate('dashboard');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   },
 
@@ -97,8 +126,9 @@ const app = {
       await api('POST', `/organizations/${org}/auth/register`, { email, name, password });
       document.getElementById('register-form').reset();
       document.getElementById('register-success').classList.remove('hidden');
+      showToast('Registered successfully! You can now sign in.', 'success');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   },
 
@@ -118,8 +148,9 @@ const app = {
       const res = await api('POST', this.orgPath('/people'), data);
       document.getElementById('new-case-person-id').value = res.data.id;
       document.getElementById('person-result').textContent = `Person created: ${res.data.first_name} ${res.data.last_name}`;
+      showToast('Person created successfully', 'success');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   },
 
@@ -134,9 +165,10 @@ const app = {
     };
     try {
       const res = await api('POST', this.orgPath('/cases'), data);
+      showToast('Case created successfully', 'success');
       router.navigate('case', res.data.id);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   },
 
@@ -180,7 +212,7 @@ const app = {
       this.renderActions();
       await this.loadTimeline(id);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   },
 
@@ -241,28 +273,39 @@ const app = {
       return;
     }
     const currentState = this.currentWorkflow.instance.current_state;
-    const currentIndex = WORKFLOW_STATES.indexOf(currentState);
+    const def = this.currentWorkflow.definition;
+    if (!def || !def.states || !def.states.length) {
+      container.innerHTML = '';
+      return;
+    }
+    // Sort states by display_order from the workflow definition
+    const sortedStates = [...def.states].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    const stateKeys = sortedStates.map(s => s.key);
+    const currentIndex = stateKeys.indexOf(currentState);
     if (currentIndex < 0) {
       container.innerHTML = '';
       return;
     }
-    const isTerminal = TERMINAL_STATES.includes(currentState);
-    const steps = WORKFLOW_STATES.map((state, idx) => {
+    const isTerminal = DEFAULT_TERMINAL_STATES.includes(currentState);
+    const steps = stateKeys.map((state, idx) => {
       let cls = 'workflow-step';
       if (idx < currentIndex) cls += ' completed';
       else if (idx === currentIndex) cls += ' active';
       else cls += ' pending';
       if (isTerminal && idx <= currentIndex) cls += ' completed';
-      return `<div class="${cls}"><span class="step-label">${escapeHTML(state)}</span></div>`;
+      const stateDef = sortedStates[idx];
+      const label = stateDef?.name || state;
+      return `<div class="${cls}"><span class="step-label">${escapeHTML(label)}</span></div>`;
     });
-    const connectors = WORKFLOW_STATES.slice(0, -1).map(() => '<div class="workflow-connector"></div>').join('');
+    const connectors = stateKeys.slice(0, -1).map(() => '<div class="workflow-connector"></div>').join('');
     container.innerHTML = steps.join(connectors ? connectors : '');
   },
 
   renderSectionActions() {
     if (!this.currentCase) return;
     const state = this.currentWorkflow?.instance?.current_state;
-    const allowed = state ? (SECTION_ACTIONS[state] || []) : [];
+    const domain = getServiceDomain(this.currentCase.service_type);
+    const sectionActionStates = domain?.sectionActionStates || {};
     const containers = {
       eligibility: document.getElementById('sec-eligibility'),
       evidence: document.getElementById('sec-evidence'),
@@ -276,11 +319,11 @@ const app = {
       el.querySelectorAll('.section-action-btn').forEach(btn => btn.remove());
       const actionBtn = document.createElement('button');
       actionBtn.className = 'btn section-action-btn';
-      const domain = getServiceDomain(this.currentCase.service_type);
-      const title = domain ? domain.sections[name]?.title : name.charAt(0).toUpperCase() + name.slice(1);
+      const title = domain?.sections[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
       actionBtn.textContent = `Add ${title}`;
       actionBtn.style.marginBottom = '8px';
-      if (!allowed.includes(name)) {
+      const allowedStates = sectionActionStates[name] || [];
+      if (!state || !allowedStates.includes(state)) {
         actionBtn.disabled = true;
         actionBtn.title = 'Not available in current workflow state';
       } else {
@@ -466,9 +509,10 @@ const app = {
     if (!this.currentCase) return;
     try {
       await api('POST', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions/${transitionKey}`), {});
+      showToast('Transition executed successfully', 'success');
       await this.loadCase(this.currentCase.id);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   },
 
@@ -539,7 +583,7 @@ const app = {
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
   },
 
   async submitEvidence(e) {
@@ -555,7 +599,7 @@ const app = {
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
   },
 
   async submitAssessment(e) {
@@ -571,7 +615,7 @@ const app = {
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
   },
 
   async submitDecision(e) {
@@ -586,7 +630,7 @@ const app = {
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
   },
 
   async submitAssistance(e) {
@@ -602,7 +646,7 @@ const app = {
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
   },
 
   async submitFollowUp(e) {
@@ -618,7 +662,7 @@ const app = {
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
-    } catch (err) { alert(err.message); }
+    } catch (err) { showToast(err.message, 'error'); }
   },
 
   logout() {

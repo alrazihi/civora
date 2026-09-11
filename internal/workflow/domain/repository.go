@@ -12,6 +12,7 @@ type WorkflowDefinitionRepository interface {
 	Save(ctx context.Context, def *WorkflowDefinition) error
 	SaveTx(ctx context.Context, tx *sql.Tx, def *WorkflowDefinition) error
 	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*WorkflowDefinition, error)
+	FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*WorkflowDefinition, error)
 	FindByKeyAndVersion(ctx context.Context, tenantID uuid.UUID, key string, version int) (*WorkflowDefinition, error)
 	FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)
 	ListByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*WorkflowDefinition, int, error)
@@ -41,6 +42,7 @@ type WorkflowInstanceRepository interface {
 	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*WorkflowInstance, error)
 	FindByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*WorkflowInstance, error)
 	FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID, limit, offset int) ([]*WorkflowInstance, int, error)
+	CountActiveByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) (int, error)
 	UpdateState(ctx context.Context, tenantID, id uuid.UUID, state string, version int) error
 	UpdateStateTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID, state string, version int) error
 	Complete(ctx context.Context, tenantID, id uuid.UUID, version int) error

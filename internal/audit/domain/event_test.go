@@ -147,21 +147,21 @@ func TestVerifyChain(t *testing.T) {
 	ev3, err := NewAuditEvent(orgID, actorID, "case.closed", "case", nil, "success", nil, nil, &ev2.Hash)
 	require.NoError(t, err)
 
-	verified, failed := VerifyChain([]*AuditEvent{ev1, ev2, ev3})
+	verified, failed, err := VerifyChain([]*AuditEvent{ev1, ev2, ev3})
+	require.NoError(t, err)
 	assert.Equal(t, 3, verified, "all events in a valid chain should pass")
 	assert.Equal(t, 0, failed, "no events should fail in a valid chain")
 
-	// Break the chain by changing ev2's previous hash. This breaks ev2's
-	// own hash integrity (its recomputed hash no longer matches the stored
-	// hash), but ev3 still links to ev2's original hash, so ev3 passes.
 	ev2.PreviousHash = strPtr("broken")
-	verified, failed = VerifyChain([]*AuditEvent{ev1, ev2, ev3})
+	verified, failed, err = VerifyChain([]*AuditEvent{ev1, ev2, ev3})
 	assert.Equal(t, 2, verified, "ev1 and ev3 should still pass")
 	assert.Equal(t, 1, failed, "ev2 should fail because its previous hash does not match ev1's hash")
+	assert.Error(t, err, "verification failures should return an error")
 }
 
 func TestVerifyChain_Empty(t *testing.T) {
-	verified, failed := VerifyChain(nil)
+	verified, failed, err := VerifyChain(nil)
+	require.NoError(t, err)
 	assert.Equal(t, 0, verified)
 	assert.Equal(t, 0, failed)
 }

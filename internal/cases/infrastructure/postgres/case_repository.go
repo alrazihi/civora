@@ -188,7 +188,8 @@ func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx,
 func (r *PostgresCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int) error {
 	query := `
 		UPDATE cases
-		SET workflow_state = $1, status = $1, version = version + 1, updated_at = now()
+		SET workflow_state = $1, status = $1, version = version + 1, updated_at = now(),
+		    closed_at = CASE WHEN $1 = 'CLOSED' THEN now() ELSE closed_at END
 		WHERE organization_id = $2 AND id = $3 AND version = $4
 	`
 	result, err := tx.ExecContext(ctx, query, workflowState, orgID, id, version)

@@ -10,91 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsValidTransition(t *testing.T) {
-	tests := []struct {
-		name string
-		from CaseStatus
-		to   CaseStatus
-		want bool
-	}{
-		{"New to Open", CaseStatusNew, CaseStatusOpen, true},
-		{"New to InReview", CaseStatusNew, CaseStatusInReview, true},
-		{"Open to InReview", CaseStatusOpen, CaseStatusInReview, true},
-		{"InReview to Assessment", CaseStatusInReview, CaseStatusAssessment, true},
-		{"InReview back to Open", CaseStatusInReview, CaseStatusOpen, true},
-		{"Assessment to DecisionPending", CaseStatusAssessment, CaseStatusDecisionPending, true},
-		{"DecisionPending to Approved", CaseStatusDecisionPending, CaseStatusApproved, true},
-		{"DecisionPending to Rejected", CaseStatusDecisionPending, CaseStatusRejected, true},
-		{"Approved to InProgress", CaseStatusApproved, CaseStatusInProgress, true},
-		{"Rejected to Closed", CaseStatusRejected, CaseStatusClosed, true},
-		{"InProgress to FollowUp", CaseStatusInProgress, CaseStatusFollowUp, true},
-		{"FollowUp to Closed", CaseStatusFollowUp, CaseStatusClosed, true},
-		{"New to Closed (invalid)", CaseStatusNew, CaseStatusClosed, false},
-		{"Open to Approved (invalid)", CaseStatusOpen, CaseStatusApproved, false},
-		{"Closed to anything (invalid)", CaseStatusClosed, CaseStatusOpen, false},
-		{"Same status (invalid)", CaseStatusOpen, CaseStatusOpen, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := IsValidTransition(tt.from, tt.to)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestValidTransitionsFrom(t *testing.T) {
-	tests := []struct {
-		status   CaseStatus
-		expected []CaseStatus
-	}{
-		{CaseStatusNew, []CaseStatus{CaseStatusOpen, CaseStatusInReview}},
-		{CaseStatusOpen, []CaseStatus{CaseStatusInReview}},
-		{CaseStatusInReview, []CaseStatus{CaseStatusAssessment, CaseStatusOpen}},
-		{CaseStatusAssessment, []CaseStatus{CaseStatusDecisionPending}},
-		{CaseStatusDecisionPending, []CaseStatus{CaseStatusApproved, CaseStatusRejected}},
-		{CaseStatusApproved, []CaseStatus{CaseStatusInProgress}},
-		{CaseStatusRejected, []CaseStatus{CaseStatusClosed}},
-		{CaseStatusInProgress, []CaseStatus{CaseStatusFollowUp}},
-		{CaseStatusFollowUp, []CaseStatus{CaseStatusClosed}},
-		{CaseStatusClosed, []CaseStatus{}},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.status), func(t *testing.T) {
-			result := ValidTransitionsFrom(tt.status)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestCase_TransitionTo(t *testing.T) {
-	t.Run("valid transition", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
-		require.NoError(t, err)
-		err = c.TransitionTo(CaseStatusOpen)
-		require.NoError(t, err)
-		assert.Equal(t, CaseStatusOpen, c.Status)
-	})
-
-	t.Run("invalid transition", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
-		require.NoError(t, err)
-		err = c.TransitionTo(CaseStatusClosed)
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, ErrInvalidStateTransition)
-	})
-
-	t.Run("closed sets closed_at", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityUrgent, nil)
-		require.NoError(t, err)
-		c.Status = CaseStatusFollowUp
-		err = c.TransitionTo(CaseStatusClosed)
-		require.NoError(t, err)
-		assert.NotNil(t, c.ClosedAt)
-	})
-}
-
 func TestCase_AssignTo(t *testing.T) {
 	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
 	require.NoError(t, err)
@@ -204,10 +119,11 @@ func TestSyncStatusFromWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown state returns contradiction", func(t *testing.T) {
+	t.Run("custom workflow state is accepted", func(t *testing.T) {
 		c := &Case{Status: CaseStatusOpen}
-		err := c.SyncStatusFromWorkflow("UNKNOWN_STATE")
-		assert.ErrorIs(t, err, ErrCaseStatusContradiction)
+		err := c.SyncStatusFromWorkflow("GRANT_PROCESSING")
+		assert.NoError(t, err)
+		assert.Equal(t, CaseStatus("GRANT_PROCESSING"), c.Status)
 	})
 
 	t.Run("empty state is a no-op", func(t *testing.T) {
@@ -251,6 +167,14 @@ func TestStatusFromWorkflowState(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, st, got)
 	}
-	_, err := StatusFromWorkflowState("BOGUS")
+	got, err := StatusFromWorkflowState("BOGUS")
+	assert.NoError(t, err)
+	assert.Equal(t, CaseStatus("BOGUS"), got)
+
+	got, err = StatusFromWorkflowState("GRANT_PROCESSING")
+	assert.NoError(t, err)
+	assert.Equal(t, CaseStatus("GRANT_PROCESSING"), got)
+
+	_, err = StatusFromWorkflowState("")
 	assert.Error(t, err)
 }

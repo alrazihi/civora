@@ -173,58 +173,18 @@ type ChangeCaseStatusParams struct {
 }
 
 func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusParams) (*domain.Case, error) {
+	if s.workflowSvc == nil {
+		return nil, ErrWorkflowNotAvailable
+	}
+	return s.changeStatusViaWorkflow(ctx, params)
+}
+
+func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params ChangeCaseStatusParams) (*domain.Case, error) {
 	c, err := s.repo.FindByID(ctx, params.OrganizationID, params.CaseID)
 	if err != nil {
 		return nil, ErrCaseNotFound
 	}
 
-	if s.workflowSvc != nil {
-		return s.changeStatusViaWorkflow(ctx, params, c)
-	}
-
-	oldStatus := c.Status
-	if err := c.TransitionTo(params.Status); err != nil {
-		if errors.Is(err, domain.ErrInvalidStateTransition) {
-			return nil, fmt.Errorf("%w: from %s to %s", ErrCaseTransition, c.Status, params.Status)
-		}
-		return nil, err
-	}
-
-	var result *domain.Case
-	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, params.CaseID, params.Status, c.Version); err != nil {
-			return fmt.Errorf("failed to update case status: %w", err)
-		}
-
-		if s.auditor != nil {
-			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
-				OrganizationID: c.OrganizationID,
-				ActorID:        &params.ActorID,
-				Action:         "case.transition",
-				Resource:       "case",
-				ResourceID:     shared.StrPtr(c.ID.String()),
-				Outcome:        "success",
-				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
-				Metadata: map[string]interface{}{
-					"from": string(oldStatus),
-					"to":   string(params.Status),
-				},
-			}); err != nil {
-				return fmt.Errorf("failed to record audit event: %w", err)
-			}
-		}
-
-		result = c
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params ChangeCaseStatusParams, c *domain.Case) (*domain.Case, error) {
 	instance, err := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, params.CaseID)
 	if err != nil {
 		return nil, fmt.Errorf("workflow instance not found: %w", err)
@@ -260,21 +220,35 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 			return fmt.Errorf("workflow transition failed: %w", err)
 		}
 
-		// Refresh the case from the database to get the updated status
-		// from the OnTransition observer callback.
 		updatedCase, err := s.repo.FindByIDTx(ctx, tx, params.OrganizationID, params.CaseID)
 		if err != nil {
 			return fmt.Errorf("failed to reload case after workflow transition: %w", err)
 		}
 
-		// The observer already synced the status and workflow_state.
-		// Update the case reference and set closed_at if needed.
 		c.Status = updatedCase.Status
 		c.WorkflowState = updatedCase.WorkflowState
 		c.Version = updatedCase.Version
 		if updatedCase.Status == domain.CaseStatusClosed {
 			now := time.Now().UTC()
 			c.ClosedAt = &now
+		}
+
+		if s.auditor != nil {
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: c.OrganizationID,
+				ActorID:        &params.ActorID,
+				Action:         "case.transition",
+				Resource:       "case",
+				ResourceID:     shared.StrPtr(c.ID.String()),
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"from": string(instance.CurrentState),
+					"to":   string(updatedCase.Status),
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
 		}
 
 		result = c

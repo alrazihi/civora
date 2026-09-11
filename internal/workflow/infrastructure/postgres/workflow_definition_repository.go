@@ -64,6 +64,16 @@ func (r *PostgresWorkflowDefinitionRepository) FindByID(ctx context.Context, ten
 	return r.scanDefinition(r.db.QueryRowContext(ctx, query, tenantID, id))
 }
 
+func (r *PostgresWorkflowDefinitionRepository) FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE organization_id = $1 AND id = $2
+		FOR UPDATE
+	`
+	return r.scanDefinition(tx.QueryRowContext(ctx, query, tenantID, id))
+}
+
 func (r *PostgresWorkflowDefinitionRepository) FindByKeyAndVersion(ctx context.Context, tenantID uuid.UUID, key string, version int) (*domain.WorkflowDefinition, error) {
 	query := `
 		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at

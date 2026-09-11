@@ -56,10 +56,6 @@ func (s *FollowUpService) CreateFollowUp(ctx context.Context, params CreateFollo
 		return nil, ErrCaseClosed
 	}
 
-	if !followupdomain.IsValidCaseStatusForFollowUp(string(c.Status)) {
-		return nil, fmt.Errorf("%w: case status %s does not allow follow-up", ErrFollowUpInput, c.Status)
-	}
-
 	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate actor: %w", err)

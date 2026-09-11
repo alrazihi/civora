@@ -54,11 +54,6 @@ var (
 	ErrCaseStatusContradiction = errors.New("case status contradicts workflow state")
 )
 
-// ErrCaseStatusContradiction is returned when a Case's status field and its
-// linked WorkflowInstance.CurrentState disagree. The workflow current state
-// is authoritative for lifecycle state; the Case.Status field is a denormalized
-// mirror that must always match.
-
 type Case struct {
 	ID                 uuid.UUID   `json:"id"`
 	OrganizationID     uuid.UUID   `json:"organization_id"`
@@ -116,29 +111,9 @@ func NewCase(orgID, createdByID uuid.UUID, title, description string, serviceTyp
 	}, nil
 }
 
-func (c *Case) TransitionTo(status CaseStatus) error {
-	if !IsValidTransition(c.Status, status) {
-		return fmt.Errorf(
-			"%w: cannot transition from %s to %s",
-			ErrInvalidStateTransition, c.Status, status,
-		)
-	}
-	c.Status = status
-	c.UpdatedAt = time.Now().UTC()
-	// Keep the authoritative workflow state in sync with the denormalized
-	// status so the two fields never drift apart.
-	c.WorkflowState = string(status)
-	if status == CaseStatusClosed {
-		closedAt := time.Now().UTC()
-		c.ClosedAt = &closedAt
-	}
-	return nil
-}
-
 // ValidateConsistency verifies that the Case status matches the linked
 // workflow instance's current state. When no workflow instance is linked,
-// the check is skipped (the legacy transition rules apply).
-//
+// the check is skipped.
 // The authoritative lifecycle state is the workflow current state. The
 // Case.Status field is a denormalized mirror that must always agree.
 // This function returns ErrCaseStatusContradiction when they disagree.
@@ -157,33 +132,13 @@ func (c *Case) ValidateConsistency(workflowState string) error {
 }
 
 // StatusFromWorkflowState returns the CaseStatus derived from a workflow
-// state key. This is the single place where workflow state keys are mapped
-// to case status values, ensuring consistency across the domain.
+// state key. Any non-empty state key is accepted so custom workflow
+// definitions are not limited to a fixed legacy state set.
 func StatusFromWorkflowState(state string) (CaseStatus, error) {
-	switch state {
-	case string(CaseStatusNew):
-		return CaseStatusNew, nil
-	case string(CaseStatusOpen):
-		return CaseStatusOpen, nil
-	case string(CaseStatusInReview):
-		return CaseStatusInReview, nil
-	case string(CaseStatusAssessment):
-		return CaseStatusAssessment, nil
-	case string(CaseStatusDecisionPending):
-		return CaseStatusDecisionPending, nil
-	case string(CaseStatusApproved):
-		return CaseStatusApproved, nil
-	case string(CaseStatusRejected):
-		return CaseStatusRejected, nil
-	case string(CaseStatusInProgress):
-		return CaseStatusInProgress, nil
-	case string(CaseStatusFollowUp):
-		return CaseStatusFollowUp, nil
-	case string(CaseStatusClosed):
-		return CaseStatusClosed, nil
-	default:
-		return "", fmt.Errorf("unknown workflow state: %s", state)
+	if state == "" {
+		return "", fmt.Errorf("workflow state cannot be empty")
 	}
+	return CaseStatus(state), nil
 }
 
 func (c *Case) AssignTo(userID uuid.UUID) {
@@ -198,89 +153,25 @@ func (c *Case) RegenerateCaseNumber() {
 // SyncStatusFromWorkflow updates the Case status to match the given workflow
 // state. This is called after a workflow transition to keep the denormalized
 // status field in sync with the authoritative workflow state.
-// Returns ErrCaseStatusContradiction if the workflow state is unknown.
 func (c *Case) SyncStatusFromWorkflow(state string) error {
 	if state == "" {
 		return nil
 	}
-	status, err := StatusFromWorkflowState(state)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrCaseStatusContradiction, err)
-	}
-	c.Status = status
+	c.Status = CaseStatus(state)
 	c.UpdatedAt = time.Now().UTC()
-	if status == CaseStatusClosed {
+	if CaseStatus(state) == CaseStatusClosed {
 		closedAt := time.Now().UTC()
 		c.ClosedAt = &closedAt
 	}
 	return nil
 }
 
-// transitionRules is a legacy fallback for cases that do not have an
-// associated workflow instance. The authoritative transition mechanism
-// is the configurable workflow engine. Do not add new logic here.
-var transitionRules = map[CaseStatus][]CaseStatus{
-	CaseStatusNew:             {CaseStatusOpen, CaseStatusInReview},
-	CaseStatusOpen:            {CaseStatusInReview},
-	CaseStatusInReview:        {CaseStatusAssessment, CaseStatusOpen},
-	CaseStatusAssessment:      {CaseStatusDecisionPending},
-	CaseStatusDecisionPending: {CaseStatusApproved, CaseStatusRejected},
-	CaseStatusApproved:        {CaseStatusInProgress},
-	CaseStatusRejected:        {CaseStatusClosed},
-	CaseStatusInProgress:      {CaseStatusFollowUp},
-	CaseStatusFollowUp:        {CaseStatusClosed},
-	CaseStatusClosed:          {},
-}
-
-func IsValidTransition(from, to CaseStatus) bool {
-	validStatuses := map[CaseStatus]bool{
-		CaseStatusNew:             true,
-		CaseStatusOpen:            true,
-		CaseStatusInReview:        true,
-		CaseStatusAssessment:      true,
-		CaseStatusDecisionPending: true,
-		CaseStatusApproved:        true,
-		CaseStatusRejected:        true,
-		CaseStatusInProgress:      true,
-		CaseStatusFollowUp:        true,
-		CaseStatusClosed:          true,
-	}
-	if !validStatuses[from] || !validStatuses[to] {
-		return false
-	}
-	if from == to {
-		return false
-	}
-	allowed, ok := transitionRules[from]
-	if !ok {
-		return false
-	}
-	for _, s := range allowed {
-		if s == to {
-			return true
-		}
-	}
-	return false
-}
-
-func ValidTransitionsFrom(status CaseStatus) []CaseStatus {
-	return transitionRules[status]
+func IsClosed(status CaseStatus) bool {
+	return status == CaseStatusClosed
 }
 
 func IsValidStatus(status string) bool {
-	switch status {
-	case string(CaseStatusNew), string(CaseStatusOpen), string(CaseStatusInReview),
-		string(CaseStatusAssessment), string(CaseStatusDecisionPending),
-		string(CaseStatusApproved), string(CaseStatusRejected),
-		string(CaseStatusInProgress), string(CaseStatusFollowUp), string(CaseStatusClosed):
-		return true
-	default:
-		return false
-	}
-}
-
-func IsClosed(status CaseStatus) bool {
-	return status == CaseStatusClosed
+	return status != ""
 }
 
 func GenerateCaseNumber(t time.Time) string {

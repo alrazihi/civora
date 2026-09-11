@@ -10,6 +10,7 @@ import (
 
 	"github.com/alrazihi/civora/internal/cases/domain"
 	peopleDomain "github.com/alrazihi/civora/internal/people/domain"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -193,6 +194,85 @@ func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
 	m.members[orgID][userID] = true
 }
 
+type mockWorkflowService struct {
+	instanceID  uuid.UUID
+	caseID      uuid.UUID
+	state       string
+	transitions map[string]workflowdomain.WorkflowTransition
+	observer    workflowapp.TransitionObserver
+}
+
+func newMockWorkflowService(initialState string) *mockWorkflowService {
+	return &mockWorkflowService{
+		instanceID:  uuid.New(),
+		state:       initialState,
+		transitions: make(map[string]workflowdomain.WorkflowTransition),
+	}
+}
+
+func (m *mockWorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	m.caseID = caseID
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+}
+
+func (m *mockWorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	m.caseID = caseID
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+}
+
+func (m *mockWorkflowService) GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+}
+
+func (m *mockWorkflowService) ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
+	return m.executeTransition(params)
+}
+
+func (m *mockWorkflowService) ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
+	return m.executeTransition(params)
+}
+
+func (m *mockWorkflowService) executeTransition(params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
+	if tr, ok := m.transitions[params.TransitionKey]; ok {
+		m.state = tr.ToState
+		instance := &workflowdomain.WorkflowInstance{
+			ID:           m.instanceID,
+			TenantID:     params.TenantID,
+			CaseID:       m.caseID,
+			CurrentState: m.state,
+		}
+		transition := &workflowdomain.WorkflowTransition{Key: tr.Key, ToState: tr.ToState}
+		if m.observer != nil {
+			if err := m.observer.OnTransition(context.Background(), nil, instance, transition); err != nil {
+				return nil, err
+			}
+		}
+		return instance, nil
+	}
+	return nil, errors.New("transition not found")
+}
+
+func (m *mockWorkflowService) GetValidTransitions(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error) {
+	var result []workflowdomain.WorkflowTransition
+	for _, tr := range m.transitions {
+		result = append(result, tr)
+	}
+	return result, nil
+}
+
+func (m *mockWorkflowService) SetTransitionObserver(observer workflowapp.TransitionObserver) {
+	m.observer = observer
+}
+
+func (m *mockWorkflowService) addTransition(key, fromState, toState string) {
+	m.transitions[key] = workflowdomain.WorkflowTransition{
+		Key:       key,
+		FromState: fromState,
+		ToState:   toState,
+		Active:    true,
+	}
+}
+
 func TestCreateCase(t *testing.T) {
 	repo := newMockCaseRepo()
 	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
@@ -222,7 +302,19 @@ func TestCreateCase(t *testing.T) {
 
 func TestCaseLifecycle(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+	wf := newMockWorkflowService("NEW")
+	wf.addTransition("open", "NEW", "OPEN")
+	wf.addTransition("review", "OPEN", "IN_REVIEW")
+	wf.addTransition("assess", "IN_REVIEW", "ASSESSMENT")
+	wf.addTransition("decide", "ASSESSMENT", "DECISION_PENDING")
+	wf.addTransition("approve", "DECISION_PENDING", "APPROVED")
+	wf.addTransition("start_assistance", "APPROVED", "IN_PROGRESS")
+	wf.addTransition("follow_up", "IN_PROGRESS", "FOLLOW_UP")
+	wf.addTransition("complete", "FOLLOW_UP", "CLOSED")
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil, wf)
+	if registrar, ok := any(wf).(workflowapp.TransitionObserverRegistrar); ok {
+		registrar.SetTransitionObserver(svc)
+	}
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -268,7 +360,12 @@ func TestCaseLifecycle(t *testing.T) {
 
 func TestInvalidStateTransition(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+	wf := newMockWorkflowService("NEW")
+	wf.addTransition("open", "NEW", "OPEN")
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil, wf)
+	if registrar, ok := any(wf).(workflowapp.TransitionObserverRegistrar); ok {
+		registrar.SetTransitionObserver(svc)
+	}
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -294,7 +391,14 @@ func TestInvalidStateTransition(t *testing.T) {
 
 func TestReopenFromReview(t *testing.T) {
 	repo := newMockCaseRepo()
-	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+	wf := newMockWorkflowService("NEW")
+	wf.addTransition("open", "NEW", "OPEN")
+	wf.addTransition("review", "OPEN", "IN_REVIEW")
+	wf.addTransition("reopen", "IN_REVIEW", "OPEN")
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil, wf)
+	if registrar, ok := any(wf).(workflowapp.TransitionObserverRegistrar); ok {
+		registrar.SetTransitionObserver(svc)
+	}
 
 	orgID := uuid.New()
 	userID := uuid.New()
@@ -564,10 +668,9 @@ func TestOnTransition_SyncsCaseStatus(t *testing.T) {
 		"case status should be synced to the target workflow state")
 }
 
-// TestOnTransition_UnknownStateReturnsContradiction verifies that the observer
-// surfaces a contradiction error when the workflow state cannot be mapped to
-// a case status, which rolls back the transition transaction.
-func TestOnTransition_UnknownStateReturnsContradiction(t *testing.T) {
+// TestOnTransition_CustomStateIsAccepted verifies that the observer accepts
+// any workflow state key, not just the legacy fixed set.
+func TestOnTransition_CustomStateIsAccepted(t *testing.T) {
 	repo := newMockCaseRepo()
 	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
 
@@ -575,7 +678,7 @@ func TestOnTransition_UnknownStateReturnsContradiction(t *testing.T) {
 	creator := uuid.New()
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
-		Title:          "Observer Contradiction Test",
+		Title:          "Custom State Test",
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
@@ -589,20 +692,18 @@ func TestOnTransition_UnknownStateReturnsContradiction(t *testing.T) {
 		CurrentState: "NEW",
 	}
 	transition := &workflowdomain.WorkflowTransition{
-		Key:       "bogus",
+		Key:       "custom",
 		FromState: "NEW",
-		ToState:   "BOGUS_STATE",
+		ToState:   "GRANT_PROCESSING",
 	}
 
 	err = svc.OnTransition(context.Background(), nil, instance, transition)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, domain.ErrCaseStatusContradiction)
+	assert.NoError(t, err)
 
-	// The status must remain unchanged because the observer failed.
 	updated, err := svc.GetCase(context.Background(), orgID, c.ID)
 	require.NoError(t, err)
-	assert.Equal(t, domain.CaseStatusNew, updated.Status,
-		"case status must not change when the observer fails")
+	assert.Equal(t, domain.CaseStatus("GRANT_PROCESSING"), updated.Status,
+		"custom workflow states should be accepted")
 }
 
 // TestOnTransition_TenantIsolation verifies that the observer cannot sync a

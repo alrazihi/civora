@@ -74,7 +74,7 @@ func Load() (*Config, error) {
 			SSLMode:  getEnv("CIVORA_DB_SSLMODE", "disable"),
 		},
 		Auth: AuthConfig{
-			JWTSecret:  getEnv("CIVORA_AUTH_JWT_SECRET", "dev-secret-change-me"),
+			JWTSecret:  getEnv("CIVORA_AUTH_JWT_SECRET", ""),
 			JWTExpiry:  getEnvDuration("CIVORA_AUTH_JWT_EXPIRY", 24*time.Hour),
 			BCryptCost: getEnvInt("CIVORA_AUTH_BCRYPT_COST", 12),
 		},
@@ -85,10 +85,12 @@ func Load() (*Config, error) {
 		},
 	}
 
-	if cfg.Auth.JWTSecret == "dev-secret-change-me" || len(cfg.Auth.JWTSecret) < 32 {
-		if os.Getenv("CIVORA_ENV") == "production" {
-			return nil, fmt.Errorf("CIVORA_AUTH_JWT_SECRET must be set to a secure value of at least 32 characters in production")
-		}
+	if len(cfg.Auth.JWTSecret) < 32 {
+		return nil, fmt.Errorf("CIVORA_AUTH_JWT_SECRET must be set to a secure value of at least 32 characters")
+	}
+
+	if cfg.Auth.BCryptCost < 10 {
+		return nil, fmt.Errorf("CIVORA_AUTH_BCRYPT_COST must be at least 10, got %d", cfg.Auth.BCryptCost)
 	}
 
 	return cfg, nil

@@ -276,8 +276,9 @@ func TestRegression_CompletedCaseRetainsDomainData(t *testing.T) {
 	followUpRepo := followuppostgres.NewPostgresFollowUpRepository(db)
 
 	caseID := uuid.New()
-	_, err := db.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`,
-		caseID, orgID, "REG-CMP-001", "Regression Completed Case", "Test", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID)
+	now := time.Now().UTC()
+	_, err := db.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, assigned_to, created_at, updated_at, closed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+		caseID, orgID, "REG-CMP-001", "Regression Completed Case", "Test", "CLOSED", "EMERGENCY", "URGENT", &personID, adminID, nil, now, now, now)
 	require.NoError(t, err)
 
 	eligibilityID := uuid.New()

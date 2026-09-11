@@ -167,7 +167,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
-	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
+	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	followUpService := followupapp.NewFollowUpService(followUpRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 
@@ -400,12 +400,22 @@ func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.
 		{ID: uuid.New(), TenantID: orgID, Key: "complete", Name: "Complete", FromState: "FOLLOW_UP", ToState: "CLOSED", Active: true, CreatedAt: now},
 	}
 
-	// The generic workflow definitions are shared across service types: the
-	// emergency_assistance workflow is the primary lifecycle, and the
-	// general_assistance workflow is the default for cases whose service type
-	// does not map to a specialized workflow (e.g. GENERAL). Both use the
-	// same state machine so the case lifecycle is consistent.
-	for _, key := range []string{"emergency_assistance", "general_assistance"} {
+	// The generic workflow definitions are shared across service types.
+	// Seed all workflow keys that WorkflowKeyForServiceType can produce so
+	// every service type can create a workflow instance successfully.
+	allKeys := []string{
+		"emergency_assistance",
+		"medical_assistance",
+		"financial_assistance",
+		"food_assistance",
+		"shelter_assistance",
+		"education_assistance",
+		"transport_assistance",
+		"general_assistance",
+	}
+
+	var emergencyDefID uuid.UUID
+	for _, key := range allKeys {
 		statesCopy := make([]workflowdomain.WorkflowState, len(states))
 		copy(statesCopy, states)
 		for i := range statesCopy {
@@ -421,8 +431,8 @@ func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.
 			TenantID:     orgID,
 			ActorID:      uuid.Nil,
 			Key:          key,
-			Name:         "Emergency Assistance",
-			Description:  "Emergency assistance request workflow",
+			Name:         "Assistance Workflow",
+			Description:  "Generic assistance request workflow for " + key,
 			Version:      1,
 			InitialState: "NEW",
 			States:       statesCopy,
@@ -435,11 +445,11 @@ func seedEmergencyAssistanceWorkflow(t *testing.T, db *sql.DB, svc *application.
 		require.NoError(t, err)
 
 		if key == "emergency_assistance" {
-			return def.ID
+			emergencyDefID = def.ID
 		}
 	}
 
-	return uuid.Nil
+	return emergencyDefID
 }
 
 func TestEmergencyAssistanceRequestLifecycle(t *testing.T) {

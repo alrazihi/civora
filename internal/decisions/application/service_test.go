@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
 	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,28 +51,6 @@ func (m *mockDecisionRepo) FindByOrganization(ctx context.Context, orgID uuid.UU
 }
 func (m *mockDecisionRepo) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
 	return 0, nil
-}
-
-type mockCaseUpdater struct {
-	mu       sync.RWMutex
-	statuses map[uuid.UUID]domain.CaseStatus
-}
-
-func newMockCaseUpdater() *mockCaseUpdater {
-	return &mockCaseUpdater{statuses: make(map[uuid.UUID]domain.CaseStatus)}
-}
-
-func (m *mockCaseUpdater) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.statuses[id] = status
-	return nil
-}
-
-func (m *mockCaseUpdater) getStatus(id uuid.UUID) domain.CaseStatus {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.statuses[id]
 }
 
 type mockCaseFinder struct {
@@ -116,10 +95,57 @@ func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
 	m.members[orgID][userID] = true
 }
 
+type mockWorkflowService struct {
+	instanceID  uuid.UUID
+	state       string
+	transitions map[string]workflowdomain.WorkflowTransition
+}
+
+func newMockWorkflowService(initialState string) *mockWorkflowService {
+	return &mockWorkflowService{
+		instanceID:  uuid.New(),
+		state:       initialState,
+		transitions: make(map[string]workflowdomain.WorkflowTransition),
+	}
+}
+
+func (m *mockWorkflowService) GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+}
+
+func (m *mockWorkflowService) GetValidTransitions(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error) {
+	var result []workflowdomain.WorkflowTransition
+	for _, tr := range m.transitions {
+		result = append(result, tr)
+	}
+	return result, nil
+}
+
+func (m *mockWorkflowService) ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
+	if tr, ok := m.transitions[params.TransitionKey]; ok {
+		m.state = tr.ToState
+		return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: params.TenantID, CurrentState: m.state}, nil
+	}
+	return nil, errors.New("transition not found")
+}
+
+func (m *mockWorkflowService) ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
+	return m.ExecuteTransition(ctx, params)
+}
+
+func (m *mockWorkflowService) addTransition(key, fromState, toState string) {
+	m.transitions[key] = workflowdomain.WorkflowTransition{
+		Key:       key,
+		FromState: fromState,
+		ToState:   toState,
+		Active:    true,
+	}
+}
+
 func TestMakeDecision_CrossTenantCase(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	caseUpdater := newMockCaseUpdater()
-	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, newMockUserChecker(), nil)
+	wf := newMockWorkflowService("NEW")
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, newMockUserChecker(), nil, wf)
 
 	org1 := uuid.New()
 	org2 := uuid.New()
@@ -141,9 +167,9 @@ func TestMakeDecision_CrossTenantCase(t *testing.T) {
 
 func TestMakeDecision_CrossTenantUser(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	caseUpdater := newMockCaseUpdater()
+	wf := newMockWorkflowService("NEW")
 	userChecker := newMockUserChecker()
-	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil, wf)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
@@ -162,17 +188,16 @@ func TestMakeDecision_CrossTenantUser(t *testing.T) {
 	assert.ErrorIs(t, err, ErrUserNotFound)
 }
 
-func TestMakeDecision_InvalidCaseStatus(t *testing.T) {
+func TestMakeDecision_NoValidTransition(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	caseUpdater := newMockCaseUpdater()
+	wf := newMockWorkflowService("NEW")
 	userChecker := newMockUserChecker()
-	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil, wf)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
 
 	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
-	c.Status = domain.CaseStatusNew
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -184,20 +209,20 @@ func TestMakeDecision_InvalidCaseStatus(t *testing.T) {
 		ActorID:          actorID,
 	})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrInvalidCaseStatus)
+	assert.ErrorIs(t, err, ErrCaseTransition)
 }
 
-func TestMakeDecision_AutoTransitionsToApproved(t *testing.T) {
+func TestMakeDecision_TransitionsToApproved(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	caseUpdater := newMockCaseUpdater()
+	wf := newMockWorkflowService("DECISION_PENDING")
+	wf.addTransition("approve", "DECISION_PENDING", "APPROVED")
 	userChecker := newMockUserChecker()
-	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil, wf)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
 
 	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
-	c.Status = domain.CaseStatusDecisionPending
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -209,20 +234,20 @@ func TestMakeDecision_AutoTransitionsToApproved(t *testing.T) {
 		ActorID:          actorID,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, domain.CaseStatusApproved, caseUpdater.getStatus(c.ID))
+	assert.Equal(t, "APPROVED", wf.state)
 }
 
-func TestMakeDecision_AutoTransitionsToRejected(t *testing.T) {
+func TestMakeDecision_TransitionsToRejected(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	caseUpdater := newMockCaseUpdater()
+	wf := newMockWorkflowService("DECISION_PENDING")
+	wf.addTransition("reject", "DECISION_PENDING", "REJECTED")
 	userChecker := newMockUserChecker()
-	svc := NewDecisionService(newMockDecisionRepo(), caseUpdater, caseFinder, userChecker, nil)
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil, wf)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
 
 	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
-	c.Status = domain.CaseStatusDecisionPending
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -234,5 +259,38 @@ func TestMakeDecision_AutoTransitionsToRejected(t *testing.T) {
 		ActorID:          actorID,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, domain.CaseStatusRejected, caseUpdater.getStatus(c.ID))
+	assert.Equal(t, "REJECTED", wf.state)
+}
+
+func TestMakeDecision_DuplicateDecision(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	wf := newMockWorkflowService("DECISION_PENDING")
+	wf.addTransition("approve", "DECISION_PENDING", "APPROVED")
+	userChecker := newMockUserChecker()
+	repo := newMockDecisionRepo()
+	svc := NewDecisionService(repo, caseFinder, userChecker, nil, wf)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	repo.items[uuid.New()] = &decisionsdomain.Decision{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeApproved,
+		DecisionMaker:    actorID,
+	}
+
+	_, err := svc.MakeDecision(context.Background(), MakeDecisionParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeApproved,
+		Reason:           "Approved",
+		ActorID:          actorID,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrDecisionInput)
 }

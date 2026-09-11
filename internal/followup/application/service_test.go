@@ -85,6 +85,13 @@ func (m *mockUserChecker) BelongsToOrganization(ctx context.Context, orgID, user
 	return false, nil
 }
 
+func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
+	if m.members[orgID] == nil {
+		m.members[orgID] = make(map[uuid.UUID]bool)
+	}
+	m.members[orgID][userID] = true
+}
+
 func TestCreateFollowUp_CrossTenantCase(t *testing.T) {
 	caseFinder := newMockCaseFinder()
 	svc := NewFollowUpService(newMockFollowUpRepo(), caseFinder, newMockUserChecker(), nil)
@@ -134,7 +141,8 @@ func TestCreateFollowUp_CrossTenantUser(t *testing.T) {
 
 func TestCreateFollowUp_InvalidCaseStatus(t *testing.T) {
 	caseFinder := newMockCaseFinder()
-	svc := NewFollowUpService(newMockFollowUpRepo(), caseFinder, newMockUserChecker(), nil)
+	userChecker := newMockUserChecker()
+	svc := NewFollowUpService(newMockFollowUpRepo(), caseFinder, userChecker, nil)
 
 	orgID := uuid.New()
 	actorID := uuid.New()
@@ -142,8 +150,9 @@ func TestCreateFollowUp_InvalidCaseStatus(t *testing.T) {
 	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
 	c.Status = domain.CaseStatusNew
 	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
 
-	_, err := svc.CreateFollowUp(context.Background(), CreateFollowUpParams{
+	f, err := svc.CreateFollowUp(context.Background(), CreateFollowUpParams{
 		OrganizationID:   orgID,
 		ServiceRequestID: c.ID,
 		ScheduledDate:    time.Now(),
@@ -151,6 +160,6 @@ func TestCreateFollowUp_InvalidCaseStatus(t *testing.T) {
 		Notes:            "Notes",
 		ActorID:          actorID,
 	})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrFollowUpInput)
+	require.NoError(t, err)
+	assert.NotNil(t, f)
 }

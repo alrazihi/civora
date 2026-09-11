@@ -165,25 +165,30 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 
 // ActivateWorkflowDefinition activates a draft workflow definition.
 func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
-	def, err := s.defRepo.FindByID(ctx, tenantID, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
+		def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+			}
+			return fmt.Errorf("workflow definition not found: %w", err)
 		}
-		return fmt.Errorf("workflow definition not found: %w", err)
-	}
-	if def.Status != domain.WorkflowStatusDraft {
-		return fmt.Errorf("only draft definitions can be activated")
-	}
+		if def.Status != domain.WorkflowStatusDraft {
+			return fmt.Errorf("only draft definitions can be activated")
+		}
 
-	def.Status = domain.WorkflowStatusActive
-	def.UpdatedAt = time.Now().UTC()
+		activeDef, _ := s.defRepo.FindLatestActiveByKey(ctx, tenantID, def.Key)
+		if activeDef != nil && activeDef.ID != def.ID {
+			return fmt.Errorf("another active version (%d) already exists for key %s", activeDef.Version, def.Key)
+		}
 
-	if err := s.defRepo.UpdateStatus(ctx, tenantID, id, domain.WorkflowStatusActive, def.Version); err != nil {
-		return fmt.Errorf("failed to activate workflow definition: %w", err)
-	}
+		def.Status = domain.WorkflowStatusActive
+		def.UpdatedAt = time.Now().UTC()
 
-	defer func() {
+		if err := s.defRepo.UpdateStatusTx(ctx, tx, tenantID, id, domain.WorkflowStatusActive, def.Version); err != nil {
+			return fmt.Errorf("failed to activate workflow definition: %w", err)
+		}
+
 		if s.auditor != nil {
 			defIDStr := def.ID.String()
 			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
@@ -200,32 +205,44 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 				},
 			})
 		}
-	}()
+
+		return nil
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // ArchiveWorkflowDefinition archives an active workflow definition.
 func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
-	def, err := s.defRepo.FindByID(ctx, tenantID, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
+		def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+			}
+			return fmt.Errorf("workflow definition not found: %w", err)
 		}
-		return fmt.Errorf("workflow definition not found: %w", err)
-	}
-	if def.Status != domain.WorkflowStatusActive {
-		return fmt.Errorf("only active definitions can be archived")
-	}
+		if def.Status != domain.WorkflowStatusActive {
+			return fmt.Errorf("only active definitions can be archived")
+		}
 
-	def.Status = domain.WorkflowStatusArchived
-	def.UpdatedAt = time.Now().UTC()
+		activeCount, err := s.instanceRepo.CountActiveByDefinitionID(ctx, tenantID, def.ID)
+		if err != nil {
+			return fmt.Errorf("failed to count active instances: %w", err)
+		}
+		if activeCount > 0 {
+			return fmt.Errorf("cannot archive workflow definition with %d active instances", activeCount)
+		}
 
-	if err := s.defRepo.UpdateStatus(ctx, tenantID, id, domain.WorkflowStatusArchived, def.Version); err != nil {
-		return fmt.Errorf("failed to archive workflow definition: %w", err)
-	}
+		def.Status = domain.WorkflowStatusArchived
+		def.UpdatedAt = time.Now().UTC()
 
-	defer func() {
+		if err := s.defRepo.UpdateStatusTx(ctx, tx, tenantID, id, domain.WorkflowStatusArchived, def.Version); err != nil {
+			return fmt.Errorf("failed to archive workflow definition: %w", err)
+		}
+
 		if s.auditor != nil {
 			defIDStr := def.ID.String()
 			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
@@ -242,7 +259,11 @@ func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantI
 				},
 			})
 		}
-	}()
+
+		return nil
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }

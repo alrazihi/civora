@@ -112,6 +112,17 @@ func (r *PostgresWorkflowInstanceRepository) FindByDefinitionID(ctx context.Cont
 	return instances, total, nil
 }
 
+func (r *PostgresWorkflowInstanceRepository) CountActiveByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) (int, error) {
+	var total int
+	err := r.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM workflow_instances WHERE organization_id = $1 AND workflow_definition_id = $2 AND completed_at IS NULL",
+		tenantID, defID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count active workflow instances: %w", err)
+	}
+	return total, nil
+}
+
 func (r *PostgresWorkflowInstanceRepository) UpdateState(ctx context.Context, tenantID, id uuid.UUID, state string, version int) error {
 	return r.updateState(ctx, r.db, tenantID, id, state, version)
 }
