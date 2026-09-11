@@ -69,8 +69,7 @@ function showToast(message, type = 'info') {
     return c;
   })();
   const toast = document.createElement('div');
-  const bg = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : 'var(--primary)';
-  toast.style.cssText = `background:${bg};color:#fff;padding:12px 16px;border-radius:var(--radius);box-shadow:var(--shadow);max-width:320px;animation:slideIn 0.3s ease;`;
+  toast.className = `toast ${type}`;
   toast.textContent = message;
   container.appendChild(toast);
   setTimeout(() => {
@@ -80,10 +79,7 @@ function showToast(message, type = 'info') {
 }
 
 const styleEl = document.createElement('style');
-styleEl.textContent = `
-@keyframes slideIn { from { opacity:0; transform:translateX(100%); } to { opacity:1; transform:translateX(0); } }
-@keyframes slideOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(100%); } }
-`;
+styleEl.textContent = '';
 document.head.appendChild(styleEl);
 
 function getServiceDomain(serviceType) {
@@ -452,14 +448,11 @@ const app = {
     const container = document.getElementById('case-actions');
     if (!container || !this.currentCase) return;
     this.loadWorkflowTransitions(this.currentCase.id).then(transitions => {
-      let html = '';
-      if (transitions.length) {
-        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-        for (const t of transitions) {
-          html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
-        }
-        html += '</div>';
+      let html = '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+      for (const t of transitions) {
+        html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
       }
+      html += '</div>';
       const state = this.currentWorkflow?.instance?.current_state;
       if (state) {
         const terminalStates = getTerminalStates(this.currentWorkflow?.definition);
@@ -563,7 +556,14 @@ const app = {
   },
   showFollowUpForm() { this.showModal('followup-modal'); },
 
-  showModal(id) { document.getElementById(id)?.classList.remove('hidden'); },
+  showModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+    if (!el.style.position) {
+      el.classList.add('modal-overlay');
+    }
+  },
   hideModal(id) { document.getElementById(id)?.classList.add('hidden'); },
 
   async loadStaffOptions() {
@@ -753,18 +753,18 @@ const app = {
     const canArchive = d.status === 'ACTIVE';
     const canEdit = d.status === 'DRAFT';
     const canDelete = d.status === 'DRAFT';
-    let actionBtns = `<button class="btn secondary" style="font-size:0.8rem;padding:4px 8px" onclick="app.showWorkflowDetail('${d.id}')">View</button>`;
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${d.id}')">View</button>`;
     if (canEdit) {
-      actionBtns += ` <button class="btn secondary" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')">Edit</button>`;
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')">Edit</button>`;
     }
     if (canActivate) {
-      actionBtns += ` <button class="btn" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.activateWorkflow('${d.id}')">Activate</button>`;
+      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${d.id}')">Activate</button>`;
     }
     if (canArchive) {
-      actionBtns += ` <button class="btn warning" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')">Archive</button>`;
+      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')">Archive</button>`;
     }
     if (canDelete) {
-      actionBtns += ` <button class="btn danger" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')">Delete</button>`;
+      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')">Delete</button>`;
     }
     return `<tr>
       <td>${escapeHTML(d.name)} <span class="text-muted" style="font-size:0.8rem">(${escapeHTML(d.key)})</span></td>
@@ -788,10 +788,10 @@ const app = {
     const end = Math.min(totalPages, p + max - 1);
     p = Math.max(1, end - max + 1);
     let html = '';
-    for (let i = p; i <= end; i++) {
-      if (i === page) html += `<span class="badge" style="margin-right:4px">${i}</span>`;
-      else html += `<button class="btn secondary" style="font-size:0.8rem;padding:4px 8px;margin-right:4px" onclick="app.loadWorkflowList(${i})">${i}</button>`;
-    }
+      for (let i = p; i <= end; i++) {
+        if (i === page) html += `<span class="badge" style="margin-right:4px">${i}</span>`;
+        else html += `<button class="btn secondary sm" style="margin-right:4px" onclick="app.loadWorkflowList(${i})">${i}</button>`;
+      }
     el.innerHTML = html;
   },
 
@@ -865,11 +865,11 @@ const app = {
     const isArchived = def.status === 'ARCHIVED';
 
     const statusBadge = (status, text) => `<span class="badge wf-status-${status.toLowerCase()}" style="text-transform:none">${escapeHTML(text)}</span>`;
-    let actions = `<button class="btn secondary" style="font-size:0.8rem" onclick="app.showWorkflowsView()">Back to Workflows</button>`;
+    let actions = `<button class="btn secondary sm" onclick="app.showWorkflowsView()">Back to Workflows</button>`;
     if (isDraft) {
-      actions += ` <button class="btn" style="font-size:0.8rem" onclick="app.activateWorkflow('${def.id}')">Activate</button>`;
+      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')">Activate</button>`;
     } else if (isActive) {
-      actions += ` <button class="btn warning" style="font-size:0.8rem" onclick="app.archiveWorkflow('${def.id}')">Archive</button>`;
+      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')">Archive</button>`;
     }
     const badge = statusBadge(def.status, def.status);
 
@@ -1025,7 +1025,7 @@ const app = {
     container.innerHTML = `
       <div class="header" style="margin-bottom:16px">
         <h1>${title}</h1>
-        <nav><button class="btn secondary" onclick="app.cancelWorkflowCreate()">Cancel</button></nav>
+        <nav><button class="btn secondary sm" onclick="app.cancelWorkflowCreate()">Cancel</button></nav>
       </div>
       <div class="card">
         <h2>Workflow</h2>
@@ -1069,7 +1069,7 @@ const app = {
       <div class="card">
         <div id="wf-create-errors" style="color:var(--danger);margin-bottom:12px;"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn secondary" onclick="app.cancelWorkflowCreate()">Cancel</button>
+          <button class="btn secondary" onclick="app.cancelWorkflowCreate()">Back</button>
           <button class="btn" onclick="app.validateAndSubmitWorkflow()">${submitLabel}</button>
         </div>
       </div>
@@ -1171,19 +1171,19 @@ const app = {
     const c = this.workflowDraft;
     const tbody = document.getElementById('wf-states-tbody');
     if (!tbody) return;
-     tbody.innerHTML = c.states.map((s, i) => {
-       return `<tr>
+    tbody.innerHTML = c.states.map((s, i) => {
+      return `<tr>
         <td><input style="width:110px" value="${escapeHTML(s.key)}" oninput="app.onStateFieldChange(${i}, 'key', this.value)"></td>
         <td><input value="${escapeHTML(s.name)}" oninput="app.onStateFieldChange(${i}, 'name', this.value)"></td>
         <td><input value="${escapeHTML(s.description)}" oninput="app.onStateFieldChange(${i}, 'description', this.value)"></td>
         <td><input value="${escapeHTML(s.category)}" oninput="app.onStateFieldChange(${i}, 'category', this.value)"></td>
-         <td><input type="number" min="0" style="width:80px" value="${s.display_order}" onchange="app.onStateFieldChange(${i}, 'display_order', parseInt(this.value,10)||0)"></td>
-         <td style="text-align:center"><input type="checkbox" ${s.terminal ? 'checked' : ''} onchange="app.onStateFieldChange(${i}, 'terminal', this.checked)"></td>
+        <td><input type="number" min="0" style="width:80px" value="${s.display_order}" onchange="app.onStateFieldChange(${i}, 'display_order', parseInt(this.value,10)||0)"></td>
+        <td style="text-align:center"><input type="checkbox" ${s.terminal ? 'checked' : ''} onchange="app.onStateFieldChange(${i}, 'terminal', this.checked)"></td>
         <td><input value="${escapeHTML(s.responsible_role)}" oninput="app.onStateFieldChange(${i}, 'responsible_role', this.value)"></td>
         <td style="white-space:nowrap">
-          <button class="btn secondary" style="font-size:0.75rem;padding:2px 6px" onclick="app.moveStateUp(${i})">↑</button>
-          <button class="btn secondary" style="font-size:0.75rem;padding:2px 6px" onclick="app.moveStateDown(${i})">↓</button>
-          <button class="btn danger" style="font-size:0.75rem;padding:2px 6px" onclick="app.removeWorkflowState(${i})">✕</button>
+          <button class="btn secondary sm" onclick="app.moveStateUp(${i})">↑</button>
+          <button class="btn secondary sm" onclick="app.moveStateDown(${i})">↓</button>
+          <button class="btn danger sm" onclick="app.removeWorkflowState(${i})">✕</button>
         </td>
       </tr>`;
       }).join('');
@@ -1202,12 +1202,12 @@ const app = {
         <td><input style="width:110px" value="${escapeHTML(t.key)}" oninput="app.onTransitionFieldChange(${i}, 'key', this.value)"></td>
         <td><input value="${escapeHTML(t.name)}" oninput="app.onTransitionFieldChange(${i}, 'name', this.value)"></td>
         <td><select onchange="app.onTransitionFieldChange(${i}, 'from_state', this.value)">${selectOptions(t.from_state)}</select></td>
-        <td><select onchange="app.onTransitionFieldChange(${i}, 'to_state', this.value)}">${selectOptions(t.to_state)}</select></td>
-        <td style="text-align:center"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="app.onTransitionFieldChange(${i}, 'active', this.checked)}"></td>
+        <td><select onchange="app.onTransitionFieldChange(${i}, 'to_state', this.value)">${selectOptions(t.to_state)}</select></td>
+        <td style="text-align:center"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="app.onTransitionFieldChange(${i}, 'active', this.checked)"></td>
         <td><input value="${Array.isArray(t.allowed_roles) ? t.allowed_roles.join(', ') : ''}" oninput="app.onTransitionFieldChange(${i}, 'allowed_roles_raw', this.value)" placeholder="admin, staff"></td>
         <td><input style="width:140px" value="${Array.isArray(t.conditions) && t.conditions.length ? JSON.stringify(t.conditions) : ''}" oninput="app.onTransitionFieldChange(${i}, 'conditions_raw', this.value)" placeholder="[]"></td>
-        <td><input value="${escapeHTML(t.description)}" oninput="app.onTransitionFieldChange(${i}, 'description', this.value)}"></td>
-        <td style="white-space:nowrap"><button class="btn danger" style="font-size:0.75rem;padding:2px 6px" onclick="app.removeWorkflowTransition(${i})">✕</button></td>
+        <td><input value="${escapeHTML(t.description)}" oninput="app.onTransitionFieldChange(${i}, 'description', this.value)"></td>
+        <td style="white-space:nowrap"><button class="btn danger sm" onclick="app.removeWorkflowTransition(${i})">✕</button></td>
       </tr>`;
     }).join('');
   },

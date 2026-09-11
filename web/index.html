@@ -10,8 +10,8 @@
   <div id="view-login" class="hidden">
     <div class="auth-form">
       <div class="card">
-        <h1 style="text-align:center;margin-bottom:16px">CIVORA</h1>
-        <p style="text-align:center;color:var(--text-muted);margin-bottom:20px">Public Service Delivery</p>
+        <h1 style="text-align:center;margin-bottom:4px;font-size:2rem">CIVORA</h1>
+        <p style="text-align:center;color:var(--text-muted);margin-bottom:24px;font-size:1rem">Public Service Delivery Platform</p>
         <form id="login-form" onsubmit="app.login(event)">
           <label>Organization Slug</label>
           <input id="login-org" required placeholder="e.g. emergency-response">
@@ -19,10 +19,10 @@
           <input id="login-email" type="email" required placeholder="staff@org.org">
           <label>Password</label>
           <input id="login-password" type="password" required>
-          <button type="submit" class="btn" style="width:100%">Sign In</button>
+          <button type="submit" class="btn" style="width:100%;justify-content:center">Sign In</button>
         </form>
-        <hr style="margin:16px 0;border-color:var(--border)">
-        <p style="font-size:0.85rem;color:var(--text-muted)">No account? Register below.</p>
+        <hr style="margin:20px 0;border-color:var(--border)">
+        <p style="font-size:0.85rem;color:var(--text-muted);text-align:center;margin-bottom:16px">No account? Register below.</p>
         <form id="register-form" onsubmit="app.register(event)">
           <label>Organization Slug</label>
           <input id="reg-org" required placeholder="e.g. emergency-response">
@@ -32,9 +32,9 @@
           <input id="reg-email" type="email" required placeholder="jane@org.org">
           <label>Password (min 12 chars, 1 letter, 1 number)</label>
           <input id="reg-password" type="password" required minlength="12">
-          <button type="submit" class="btn secondary" style="width:100%">Register</button>
+          <button type="submit" class="btn secondary" style="width:100%;justify-content:center">Create Account</button>
         </form>
-        <p id="register-success" class="hidden" style="color:var(--success);text-align:center;margin-top:12px">Registered! You can now sign in.</p>
+        <p id="register-success" class="hidden" style="color:var(--success);text-align:center;margin-top:12px;font-weight:500">Registered! You can now sign in.</p>
       </div>
     </div>
   </div>
@@ -44,7 +44,7 @@
       <div class="header">
         <div>
           <h1>Cases</h1>
-          <p style="color:var(--text-muted)">Service Requests</p>
+          <p>Service Requests</p>
         </div>
         <nav>
           <button class="btn" onclick="router.navigate('new-case')">New Request</button>
@@ -66,9 +66,9 @@
       <div class="header">
         <div>
           <h1 id="case-title"></h1>
-          <p style="color:var(--text-muted)"><span id="case-number"></span> · <span id="case-status" class="badge"></span> · <span id="case-service"></span> · Priority: <span id="case-priority"></span></p>
-          <p id="workflow-label" class="hidden" style="color:var(--text-muted);font-size:0.9rem;margin-top:4px"></p>
-          <div id="service-banner" class="service-banner hidden" style="margin-top:8px;padding:8px 12px;border-radius:var(--radius);font-weight:600;font-size:0.9rem;"></div>
+          <p><span id="case-number"></span> · <span id="case-status" class="badge"></span> · <span id="case-service"></span> · Priority: <span id="case-priority"></span></p>
+          <p id="workflow-label" class="hidden" style="color:var(--text-muted);font-size:0.85rem;margin-top:4px"></p>
+          <div id="service-banner" class="service-banner hidden" style="margin-top:8px;"></div>
         </div>
         <nav>
           <button class="btn secondary" onclick="router.navigate('dashboard')">Dashboard</button>
@@ -79,49 +79,51 @@
 
       <div class="card">
         <h2>Description</h2>
-        <p id="case-desc"></p>
+        <p id="case-desc" style="color:var(--text-secondary);line-height:1.7"></p>
       </div>
 
       <div class="card">
         <h2>Workflow</h2>
         <div id="workflow-current-state" style="margin-bottom:16px;">
-          <span class="badge" id="workflow-state-badge" style="font-size:1rem;padding:6px 12px;"></span>
-          <span id="workflow-state-name" style="margin-left:8px;color:var(--text-muted);"></span>
+          <span class="badge" id="workflow-state-badge" style="font-size:0.85rem;padding:6px 14px;"></span>
+          <span id="workflow-state-name" style="margin-left:8px;color:var(--text-secondary);font-weight:500;"></span>
         </div>
-        <div id="workflow-progress" class="workflow-progress" style="margin-bottom:16px;"></div>
-        <div id="workflow-actions" style="margin-bottom:16px;">
-          <h3 style="margin:0 0 8px 0;font-size:0.95rem;">Available Actions</h3>
+        <div id="workflow-progress" class="workflow-progress" style="margin-bottom:20px;"></div>
+        <div id="workflow-actions" style="margin-bottom:20px;">
+          <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Available Actions</h3>
           <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
         </div>
         <div>
-          <h3 style="margin:0 0 8px 0;font-size:0.95rem;">Workflow Timeline</h3>
+          <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Workflow Timeline</h3>
           <div id="timeline" class="timeline"></div>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Eligibility</h2>
-        <div id="sec-eligibility"></div>
-      </div>
-      <div class="card">
-        <h2>Evidence</h2>
-        <div id="sec-evidence"></div>
-      </div>
-      <div class="card">
-        <h2>Assessment</h2>
-        <div id="sec-assessment"></div>
-      </div>
-      <div class="card">
-        <h2>Decision</h2>
-        <div id="sec-decision"></div>
-      </div>
-      <div class="card">
-        <h2>Assistance</h2>
-        <div id="sec-assistance"></div>
-      </div>
-      <div class="card">
-        <h2>Follow-up</h2>
-        <div id="sec-followup"></div>
+      <div class="sections-grid">
+        <div class="card">
+          <h2>Eligibility</h2>
+          <div id="sec-eligibility"></div>
+        </div>
+        <div class="card">
+          <h2>Evidence</h2>
+          <div id="sec-evidence"></div>
+        </div>
+        <div class="card">
+          <h2>Assessment</h2>
+          <div id="sec-assessment"></div>
+        </div>
+        <div class="card">
+          <h2>Decision</h2>
+          <div id="sec-decision"></div>
+        </div>
+        <div class="card">
+          <h2>Assistance</h2>
+          <div id="sec-assistance"></div>
+        </div>
+        <div class="card">
+          <h2>Follow-up</h2>
+          <div id="sec-followup"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -135,23 +137,58 @@
       <div class="card">
         <h2>Step 1: Register Person</h2>
         <form onsubmit="app.createPerson(event)">
-          <label>First Name</label><input id="p-first" required>
-          <label>Last Name</label><input id="p-last" required>
-          <label>Preferred Language</label><input id="p-lang" value="en">
-          <label>Date of Birth (YYYY-MM-DD)</label><input id="p-dob" type="date">
-          <label>Email</label><input id="p-email" type="email">
-          <label>Phone</label><input id="p-phone">
-          <label>Address</label><input id="p-address">
-          <label>City</label><input id="p-city">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+            <div>
+              <label>First Name</label>
+              <input id="p-first" required>
+            </div>
+            <div>
+              <label>Last Name</label>
+              <input id="p-last" required>
+            </div>
+          </div>
+          <label>Preferred Language</label>
+          <input id="p-lang" value="en">
+          <label>Date of Birth (YYYY-MM-DD)</label>
+          <input id="p-dob" type="date">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+            <div>
+              <label>Email</label>
+              <input id="p-email" type="email">
+            </div>
+            <div>
+              <label>Phone</label>
+              <input id="p-phone">
+            </div>
+          </div>
+          <label>Address</label>
+          <input id="p-address">
+          <label>City</label>
+          <input id="p-city">
           <button type="submit" class="btn">Register Person</button>
         </form>
-        <p id="person-result" style="margin-top:8px;color:var(--success)"></p>
+        <p id="person-result" style="margin-top:8px;color:var(--success);font-weight:500"></p>
       </div>
       <div class="card">
         <h2>Step 2: Create Case</h2>
         <form onsubmit="app.createCase(event)">
-          <label>Title</label><input id="c-title" required>
-          <label>Description</label><textarea id="c-desc" rows="3"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+            <div>
+              <label>Title</label>
+              <input id="c-title" required>
+            </div>
+            <div>
+              <label>Priority</label>
+              <select id="c-priority">
+                <option value="URGENT">Urgent</option>
+                <option value="HIGH">High</option>
+                <option value="NORMAL" selected>Normal</option>
+                <option value="LOW">Low</option>
+              </select>
+            </div>
+          </div>
+          <label>Description</label>
+          <textarea id="c-desc" rows="3"></textarea>
           <label>Service Type</label>
           <select id="c-service">
             <option value="EMERGENCY">Emergency</option>
@@ -163,13 +200,6 @@
             <option value="EDUCATION">Education</option>
             <option value="GENERAL">General</option>
           </select>
-          <label>Priority</label>
-          <select id="c-priority">
-            <option value="URGENT">Urgent</option>
-            <option value="HIGH">High</option>
-            <option value="NORMAL">Normal</option>
-            <option value="LOW">Low</option>
-          </select>
           <input type="hidden" id="new-case-person-id">
           <button type="submit" class="btn">Create Request</button>
         </form>
@@ -177,49 +207,48 @@
     </div>
   </div>
 
-  <!-- Workflow Administration: List -->
   <div id="view-workflows" class="hidden">
     <div class="container">
       <div class="header">
         <div>
           <h1>Workflows</h1>
-          <p style="color:var(--text-muted)">Workflow Definitions</p>
+          <p>Workflow Definitions</p>
         </div>
         <nav id="wf-list-actions"></nav>
       </div>
       <div class="card">
+        <div class="table-wrap">
         <table>
           <thead>
             <tr><th>Name</th><th>Description</th><th>Version</th><th>Status</th><th>States</th><th>Transitions</th><th>Initial / Terminal</th><th>Created / Updated</th><th>Actions</th></tr>
           </thead>
           <tbody id="wf-table-body"></tbody>
         </table>
+        </div>
         <div id="wf-page-meta" style="margin-top:12px;color:var(--text-muted);font-size:0.85rem"></div>
         <div id="wf-pagination" style="margin-top:8px"></div>
       </div>
     </div>
   </div>
 
-  <!-- Workflow Administration: Detail (content rendered by JS) -->
   <div id="view-workflow-detail" class="hidden">
     <div class="container">
       <div id="wf-detail-container"></div>
     </div>
   </div>
 
-  <!-- Workflow Administration: Create / Editor (content rendered by JS) -->
   <div id="view-new-workflow" class="hidden">
     <div class="container">
       <div id="wf-create-container"></div>
     </div>
   </div>
 
-  <!-- Modals -->
-  <div id="eligibility-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;">
-    <div class="card" style="max-width:500px;width:90%">
+  <div id="eligibility-modal" class="hidden modal-overlay">
+    <div class="card" style="max-width:500px;width:100%">
       <h2>Add Eligibility</h2>
       <form onsubmit="app.submitEligibility(event)">
-        <label>Explanation</label><textarea id="elig-explanation" rows="3" required></textarea>
+        <label>Explanation</label>
+        <textarea id="elig-explanation" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('eligibility-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>
@@ -228,8 +257,8 @@
     </div>
   </div>
 
-  <div id="evidence-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;">
-    <div class="card" style="max-width:500px;width:90%">
+  <div id="evidence-modal" class="hidden modal-overlay">
+    <div class="card" style="max-width:500px;width:100%">
       <h2>Add Evidence</h2>
       <form onsubmit="app.submitEvidence(event)">
         <label>Type</label>
@@ -241,8 +270,10 @@
           <option value="PHOTOGRAPH">Photograph</option>
           <option value="STAFF_NOTE">Staff Note</option>
         </select>
-        <label>Description</label><input id="ev-desc" required>
-        <label>Storage Reference</label><input id="ev-ref" required placeholder="s3://bucket/key or local path">
+        <label>Description</label>
+        <input id="ev-desc" required>
+        <label>Storage Reference</label>
+        <input id="ev-ref" required placeholder="s3://bucket/key or local path">
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('evidence-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>
@@ -251,13 +282,16 @@
     </div>
   </div>
 
-  <div id="assessment-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;">
-    <div class="card" style="max-width:500px;width:90%">
+  <div id="assessment-modal" class="hidden modal-overlay">
+    <div class="card" style="max-width:500px;width:100%">
       <h2>Add Assessment</h2>
       <form onsubmit="app.submitAssessment(event)">
-        <label>Findings</label><textarea id="as-findings" rows="3" required></textarea>
-        <label>Needs Identified</label><textarea id="as-needs" rows="2"></textarea>
-        <label>Recommendation</label><textarea id="as-rec" rows="2" required></textarea>
+        <label>Findings</label>
+        <textarea id="as-findings" rows="3" required></textarea>
+        <label>Needs Identified</label>
+        <textarea id="as-needs" rows="2"></textarea>
+        <label>Recommendation</label>
+        <textarea id="as-rec" rows="2" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('assessment-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>
@@ -266,8 +300,8 @@
     </div>
   </div>
 
-  <div id="decision-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;">
-    <div class="card" style="max-width:500px;width:90%">
+  <div id="decision-modal" class="hidden modal-overlay">
+    <div class="card" style="max-width:500px;width:100%">
       <h2>Record Decision</h2>
       <form onsubmit="app.submitDecision(event)">
         <label>Decision</label>
@@ -276,7 +310,8 @@
           <option value="REJECTED">Reject</option>
           <option value="NEEDS_MORE_INFORMATION">Needs More Information</option>
         </select>
-        <label>Reason</label><textarea id="dec-reason" rows="3" required></textarea>
+        <label>Reason</label>
+        <textarea id="dec-reason" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('decision-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>
@@ -285,8 +320,8 @@
     </div>
   </div>
 
-  <div id="assistance-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;">
-    <div class="card" style="max-width:500px;width:90%">
+  <div id="assistance-modal" class="hidden modal-overlay">
+    <div class="card" style="max-width:500px;width:100%">
       <h2>Add Assistance</h2>
       <form onsubmit="app.submitAssistance(event)">
         <label>Type</label>
@@ -299,8 +334,10 @@
           <option value="TRANSPORT">Transport</option>
           <option value="OTHER">Other</option>
         </select>
-        <label>Description</label><textarea id="asst-desc" rows="3" required></textarea>
-        <label>Responsible Staff</label><select id="asst-staff" required><option value="">Select staff...</option></select>
+        <label>Description</label>
+        <textarea id="asst-desc" rows="3" required></textarea>
+        <label>Responsible Staff</label>
+        <select id="asst-staff" required><option value="">Select staff...</option></select>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('assistance-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>
@@ -309,13 +346,16 @@
     </div>
   </div>
 
-  <div id="followup-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;">
-    <div class="card" style="max-width:500px;width:90%">
+  <div id="followup-modal" class="hidden modal-overlay">
+    <div class="card" style="max-width:500px;width:100%">
       <h2>Add Follow-up</h2>
       <form onsubmit="app.submitFollowUp(event)">
-        <label>Scheduled Date (YYYY-MM-DD)</label><input id="fu-date" type="date" required>
-        <label>Outcome</label><input id="fu-outcome" required>
-        <label>Notes</label><textarea id="fu-notes" rows="3" required></textarea>
+        <label>Scheduled Date (YYYY-MM-DD)</label>
+        <input id="fu-date" type="date" required>
+        <label>Outcome</label>
+        <input id="fu-outcome" required>
+        <label>Notes</label>
+        <textarea id="fu-notes" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('followup-modal')">Cancel</button>
           <button type="submit" class="btn">Save</button>
