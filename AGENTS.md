@@ -78,3 +78,33 @@ go test -p 1 -count=1 ./...
 # Run only unit tests (fast, no database)
 go test -short ./...
 ```
+
+## Global Agent Instructions
+
+For large tasks, agents should follow this workflow:
+
+1. **Create a feature branch** - Before starting significant work, create a new feature branch from main:
+   ```bash
+   git checkout -b feature/<descriptive-name>
+   ```
+
+2. **Implement the feature** - Work on the task in the feature branch
+
+3. **Double-check work** - Before merging:
+   - Run all tests: `go test -p 1 -count=1 ./...`
+   - Run linter: `go vet ./...`
+   - Check formatting: `gofmt -l .`
+   - Verify the build: `go build ./...`
+
+4. **Merge when confident** - Only merge to main when all checks pass:
+   ```bash
+   git checkout main
+   git merge feature/<descriptive-name>
+   git branch -d feature/<descriptive-name>
+   ```
+
+5. **Self-score the task** - After completion, provide a self-assessment score (1-10) based on:
+   - Code quality and adherence to project standards
+   - Test coverage and correctness
+   - Completeness of the implementation
+   - Documentation updates if needed
