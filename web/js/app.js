@@ -45,8 +45,6 @@ const SERVICE_DOMAIN = {
   }
 };
 
-const DEFAULT_TERMINAL_STATES = ['REJECTED', 'CLOSED'];
-
 function getTerminalStates(def) {
   if (!def || !Array.isArray(def.states)) return [];
   return def.states.filter(s => s.terminal).map(s => s.key);

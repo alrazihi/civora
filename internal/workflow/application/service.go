@@ -145,6 +145,9 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 			}
 			def.States[i].WorkflowDefID = def.ID
 			def.States[i].TenantID = def.TenantID
+			if def.States[i].CreatedAt.IsZero() {
+				def.States[i].CreatedAt = now
+			}
 		}
 		if err := s.stateRepo.SaveBatchTx(ctx, tx, def.States); err != nil {
 			return fmt.Errorf("failed to save workflow states: %w", err)
@@ -155,6 +158,9 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 			}
 			def.Transitions[i].WorkflowDefID = def.ID
 			def.Transitions[i].TenantID = def.TenantID
+			if def.Transitions[i].CreatedAt.IsZero() {
+				def.Transitions[i].CreatedAt = now
+			}
 		}
 		if err := s.transitionRepo.SaveBatchTx(ctx, tx, def.Transitions); err != nil {
 			return fmt.Errorf("failed to save workflow transitions: %w", err)
