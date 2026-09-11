@@ -129,25 +129,74 @@ func (r *PostgresWorkflowDefinitionRepository) ListByOrganization(ctx context.Co
 	return definitions, total, nil
 }
 
+func (r *PostgresWorkflowDefinitionRepository) Update(ctx context.Context, def *domain.WorkflowDefinition) error {
+	return r.updateDefinition(ctx, r.db, def)
+}
+
+func (r *PostgresWorkflowDefinitionRepository) UpdateTx(ctx context.Context, tx *sql.Tx, def *domain.WorkflowDefinition) error {
+	return r.updateDefinition(ctx, tx, def)
+}
+
+func (r *PostgresWorkflowDefinitionRepository) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	return r.deleteDefinition(ctx, r.db, tenantID, id)
+}
+
+func (r *PostgresWorkflowDefinitionRepository) DeleteTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) error {
+	return r.deleteDefinition(ctx, tx, tenantID, id)
+}
+
+// UpdateStatus updates the status of a workflow definition.
 func (r *PostgresWorkflowDefinitionRepository) UpdateStatus(ctx context.Context, tenantID, id uuid.UUID, status domain.WorkflowDefinitionStatus, version int) error {
 	return r.updateStatus(ctx, r.db, tenantID, id, status, version)
 }
 
+// UpdateStatusTx updates the status of a workflow definition within a transaction.
 func (r *PostgresWorkflowDefinitionRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID, status domain.WorkflowDefinitionStatus, version int) error {
 	return r.updateStatus(ctx, tx, tenantID, id, status, version)
 }
 
-func (r *PostgresWorkflowDefinitionRepository) updateStatus(ctx context.Context, e interface {
+func (r *PostgresWorkflowDefinitionRepository) deleteDefinition(ctx context.Context, e interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-}, tenantID uuid.UUID, id uuid.UUID, status domain.WorkflowDefinitionStatus, version int) error {
+}, tenantID, id uuid.UUID) error {
+	query := `
+		DELETE FROM workflow_definitions
+		WHERE organization_id = $1 AND id = $2
+	`
+	result, err := e.ExecContext(ctx, query, tenantID, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete workflow definition: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("workflow definition not found")
+	}
+	return nil
+}
+
+func (r *PostgresWorkflowDefinitionRepository) updateDefinition(ctx context.Context, e interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}, def *domain.WorkflowDefinition) error {
 	query := `
 		UPDATE workflow_definitions
-		SET status = $1, updated_at = now()
-		WHERE organization_id = $2 AND id = $3 AND version = $4
+		SET key = $2, name = $3, description = $4, version = $5, status = $6, 
+		    initial_state = $7, metadata = $8, updated_at = now()
+		WHERE organization_id = $1 AND id = $9 AND version = $10
 	`
-	result, err := e.ExecContext(ctx, query, string(status), tenantID, id, version)
+	metadataJSON, err := json.Marshal(def.Metadata)
 	if err != nil {
-		return fmt.Errorf("failed to update workflow definition status: %w", err)
+		return fmt.Errorf("failed to marshal workflow definition metadata: %w", err)
+	}
+
+	result, err := e.ExecContext(ctx, query,
+		def.TenantID, def.Key, def.Name, def.Description,
+		def.Version, string(def.Status), def.InitialState, metadataJSON,
+		def.ID, def.Version,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update workflow definition: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
@@ -211,4 +260,27 @@ func (r *PostgresWorkflowDefinitionRepository) scanDefinitionFromRows(rows *sql.
 	def.CreatedAt = createdAt
 	def.UpdatedAt = updatedAt
 	return &def, nil
+}
+
+// updateStatus updates the status of a workflow definition.
+func (r *PostgresWorkflowDefinitionRepository) updateStatus(ctx context.Context, e interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}, tenantID uuid.UUID, id uuid.UUID, status domain.WorkflowDefinitionStatus, version int) error {
+	query := `
+		UPDATE workflow_definitions
+		SET status = $1, updated_at = now()
+		WHERE organization_id = $2 AND id = $3 AND version = $4
+	`
+	result, err := e.ExecContext(ctx, query, string(status), tenantID, id, version)
+	if err != nil {
+		return fmt.Errorf("failed to update workflow definition status: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("concurrent modification detected")
+	}
+	return nil
 }

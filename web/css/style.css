@@ -88,3 +88,22 @@ th { color: var(--text-muted); font-weight: 600; }
 .section-hint { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
 
 .assistance-status { margin-left: 6px; }
+
+.text-muted { color: var(--text-muted); }
+
+.table-wrap { overflow-x: auto; max-width: 100%; }
+
+.wf-status-draft { background: #fef3c7; color: #92400e; }
+.wf-status-active { background: #d1fae5; color: #065f46; }
+.wf-status-archived { background: #e2e8f0; color: #475569; }
+
+@media (max-width: 720px) {
+  .container { padding: 16px; }
+  .header { flex-wrap: wrap; gap: 12px; }
+  .header nav { flex: 1; }
+  .workflow-progress { padding: 8px 0; }
+  .step-label { font-size: 0.7rem; }
+  .wf-steps { display: none; }
+  th, td { padding: 8px; font-size: 0.85rem; }
+  input, select, textarea { padding: 8px 10px; font-size: 0.85rem; }
+}

@@ -27,6 +27,8 @@ type mockWorkflowService struct {
 	instances            []*workflowdomain.WorkflowInstance
 	histories            []workflowdomain.WorkflowTransitionHistory
 	mockCreateDef        func(ctx context.Context, params workflowapp.CreateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error)
+	mockUpdateDef        func(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error)
+	mockDeleteDef        func(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error
 	mockActivateDef      func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	mockArchiveDef       func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	mockGetDef           func(ctx context.Context, tenantID, id uuid.UUID) (*workflowdomain.WorkflowDefinition, error)
@@ -128,6 +130,42 @@ func (m *mockWorkflowService) GetWorkflowHistoryByCaseID(ctx context.Context, te
 	return m.histories, nil
 }
 
+func (m *mockWorkflowService) UpdateWorkflowDefinition(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error) {
+	if m.mockUpdateDef != nil {
+		return m.mockUpdateDef(ctx, params)
+	}
+	// Simple mock implementation - find the definition and update it
+	for _, def := range m.defs {
+		if def.ID == params.ID && def.TenantID == params.TenantID {
+			// Update the definition with the new values
+			def.Key = params.Key
+			def.Name = params.Name
+			def.Description = params.Description
+			def.Version = params.Version
+			def.InitialState = params.InitialState
+			def.Metadata = params.Metadata
+			// Note: In a real implementation, we would also update states and transitions
+			return def, nil
+		}
+	}
+	return nil, workflowdomain.ErrWorkflowDefinitionNotFound{DefID: params.ID}
+}
+
+func (m *mockWorkflowService) DeleteWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
+	if m.mockDeleteDef != nil {
+		return m.mockDeleteDef(ctx, tenantID, id, actorID)
+	}
+	// Simple mock implementation - remove the definition
+	for i, def := range m.defs {
+		if def.ID == id && def.TenantID == tenantID {
+			// Remove the definition from the slice
+			m.defs = append(m.defs[:i], m.defs[i+1:]...)
+			return nil
+		}
+	}
+	return workflowdomain.ErrWorkflowDefinitionNotFound{DefID: id}
+}
+
 func generateTestJWT(secret, userID, orgID, role string) string {
 	claims := jwt.MapClaims{
 		"sub":             userID,
@@ -153,8 +191,10 @@ func setupWorkflowRouter(svc WorkflowService) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin"))
 			r.Post("/", h.CreateWorkflowDefinition)
+			r.Put("/{workflowId}", h.UpdateWorkflowDefinition)
 			r.Post("/{workflowId}/activate", h.ActivateWorkflowDefinition)
 			r.Post("/{workflowId}/archive", h.ArchiveWorkflowDefinition)
+			r.Delete("/{workflowId}", h.DeleteWorkflowDefinition)
 		})
 	})
 	r.Route("/api/v1/organizations/{orgId}/cases/{caseId}/workflow", func(r chi.Router) {

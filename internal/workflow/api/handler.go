@@ -26,6 +26,8 @@ func NewHandler(svc WorkflowService) *Handler {
 
 type WorkflowService interface {
 	CreateWorkflowDefinition(ctx context.Context, params application.CreateWorkflowDefinitionParams) (*domain.WorkflowDefinition, error)
+	UpdateWorkflowDefinition(ctx context.Context, params application.UpdateWorkflowDefinitionParams) (*domain.WorkflowDefinition, error)
+	DeleteWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error
 	ActivateWorkflowDefinition(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	ArchiveWorkflowDefinition(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	GetWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error)
@@ -49,8 +51,10 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin"))
 			r.Post("/", h.CreateWorkflowDefinition)
+			r.Put("/{workflowId}", h.UpdateWorkflowDefinition)
 			r.Post("/{workflowId}/activate", h.ActivateWorkflowDefinition)
 			r.Post("/{workflowId}/archive", h.ArchiveWorkflowDefinition)
+			r.Delete("/{workflowId}", h.DeleteWorkflowDefinition)
 		})
 	})
 
@@ -212,6 +216,92 @@ func (h *Handler) ArchiveWorkflowDefinition(w http.ResponseWriter, r *http.Reque
 	}
 
 	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{"status": "archived"}, nil)
+}
+
+// DeleteWorkflowDefinition handles deleting a draft workflow definition.
+func (h *Handler) DeleteWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	workflowID, ok := parseUUID(r, "workflowId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
+		return
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	if err := h.svc.DeleteWorkflowDefinition(r.Context(), orgID, workflowID, actorID); err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{"status": "deleted"}, nil)
+}
+
+// UpdateWorkflowDefinition handles updating a draft workflow definition.
+func (h *Handler) UpdateWorkflowDefinition(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	workflowID, ok := parseUUID(r, "workflowId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
+		return
+	}
+
+	var req struct {
+		Key          string                      `json:"key"`
+		Name         string                      `json:"name"`
+		Description  string                      `json:"description"`
+		Version      int                         `json:"version"`
+		InitialState string                      `json:"initial_state"`
+		States       []domain.WorkflowState      `json:"states"`
+		Transitions  []domain.WorkflowTransition `json:"transitions"`
+		Metadata     map[string]interface{}      `json:"metadata"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	if req.Version < 1 {
+		req.Version = 1
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	def, err := h.svc.UpdateWorkflowDefinition(r.Context(), application.UpdateWorkflowDefinitionParams{
+		TenantID:     orgID,
+		ID:           workflowID,
+		ActorID:      actorID,
+		Key:          req.Key,
+		Name:         req.Name,
+		Description:  req.Description,
+		Version:      req.Version,
+		InitialState: req.InitialState,
+		States:       req.States,
+		Transitions:  req.Transitions,
+		Metadata:     req.Metadata,
+	})
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, serializeWorkflowDefinition(def), nil)
 }
 
 func (h *Handler) GetCaseWorkflow(w http.ResponseWriter, r *http.Request) {

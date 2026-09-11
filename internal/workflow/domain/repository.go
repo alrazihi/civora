@@ -11,6 +11,10 @@ type WorkflowDefinitionRepository interface {
 	DB() *sql.DB
 	Save(ctx context.Context, def *WorkflowDefinition) error
 	SaveTx(ctx context.Context, tx *sql.Tx, def *WorkflowDefinition) error
+	Update(ctx context.Context, def *WorkflowDefinition) error
+	UpdateTx(ctx context.Context, tx *sql.Tx, def *WorkflowDefinition) error
+	Delete(ctx context.Context, tenantID, id uuid.UUID) error
+	DeleteTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) error
 	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*WorkflowDefinition, error)
 	FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*WorkflowDefinition, error)
 	FindByKeyAndVersion(ctx context.Context, tenantID uuid.UUID, key string, version int) (*WorkflowDefinition, error)
@@ -25,6 +29,8 @@ type WorkflowStateRepository interface {
 	SaveBatch(ctx context.Context, states []WorkflowState) error
 	SaveBatchTx(ctx context.Context, tx *sql.Tx, states []WorkflowState) error
 	FindByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) ([]WorkflowState, error)
+	DeleteBatchByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) error
+	DeleteBatchByDefinitionIDTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, defID uuid.UUID) error
 }
 
 type WorkflowTransitionRepository interface {
@@ -33,6 +39,8 @@ type WorkflowTransitionRepository interface {
 	SaveBatchTx(ctx context.Context, tx *sql.Tx, transitions []WorkflowTransition) error
 	FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) ([]WorkflowTransition, error)
 	FindByFromState(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID, fromState string) ([]WorkflowTransition, error)
+	DeleteBatchByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) error
+	DeleteBatchByDefinitionIDTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, defID uuid.UUID) error
 }
 
 type WorkflowInstanceRepository interface {

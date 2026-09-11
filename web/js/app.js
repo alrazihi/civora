@@ -47,6 +47,11 @@ const SERVICE_DOMAIN = {
 
 const DEFAULT_TERMINAL_STATES = ['REJECTED', 'CLOSED'];
 
+function getTerminalStates(def) {
+  if (!def || !Array.isArray(def.states)) return [];
+  return def.states.filter(s => s.terminal).map(s => s.key);
+}
+
 function escapeHTML(str) {
   if (str == null) return '';
   return String(str)
@@ -90,6 +95,7 @@ function getServiceDomain(serviceType) {
 const app = {
   currentCase: null,
   currentWorkflow: null,
+  workflowDraft: null,
 
   orgPath(path) {
     return `/organizations/${orgId}${path}`;
@@ -225,7 +231,7 @@ const app = {
         const def = this.currentWorkflow.definition;
 
         document.getElementById('workflow-label').classList.remove('hidden');
-        document.getElementById('workflow-label').textContent = def ? `Workflow: ${def.name} (v${def.version || 1})` : '';
+         document.getElementById('workflow-label').textContent = def ? `Workflow: ${def.name} (${def.key}, v${def.version || 1}) — ${def.status || 'DRAFT'}` : '';
 
         const stateBadge = document.getElementById('workflow-state-badge');
         const stateName = document.getElementById('workflow-state-name');
@@ -286,7 +292,8 @@ const app = {
       container.innerHTML = '';
       return;
     }
-    const isTerminal = DEFAULT_TERMINAL_STATES.includes(currentState);
+    const terminalStates = getTerminalStates(def);
+    const isTerminal = terminalStates.includes(currentState);
     const steps = stateKeys.map((state, idx) => {
       let cls = 'workflow-step';
       if (idx < currentIndex) cls += ' completed';
@@ -457,7 +464,8 @@ const app = {
       }
       const state = this.currentWorkflow?.instance?.current_state;
       if (state) {
-        const isTerminal = TERMINAL_STATES.includes(state);
+        const terminalStates = getTerminalStates(this.currentWorkflow?.definition);
+        const isTerminal = terminalStates.includes(state);
         if (isTerminal) {
           html += `<p class="empty" style="margin-top:8px;">This case is in a terminal state (<strong>${escapeHTML(state)}</strong>) and no further workflow actions are available.</p>`;
         } else if (!transitions.length) {
@@ -667,6 +675,598 @@ const app = {
     } catch (err) { showToast(err.message, 'error'); }
   },
 
+  // ---- Workflow administration API helpers ----
+  wfList(page) { return api('GET', this.orgPath(`/workflows?page=${page || 1}&per_page=50`)); },
+  wfGet(id) { return api('GET', this.orgPath(`/workflows/${id}`)); },
+  wfCreate(body) { return api('POST', this.orgPath('/workflows'), body); },
+  wfActivate(id) { return api('POST', this.orgPath(`/workflows/${id}/activate`), {}); },
+  wfArchive(id) { return api('POST', this.orgPath(`/workflows/${id}/archive`), {}); },
+
+  // ---- Workflow administration views ----
+  resetWorkflowDraft() {
+    this.workflowDraft = {
+      key: '',
+      name: '',
+      description: '',
+      version: 1,
+      initial_state: '',
+      states: [],
+      transitions: [],
+    };
+  },
+
+  switchView(viewId) {
+    const views = ['view-login', 'view-dashboard', 'view-case', 'view-new-case', 'view-workflows', 'view-workflow-detail', 'view-new-workflow'];
+    views.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', id !== viewId);
+    });
+  },
+
+  showWorkflowsView() {
+    this.switchView('view-workflows');
+    this.loadWorkflowList(1);
+  },
+
+  async loadWorkflowList(page) {
+    page = page || 1;
+    this.workflowListPage = page;
+    const tbody = document.getElementById('wf-table-body');
+    const metaEl = document.getElementById('wf-page-meta');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading workflows…</td></tr>';
+    this.renderWorkflowListActions();
+    try {
+      const res = await this.wfList(page);
+      const defs = res.data || [];
+      const totalPages = (res.meta && res.meta.total_pages) || 1;
+      const total = (res.meta && res.meta.total) || defs.length;
+      if (!defs.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No workflow definitions yet. Create one to get started.</td></tr>';
+      } else {
+        tbody.innerHTML = defs.map(d => this.renderWorkflowRow(d)).join('');
+      }
+      if (metaEl) metaEl.textContent = `Page ${page} of ${totalPages} (${total} definition${total === 1 ? '' : 's'})`;
+      this.renderWorkflowPagination(page, totalPages);
+    } catch (err) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty">Error loading workflows: ${escapeHTML(err.message)}</td></tr>`;
+      if (metaEl) metaEl.textContent = '';
+      const pag = document.getElementById('wf-pagination');
+      if (pag) pag.innerHTML = '';
+    }
+  },
+
+  renderWorkflowListActions() {
+    const actions = document.getElementById('wf-list-actions');
+    if (!actions) return;
+    actions.innerHTML = currentUserIsAdmin()
+      ? `<button class="btn" onclick="app.showWorkflowCreateView()">Create Workflow</button>`
+      : '';
+  },
+
+  renderWorkflowRow(d) {
+    const states = d.states || [];
+    const transitions = d.transitions || [];
+    const terminal = getTerminalStates(d);
+    const statusClass = (d.status || 'DRAFT').toLowerCase();
+    const badge = `<span class="badge wf-status-${statusClass}" style="text-transform:none">${escapeHTML(d.status)}</span>`;
+    const canActivate = d.status === 'DRAFT';
+    const canArchive = d.status === 'ACTIVE';
+    let actionBtns = `<button class="btn secondary" style="font-size:0.8rem;padding:4px 8px" onclick="app.showWorkflowDetail('${d.id}')">View</button>`;
+    if (canActivate) {
+      actionBtns += `<button class="btn" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.activateWorkflow('${d.id}')">Activate</button>`;
+    }
+    if (canArchive) {
+      actionBtns += `<button class="btn warning" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')">Archive</button>`;
+    }
+    return `<tr>
+      <td>${escapeHTML(d.name)} <span class="text-muted" style="font-size:0.8rem">(${escapeHTML(d.key)})</span></td>
+      <td>${escapeHTML(d.description || '')}</td>
+      <td>${d.version || 1}</td>
+      <td>${badge}</td>
+      <td>${states.length}</td>
+      <td>${transitions.length}</td>
+      <td>${d.initial_state ? escapeHTML(d.initial_state) : '<span class="text-muted">—</span>'} ${terminal.length ? '(terminal: ' + escapeHTML(terminal.join(', ')) + ')' : ''}</td>
+      <td style="white-space:nowrap;font-size:0.8rem;color:var(--text-muted)">${d.created_at ? new Date(d.created_at).toLocaleDateString() : '—'}<br>${d.updated_at ? new Date(d.updated_at).toLocaleDateString() : '—'}</td>
+      <td>${actionBtns}</td>
+    </tr>`;
+  },
+
+  renderWorkflowPagination(page, totalPages) {
+    const el = document.getElementById('wf-pagination');
+    if (!el) return;
+    if (totalPages <= 1) { el.innerHTML = ''; return; }
+    const max = 5;
+    let p = Math.max(1, page - Math.floor(max / 2));
+    const end = Math.min(totalPages, p + max - 1);
+    p = Math.max(1, end - max + 1);
+    let html = '';
+    for (let i = p; i <= end; i++) {
+      if (i === page) html += `<span class="badge" style="margin-right:4px">${i}</span>`;
+      else html += `<button class="btn secondary" style="font-size:0.8rem;padding:4px 8px;margin-right:4px" onclick="app.loadWorkflowList(${i})">${i}</button>`;
+    }
+    el.innerHTML = html;
+  },
+
+  async activateWorkflow(id) {
+    if (!confirm('Activate this workflow definition? Only draft definitions can be activated, and there can only be one active version per key.')) return;
+    try {
+      await this.wfActivate(id);
+      showToast('Workflow definition activated', 'success');
+      this.refreshWorkflowLocation(id);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async archiveWorkflow(id) {
+    if (!confirm('Archive this workflow definition? It cannot be archived while active instances are running, and it cannot be un-archived.')) return;
+    try {
+      await this.wfArchive(id);
+      showToast('Workflow definition archived', 'success');
+      this.refreshWorkflowLocation(id);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  refreshWorkflowLocation(id) {
+    if (this.currentWorkflowDef && this.currentWorkflowDef.id === id) {
+      this.showWorkflowDetail(id);
+    }
+    this.loadWorkflowList(this.workflowListPage || 1);
+  },
+
+  async showWorkflowDetail(id) {
+    this.switchView('view-workflow-detail');
+    const container = document.getElementById('wf-detail-container');
+    if (!container) return;
+    container.innerHTML = '<p class="empty">Loading workflow definition…</p>';
+    this.currentWorkflowDef = null;
+    try {
+      const res = await this.wfGet(id);
+      this.currentWorkflowDef = res.data;
+      container.innerHTML = '';
+      this.renderWorkflowDetail(this.currentWorkflowDef);
+    } catch (err) {
+      container.innerHTML = `<p class="empty" style="color:var(--danger)">Error loading workflow: ${escapeHTML(err.message)}</p>`;
+    }
+  },
+
+  renderWorkflowDetail(def) {
+    const container = document.getElementById('wf-detail-container');
+    if (!container) return;
+    const terminal = getTerminalStates(def);
+    const states = def.states || [];
+    const transitions = def.transitions || [];
+    const isDraft = def.status === 'DRAFT';
+    const isActive = def.status === 'ACTIVE';
+    const isArchived = def.status === 'ARCHIVED';
+
+    const statusBadge = (status, text) => `<span class="badge wf-status-${status.toLowerCase()}" style="text-transform:none">${escapeHTML(text)}</span>`;
+    let actions = `<button class="btn secondary" style="font-size:0.8rem" onclick="app.showWorkflowsView()">Back to Workflows</button>`;
+    if (isDraft) {
+      actions += ` <button class="btn" style="font-size:0.8rem" onclick="app.activateWorkflow('${def.id}')">Activate</button>`;
+    } else if (isActive) {
+      actions += ` <button class="btn warning" style="font-size:0.8rem" onclick="app.archiveWorkflow('${def.id}')">Archive</button>`;
+    }
+    const badge = statusBadge(def.status, def.status);
+
+    container.innerHTML = `
+      <div class="header" style="margin-bottom:8px">
+        <div><h1>${escapeHTML(def.name)}</h1>
+        <p style="color:var(--text-muted);margin-top:4px">${badge} v${def.version || 1} · key: ${escapeHTML(def.key)}</p></div>
+        <nav>${actions}</nav>
+      </div>
+      <div class="card">
+        <h2>Workflow Metadata</h2>
+        <table>
+          <tr><th>Key</th><td>${escapeHTML(def.key)}</td></tr>
+          <tr><th>Name</th><td>${escapeHTML(def.name)}</td></tr>
+          <tr><th>Description</th><td>${escapeHTML(def.description || '')}</td></tr>
+          <tr><th>Version</th><td>${def.version || 1}</td></tr>
+          <tr><th>Status</th><td>${badge}</td></tr>
+          <tr><th>Initial State</th><td>${escapeHTML(def.initial_state || '')}</td></tr>
+          <tr><th>Terminal States</th><td>${terminal.length ? escapeHTML(terminal.join(', ')) : '<span class="text-muted">none</span>'}</td></tr>
+          <tr><th>States</th><td>${states.length}</td></tr>
+          <tr><th>Transitions</th><td>${transitions.length}</td></tr>
+          <tr><th>Created</th><td>${def.created_at ? new Date(def.created_at).toLocaleString() : '—'}</td></tr>
+          <tr><th>Updated</th><td>${def.updated_at ? new Date(def.updated_at).toLocaleString() : '—'}</td></tr>
+          <tr><th>Lifecycle</th><td>
+            ${isDraft ? '<span class="badge wf-status-draft">Draft — not yet in use</span>' : ''}
+            ${isActive ? '<span class="badge wf-status-active" style="background:#dcfce7;color:#15803d">Active — governs new cases</span>' : ''}
+            ${isArchived ? '<span class="badge" style="background:#f1f5f9;color:#475569">Archived — read-only</span>' : ''}
+          </td></tr>
+        </table>
+        ${!currentUserIsAdmin() && isDraft ? '<p class="text-muted" style="margin-top:8px">Only administrators can activate draft workflows.</p>' : ''}
+      </div>
+      <div class="card">
+        <h2>States (${states.length})</h2>
+        ${states.length ? '<div class="table-wrap">' + this.renderWorkflowStateTable(states, terminal, def.initial_state) + '</div>' : '<p class="empty">No states defined.</p>'}
+      </div>
+      <div class="card">
+        <h2>Transitions (${transitions.length})</h2>
+        ${transitions.length ? '<div class="table-wrap">' + this.renderWorkflowTransitionTable(transitions) + '</div>' : '<p class="empty">No transitions defined.</p>'}
+      </div>
+    `;
+    if (isArchived) {
+      const draftBanner = document.createElement('div');
+      draftBanner.className = 'card';
+      draftBanner.style.background = 'var(--bg)';
+      draftBanner.innerHTML = '<p style="color:var(--text-muted)">This workflow definition is archived and cannot be modified or re-activated from the UI. To change it, create a new version (same key) and activate it.</p>';
+      container.appendChild(draftBanner);
+    }
+  },
+
+  renderWorkflowStateTable(states, terminal, initial) {
+    return `<table><thead><tr><th>Key</th><th>Name</th><th>Description</th><th>Category</th><th>Initial</th><th>Terminal</th><th>Display Order</th><th>Responsible Role</th></tr></thead><tbody>` +
+      states.map(s => `
+        <tr>
+          <td><code>${escapeHTML(s.key)}</code></td>
+          <td>${escapeHTML(s.name || '')}</td>
+          <td>${escapeHTML(s.description || '')}</td>
+          <td>${escapeHTML(s.category || '')}</td>
+          <td>${s.key === initial ? '<span class="badge" style="background:#dbeafe;color:#1e40af">initial</span>' : ''}</td>
+          <td>${s.terminal ? '<span class="badge" style="background:#fee2e2;color:#991b1b">terminal</span>' : ''}</td>
+          <td>${s.display_order ?? ''}</td>
+          <td>${escapeHTML(s.responsible_role || '')}</td>
+        </tr>`).join('') +
+      '</tbody></table>';
+  },
+
+  renderWorkflowTransitionTable(transitions) {
+    return `<table><thead><tr><th>Key</th><th>Name</th><th>Source</th><th>Destination</th><th>Active</th><th>Allowed Roles</th><th>Conditions</th><th>Description</th></tr></thead><tbody>` +
+      transitions.map(t => `
+        <tr>
+          <td><code>${escapeHTML(t.key)}</code></td>
+          <td>${escapeHTML(t.name || '')}</td>
+          <td><code>${escapeHTML(t.from_state)}</code></td>
+          <td><code>${escapeHTML(t.to_state)}</code></td>
+          <td>${t.active ? '<span class="badge" style="background:#d1fae5;color:#065f46">yes</span>' : '<span class="badge" style="background:#fee2e2;color:#991b1b">no</span>'}</td>
+          <td>${Array.isArray(t.allowed_roles) && t.allowed_roles.length ? escapeHTML(t.allowed_roles.join(', ')) : '<span class="text-muted">—</span>'}</td>
+          <td>${Array.isArray(t.conditions) && t.conditions.length ? JSON.stringify(t.conditions) : '<span class="text-muted">none</span>'}</td>
+          <td>${escapeHTML(t.description || '')}</td>
+        </tr>`).join('') +
+      '</tbody></table>';
+  },
+
+  showWorkflowCreateView() {
+    if (!currentUserIsAdmin()) {
+      showToast('Only administrators can create workflow definitions', 'error');
+      return;
+    }
+    this.switchView('view-new-workflow');
+    this.resetWorkflowDraft();
+    this.workflowCreateErrors = [];
+    const container = document.getElementById('wf-create-container');
+    if (!container) return;
+    container.innerHTML = '';
+    this.renderWorkflowCreateForm();
+  },
+
+  renderWorkflowCreateForm() {
+    const c = this.workflowDraft;
+    const stateKeys = c.states.map(s => s.key).filter(k => k);
+    const container = document.getElementById('wf-create-container');
+    if (!container) return;
+    container.innerHTML = `
+      <div class="header" style="margin-bottom:16px">
+        <h1>Create Workflow Definition</h1>
+        <nav><button class="btn secondary" onclick="app.cancelWorkflowCreate()">Cancel</button></nav>
+      </div>
+      <div class="card">
+        <h2>Workflow</h2>
+        <p class="section-hint">A new definition is created in <strong>DRAFT</strong> status. Activate it to start using it for new cases.</p>
+        <label>Key</label><input id="wf-key" value="${escapeHTML(c.key)}" oninput="app.onWorkflowMetaChange('key', this.value)">
+        <label>Name</label><input id="wf-name" value="${escapeHTML(c.name)}" oninput="app.onWorkflowMetaChange('name', this.value)">
+        <label>Description</label><textarea id="wf-desc" rows="2" oninput="app.onWorkflowMetaChange('description', this.value)">${escapeHTML(c.description)}</textarea>
+        <label>Version</label><input id="wf-version" type="number" min="1" value="${c.version}" oninput="app.onWorkflowMetaChange('version', this.value)">
+        <label>Initial State</label>
+        <select id="wf-initial" onchange="app.onWorkflowMetaChange('initial_state', this.value)">
+          <option value="">— select initial state —</option>
+          ${stateKeys.map(k => `<option value="${escapeHTML(k)}" ${k === c.initial_state ? 'selected' : ''}>${escapeHTML(k)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2>States (${c.states.length})</h2>
+          <button class="btn success" onclick="app.addWorkflowState()">Add State</button>
+        </div>
+        <p class="section-hint">Define the lifecycle states. Mark one as the initial state and any number as terminal.</p>
+        <div class="table-wrap">
+        <table id="wf-states-table">
+          <thead><tr><th>Key</th><th>Name</th><th>Description</th><th>Category</th><th>Display Order</th><th>Terminal</th><th>Responsible Role</th><th>Actions</th></tr></thead>
+          <tbody id="wf-states-tbody"></tbody>
+        </table>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2>Transitions (${c.transitions.length})</h2>
+          <button class="btn success" onclick="app.addWorkflowTransition()">Add Transition</button>
+        </div>
+        <p class="section-hint">Define transitions between states. A transition's source and target must reference existing state keys.</p>
+        <div class="table-wrap">
+        <table id="wf-transitions-table">
+          <thead><tr><th>Key</th><th>Name</th><th>From State</th><th>To State</th><th>Active</th><th>Allowed Roles</th><th>Conditions (JSON)</th><th>Description</th><th>Actions</th></tr></thead>
+          <tbody id="wf-transitions-tbody"></tbody>
+        </table>
+        </div>
+      </div>
+      <div class="card">
+        <div id="wf-create-errors" style="color:var(--danger);margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn secondary" onclick="app.cancelWorkflowCreate()">Cancel</button>
+          <button class="btn" onclick="app.validateAndSubmitWorkflow()">Create Definition</button>
+        </div>
+      </div>
+    `;
+    this.renderWorkflowStatesEditor();
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  addWorkflowState() {
+    this.workflowDraft.states.push({
+      key: '', name: '', description: '', category: '',
+      terminal: false, display_order: this.workflowDraft.states.length,
+      responsible_role: '',
+    });
+    this.renderWorkflowStatesEditor();
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  addWorkflowTransition() {
+    this.workflowDraft.transitions.push({
+      key: '', name: '', from_state: '', to_state: '',
+      description: '', conditions: [], allowed_roles: [], active: true,
+    });
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  removeWorkflowState(idx) {
+    const removed = this.workflowDraft.states.splice(idx, 1)[0];
+    if (this.workflowDraft.initial_state === removed.key) {
+      this.workflowDraft.initial_state = '';
+    }
+    this.workflowDraft.states.forEach((s, i) => { s.display_order = i; });
+    this.renderWorkflowStatesEditor();
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  removeWorkflowTransition(idx) {
+    this.workflowDraft.transitions.splice(idx, 1);
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  moveStateUp(idx) {
+    if (idx <= 0) return;
+    const s = this.workflowDraft.states.splice(idx, 1)[0];
+    this.workflowDraft.states.splice(idx - 1, 0, s);
+    this.workflowDraft.states.forEach((st, i) => { st.display_order = i; });
+    this.renderWorkflowStatesEditor();
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  moveStateDown(idx) {
+    if (idx >= this.workflowDraft.states.length - 1) return;
+    const s = this.workflowDraft.states.splice(idx, 1)[0];
+    this.workflowDraft.states.splice(idx + 1, 0, s);
+    this.workflowDraft.states.forEach((st, i) => { st.display_order = i; });
+    this.renderWorkflowStatesEditor();
+    this.renderWorkflowTransitionsEditor();
+  },
+
+  onWorkflowMetaChange(field, value) {
+    const v = value === '' ? '' : value;
+    if (field === 'version') {
+      const n = parseInt(value, 10);
+      this.workflowDraft.version = isNaN(n) || n < 1 ? 1 : n;
+    } else {
+      this.workflowDraft[field] = v;
+    }
+    this.clearWorkflowErrors();
+  },
+
+  onStateFieldChange(idx, field, value, isCheckbox) {
+    const s = this.workflowDraft.states[idx];
+    if (!s) return;
+    if (field === 'terminal') {
+      s.terminal = !!value;
+      return;
+    }
+    s[field] = isCheckbox ? !!value : value;
+    if (field === 'key') this.refreshInitialSelect();
+  },
+
+  refreshInitialSelect() {
+    const sel = document.getElementById('wf-initial');
+    if (!sel) return;
+    const keys = this.workflowDraft.states.map(s => s.key).filter(k => k);
+    const current = this.workflowDraft.initial_state;
+    sel.innerHTML = '<option value="">— select initial state —</option>' +
+      keys.map(k => `<option value="${escapeHTML(k)}" ${k === current ? 'selected' : ''}>${escapeHTML(k)}</option>`).join('');
+  },
+
+  onTransitionFieldChange(idx, field, value) {
+    const t = this.workflowDraft.transitions[idx];
+    if (!t) return;
+    if (field === 'active') { t.active = !!value; }
+    else { t[field] = value; }
+  },
+
+  renderWorkflowStatesEditor() {
+    const c = this.workflowDraft;
+    const tbody = document.getElementById('wf-states-tbody');
+    if (!tbody) return;
+     tbody.innerHTML = c.states.map((s, i) => {
+       return `<tr>
+        <td><input style="width:110px" value="${escapeHTML(s.key)}" oninput="app.onStateFieldChange(${i}, 'key', this.value)"></td>
+        <td><input value="${escapeHTML(s.name)}" oninput="app.onStateFieldChange(${i}, 'name', this.value)"></td>
+        <td><input value="${escapeHTML(s.description)}" oninput="app.onStateFieldChange(${i}, 'description', this.value)"></td>
+        <td><input value="${escapeHTML(s.category)}" oninput="app.onStateFieldChange(${i}, 'category', this.value)"></td>
+         <td><input type="number" min="0" style="width:80px" value="${s.display_order}" onchange="app.onStateFieldChange(${i}, 'display_order', parseInt(this.value,10)||0)"></td>
+         <td style="text-align:center"><input type="checkbox" ${s.terminal ? 'checked' : ''} onchange="app.onStateFieldChange(${i}, 'terminal', this.checked)"></td>
+        <td><input value="${escapeHTML(s.responsible_role)}" oninput="app.onStateFieldChange(${i}, 'responsible_role', this.value)"></td>
+        <td style="white-space:nowrap">
+          <button class="btn secondary" style="font-size:0.75rem;padding:2px 6px" onclick="app.moveStateUp(${i})">↑</button>
+          <button class="btn secondary" style="font-size:0.75rem;padding:2px 6px" onclick="app.moveStateDown(${i})">↓</button>
+          <button class="btn danger" style="font-size:0.75rem;padding:2px 6px" onclick="app.removeWorkflowState(${i})">✕</button>
+        </td>
+      </tr>`;
+      }).join('');
+    this.refreshInitialSelect();
+  },
+
+  renderWorkflowTransitionsEditor() {
+    const c = this.workflowDraft;
+    const stateKeys = c.states.map(s => s.key).filter(k => k);
+    const tbody = document.getElementById('wf-transitions-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = c.transitions.map((t, i) => {
+      const fromOptions = [{ v: '', l: '— select —' }, ...stateKeys.map(k => k)].map(k => {
+        const val = typeof k === 'string' ? k : k.v;
+        const label = typeof k === 'string' ? k : k.l;
+        return `<option value="${escapeHTML(val)}" ${val === t.from_state ? 'selected' : ''}>${escapeHTML(label)}</option>`;
+      }).join('');
+      const toOptions = fromOptions;
+      return `<tr>
+        <td><input style="width:110px" value="${escapeHTML(t.key)}" oninput="app.onTransitionFieldChange(${i}, 'key', this.value)"></td>
+        <td><input value="${escapeHTML(t.name)}" oninput="app.onTransitionFieldChange(${i}, 'name', this.value)"></td>
+        <td><select onchange="app.onTransitionFieldChange(${i}, 'from_state', this.value)">${fromOptions}</select></td>
+        <td><select onchange="app.onTransitionFieldChange(${i}, 'to_state', this.value)">${toOptions}</select></td>
+        <td style="text-align:center"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="app.onTransitionFieldChange(${i}, 'active', this.checked)"></td>
+        <td><input value="${Array.isArray(t.allowed_roles) ? t.allowed_roles.join(', ') : ''}" oninput="app.onTransitionFieldChange(${i}, 'allowed_roles_raw', this.value)" placeholder="admin, staff"></td>
+        <td><input style="width:140px" value="${Array.isArray(t.conditions) && t.conditions.length ? JSON.stringify(t.conditions) : ''}" oninput="app.onTransitionFieldChange(${i}, 'conditions_raw', this.value)" placeholder="[]"></td>
+        <td><input value="${escapeHTML(t.description)}" oninput="app.onTransitionFieldChange(${i}, 'description', this.value)"></td>
+        <td style="white-space:nowrap"><button class="btn danger" style="font-size:0.75rem;padding:2px 6px" onclick="app.removeWorkflowTransition(${i})">✕</button></td>
+      </tr>`;
+    }).join('');
+  },
+
+  clearWorkflowErrors() {
+    const el = document.getElementById('wf-create-errors');
+    if (el) el.innerHTML = '';
+    this.workflowCreateErrors = [];
+  },
+
+  validateWorkflowDraft() {
+    const errors = [];
+    const d = this.workflowDraft;
+    if (!d.key.trim()) errors.push('Workflow key is required');
+    if (!d.name.trim()) errors.push('Workflow name is required');
+    if (!d.version || d.version < 1) errors.push('Version must be at least 1');
+    if (!d.initial_state) errors.push('An initial state is required');
+    if (!d.states.length) errors.push('At least one state is required');
+
+    const stateKeys = new Set();
+    d.states.forEach((s, i) => {
+      if (!s.key.trim()) errors.push(`State #${i + 1}: key is required`);
+      else if (stateKeys.has(s.key)) errors.push(`Duplicate state key: "${s.key}"`);
+      else stateKeys.add(s.key);
+      if (!s.name.trim()) errors.push(`State #${i + 1}: name is required`);
+    });
+    if (d.initial_state) {
+      if (!stateKeys.has(d.initial_state)) {
+        errors.push(`Initial state "${d.initial_state}" does not match any defined state key`);
+      }
+    } else if (stateKeys.size > 0) {
+      errors.push('An initial state must be selected');
+    }
+
+    const seenTransitions = new Set();
+    d.transitions.forEach((t, i) => {
+      if (!t.key.trim()) errors.push(`Transition #${i + 1}: key is required`);
+      else if (seenTransitions.has(t.key)) errors.push(`Duplicate transition key: "${t.key}"`);
+      else seenTransitions.add(t.key);
+      if (!t.name.trim()) errors.push(`Transition #${i + 1}: name is required`);
+      if (!stateKeys.has(t.from_state)) errors.push(`Transition #${i + 1}: source state "${t.from_state}" is unknown`);
+      if (!stateKeys.has(t.to_state)) errors.push(`Transition #${i + 1}: target state "${t.to_state}" is unknown`);
+      if (t.from_state && t.from_state === t.to_state) errors.push(`Transition #${i + 1}: source and target must differ`);
+      if (t.conditions_raw !== undefined && String(t.conditions_raw).trim() !== '') {
+        try {
+          const parsed = JSON.parse(t.conditions_raw);
+          if (!Array.isArray(parsed)) errors.push(`Transition #${i + 1}: conditions must be a JSON array`);
+        } catch (e) { errors.push(`Transition #${i + 1}: conditions must be valid JSON`); }
+      }
+    });
+
+    d.states.forEach(s => {
+      if (s.terminal && stateKeys.has(s.key)) {
+        const hasOutgoing = d.transitions.some(t => t.from_state === s.key && t.active !== false);
+        if (hasOutgoing) errors.push(`Terminal state "${s.key}" cannot have outgoing transitions`);
+      }
+    });
+
+    return errors;
+  },
+
+  validateAndSubmitWorkflow() {
+    this.clearWorkflowErrors();
+    const errors = this.validateWorkflowDraft();
+    if (errors.length) {
+      this.workflowCreateErrors = errors;
+      this.renderWorkflowErrors();
+      return;
+    }
+    this.submitWorkflowCreate();
+  },
+
+  renderWorkflowErrors() {
+    const el = document.getElementById('wf-create-errors');
+    if (!el) return;
+    el.innerHTML = this.workflowCreateErrors.map(e => `<div>• ${escapeHTML(e)}</div>`).join('');
+  },
+
+  buildWorkflowPayload() {
+    const d = this.workflowDraft;
+    const transitions = d.transitions.map(t => {
+      let conditions = [];
+      if (typeof t.conditions_raw === 'string' && t.conditions_raw.trim()) {
+        try { conditions = JSON.parse(t.conditions_raw); } catch (e) { conditions = []; }
+      } else if (Array.isArray(t.conditions)) {
+        conditions = t.conditions;
+      }
+      let allowed_roles = [];
+      const raw = typeof t.allowed_roles_raw === 'string' ? t.allowed_roles_raw.trim() : '';
+      if (raw) allowed_roles = raw.split(',').map(r => r.trim()).filter(Boolean);
+      return {
+        key: t.key, name: t.name, from_state: t.from_state, to_state: t.to_state,
+        description: t.description, conditions, allowed_roles, active: t.active !== false,
+      };
+    });
+    const states = d.states.map(s => ({
+      key: s.key, name: s.name, description: s.description, category: s.category,
+      terminal: !!s.terminal, display_order: s.display_order, responsible_role: s.responsible_role,
+    }));
+    return {
+      key: d.key, name: d.name, description: d.description, version: d.version,
+      initial_state: d.initial_state, states, transitions, metadata: {},
+    };
+  },
+
+  async submitWorkflowCreate() {
+    const payload = this.buildWorkflowPayload();
+    try {
+      const res = await this.wfCreate(payload);
+      const def = res.data || payload;
+      showToast('Workflow definition created', 'success');
+      this.workflowDraft = null;
+      this.switchView('view-workflow-detail');
+      const container = document.getElementById('wf-detail-container');
+      if (container) {
+        container.innerHTML = '';
+        this.renderWorkflowDetail(def);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  cancelWorkflowCreate() {
+    this.workflowDraft = null;
+    this.switchView('view-workflows');
+    this.loadWorkflowList(this.workflowListPage || 1);
+  },
+
   logout() {
     clearAuth();
     router.navigate('login');
@@ -699,6 +1299,9 @@ router.on('login', () => {
   document.getElementById('view-dashboard').classList.add('hidden');
   document.getElementById('view-case').classList.add('hidden');
   document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
 });
 
 router.on('dashboard', async () => {
@@ -706,6 +1309,9 @@ router.on('dashboard', async () => {
   document.getElementById('view-dashboard').classList.remove('hidden');
   document.getElementById('view-case').classList.add('hidden');
   document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
   await app.loadDashboard();
 });
 
@@ -715,6 +1321,9 @@ router.on('case', async (id) => {
   document.getElementById('view-dashboard').classList.add('hidden');
   document.getElementById('view-case').classList.remove('hidden');
   document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
   await app.loadCase(id);
 });
 
@@ -723,4 +1332,21 @@ router.on('new-case', () => {
   document.getElementById('view-dashboard').classList.add('hidden');
   document.getElementById('view-case').classList.add('hidden');
   document.getElementById('view-new-case').classList.remove('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
+});
+
+router.on('workflows', () => {
+  app.switchView('view-workflows');
+  app.loadWorkflowList(1);
+});
+
+router.on('workflow', (id) => {
+  if (!id) { router.navigate('workflows'); return; }
+  app.showWorkflowDetail(id);
+});
+
+router.on('new-workflow', () => {
+  app.showWorkflowCreateView();
 });

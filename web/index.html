@@ -48,6 +48,7 @@
         </div>
         <nav>
           <button class="btn" onclick="router.navigate('new-case')">New Request</button>
+          <button class="btn secondary" onclick="router.navigate('workflows')">Workflows</button>
           <button class="btn secondary" onclick="app.logout()">Logout</button>
         </nav>
       </div>
@@ -71,6 +72,7 @@
         </div>
         <nav>
           <button class="btn secondary" onclick="router.navigate('dashboard')">Dashboard</button>
+          <button class="btn secondary" onclick="router.navigate('workflows')">Workflows</button>
           <button class="btn secondary" onclick="app.logout()">Logout</button>
         </nav>
       </div>
@@ -172,6 +174,43 @@
           <button type="submit" class="btn">Create Request</button>
         </form>
       </div>
+    </div>
+  </div>
+
+  <!-- Workflow Administration: List -->
+  <div id="view-workflows" class="hidden">
+    <div class="container">
+      <div class="header">
+        <div>
+          <h1>Workflows</h1>
+          <p style="color:var(--text-muted)">Workflow Definitions</p>
+        </div>
+        <nav id="wf-list-actions"></nav>
+      </div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Description</th><th>Version</th><th>Status</th><th>States</th><th>Transitions</th><th>Initial / Terminal</th><th>Created / Updated</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="wf-table-body"></tbody>
+        </table>
+        <div id="wf-page-meta" style="margin-top:12px;color:var(--text-muted);font-size:0.85rem"></div>
+        <div id="wf-pagination" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workflow Administration: Detail (content rendered by JS) -->
+  <div id="view-workflow-detail" class="hidden">
+    <div class="container">
+      <div id="wf-detail-container"></div>
+    </div>
+  </div>
+
+  <!-- Workflow Administration: Create / Editor (content rendered by JS) -->
+  <div id="view-new-workflow" class="hidden">
+    <div class="container">
+      <div id="wf-create-container"></div>
     </div>
   </div>
 

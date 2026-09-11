@@ -77,6 +77,21 @@ type CreateWorkflowDefinitionParams struct {
 	Metadata     map[string]interface{}
 }
 
+// UpdateWorkflowDefinitionParams holds parameters for updating a workflow definition.
+type UpdateWorkflowDefinitionParams struct {
+	TenantID     uuid.UUID
+	ID           uuid.UUID
+	ActorID      uuid.UUID
+	Key          string
+	Name         string
+	Description  string
+	Version      int
+	InitialState string
+	States       []domain.WorkflowState
+	Transitions  []domain.WorkflowTransition
+	Metadata     map[string]interface{}
+}
+
 // ExecuteTransitionParams holds parameters for executing a workflow transition.
 type ExecuteTransitionParams struct {
 	TenantID      uuid.UUID
@@ -266,6 +281,153 @@ func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantI
 	}
 
 	return nil
+}
+
+// DeleteWorkflowDefinition deletes a draft workflow definition.
+func (s *WorkflowService) DeleteWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
+	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
+		def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+			}
+			return fmt.Errorf("workflow definition not found: %w", err)
+		}
+		if def.Status != domain.WorkflowStatusDraft {
+			return fmt.Errorf("only draft definitions can be deleted")
+		}
+
+		// Delete transitions first (foreign key constraint)
+		if err := s.transitionRepo.DeleteBatchByDefinitionIDTx(ctx, tx, tenantID, def.ID); err != nil {
+			return fmt.Errorf("failed to delete workflow transitions: %w", err)
+		}
+
+		// Delete states second (foreign key constraint)
+		if err := s.stateRepo.DeleteBatchByDefinitionIDTx(ctx, tx, tenantID, def.ID); err != nil {
+			return fmt.Errorf("failed to delete workflow states: %w", err)
+		}
+
+		// Delete the definition
+		if err := s.defRepo.DeleteTx(ctx, tx, tenantID, id); err != nil {
+			return fmt.Errorf("failed to delete workflow definition: %w", err)
+		}
+
+		// Record audit event
+		if s.auditor != nil {
+			defIDStr := def.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: tenantID,
+				ActorID:        &actorID,
+				Action:         "workflow.definition_deleted",
+				Resource:       "workflow_definition",
+				ResourceID:     &defIDStr,
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key":     def.Key,
+					"version": def.Version,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UpdateWorkflowDefinition updates a draft workflow definition.
+func (s *WorkflowService) UpdateWorkflowDefinition(ctx context.Context, params UpdateWorkflowDefinitionParams) (*domain.WorkflowDefinition, error) {
+	var def *domain.WorkflowDefinition
+	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
+		var err error
+		def, err = s.defRepo.FindByIDTx(ctx, tx, params.TenantID, params.ID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return domain.ErrWorkflowDefinitionNotFound{DefID: params.ID}
+			}
+			return fmt.Errorf("workflow definition not found: %w", err)
+		}
+		if def.Status != domain.WorkflowStatusDraft {
+			return fmt.Errorf("only draft definitions can be updated")
+		}
+
+		// Update definition fields
+		def.Key = params.Key
+		def.Name = params.Name
+		def.Description = params.Description
+		def.Version = params.Version
+		def.InitialState = params.InitialState
+		def.Metadata = params.Metadata
+		def.UpdatedAt = time.Now().UTC()
+
+		// Validate the updated definition
+		if validation := domain.ValidateWorkflowDefinition(def); validation.HasErrors() {
+			return fmt.Errorf("invalid workflow definition: %v", validation.Errors)
+		}
+
+		// Save the updated definition
+		if err := s.defRepo.UpdateTx(ctx, tx, def); err != nil {
+			return fmt.Errorf("failed to save workflow definition: %w", err)
+		}
+
+		// Update states
+		for i := range params.States {
+			if params.States[i].ID == uuid.Nil {
+				params.States[i].ID = uuid.New()
+			}
+			params.States[i].WorkflowDefID = def.ID
+			params.States[i].TenantID = def.TenantID
+		}
+		if err := s.stateRepo.SaveBatchTx(ctx, tx, params.States); err != nil {
+			return fmt.Errorf("failed to save workflow states: %w", err)
+		}
+
+		// Update transitions
+		for i := range params.Transitions {
+			if params.Transitions[i].ID == uuid.Nil {
+				params.Transitions[i].ID = uuid.New()
+			}
+			params.Transitions[i].WorkflowDefID = def.ID
+			params.Transitions[i].TenantID = def.TenantID
+		}
+		if err := s.transitionRepo.SaveBatchTx(ctx, tx, params.Transitions); err != nil {
+			return fmt.Errorf("failed to save workflow transitions: %w", err)
+		}
+
+		// Record audit event
+		if s.auditor != nil {
+			defIDStr := def.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: def.TenantID,
+				ActorID:        &params.ActorID,
+				Action:         "workflow.definition_updated",
+				Resource:       "workflow_definition",
+				ResourceID:     &defIDStr,
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key":     def.Key,
+					"version": def.Version,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	// Return the updated definition with states and transitions
+	def.States = params.States
+	def.Transitions = params.Transitions
+	return def, nil
 }
 
 // GetWorkflowDefinition retrieves a workflow definition with its states and transitions.

@@ -56,6 +56,28 @@ func (r *PostgresWorkflowStateRepository) saveBatch(ctx context.Context, e inter
 	return nil
 }
 
+func (r *PostgresWorkflowStateRepository) DeleteBatchByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) error {
+	return r.deleteBatchByDefinitionID(ctx, r.db, tenantID, defID)
+}
+
+func (r *PostgresWorkflowStateRepository) DeleteBatchByDefinitionIDTx(ctx context.Context, tx *sql.Tx, tenantID, defID uuid.UUID) error {
+	return r.deleteBatchByDefinitionID(ctx, tx, tenantID, defID)
+}
+
+func (r *PostgresWorkflowStateRepository) deleteBatchByDefinitionID(ctx context.Context, e interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}, tenantID, defID uuid.UUID) error {
+	query := `
+		DELETE FROM workflow_states
+		WHERE workflow_definition_id = $1 AND organization_id = $2
+	`
+	_, err := e.ExecContext(ctx, query, defID, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to delete workflow states: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresWorkflowStateRepository) FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) ([]domain.WorkflowState, error) {
 	query := `
 		SELECT id, workflow_definition_id, organization_id, key, name, description,

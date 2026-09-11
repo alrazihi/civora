@@ -66,6 +66,34 @@ func (s *stubDefRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id u
 	return s.FindByID(ctx, tenantID, id)
 }
 
+// Update updates a workflow definition.
+func (s *stubDefRepo) Update(ctx context.Context, def *domain.WorkflowDefinition) error {
+	if _, ok := s.defs[def.ID]; ok {
+		s.defs[def.ID] = def
+		return nil
+	}
+	return domain.ErrWorkflowDefinitionNotFound{DefID: def.ID}
+}
+
+// UpdateTx updates a workflow definition within a transaction.
+func (s *stubDefRepo) UpdateTx(ctx context.Context, tx *sql.Tx, def *domain.WorkflowDefinition) error {
+	return s.Update(ctx, def)
+}
+
+// Delete deletes a workflow definition.
+func (s *stubDefRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	if _, ok := s.defs[id]; ok {
+		delete(s.defs, id)
+		return nil
+	}
+	return domain.ErrWorkflowDefinitionNotFound{DefID: id}
+}
+
+// DeleteTx deletes a workflow definition within a transaction.
+func (s *stubDefRepo) DeleteTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) error {
+	return s.Delete(ctx, tenantID, id)
+}
+
 type stubStateRepo struct {
 	states map[uuid.UUID][]domain.WorkflowState
 }
@@ -82,6 +110,17 @@ func (s *stubStateRepo) SaveBatchTx(ctx context.Context, tx *sql.Tx, states []do
 }
 func (s *stubStateRepo) FindByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) ([]domain.WorkflowState, error) {
 	return s.states[defID], nil
+}
+
+// DeleteBatchByDefinitionID deletes all states for a workflow definition.
+func (s *stubStateRepo) DeleteBatchByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) error {
+	delete(s.states, defID)
+	return nil
+}
+
+// DeleteBatchByDefinitionIDTx deletes all states for a workflow definition within a transaction.
+func (s *stubStateRepo) DeleteBatchByDefinitionIDTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, defID uuid.UUID) error {
+	return s.DeleteBatchByDefinitionID(ctx, tenantID, defID)
 }
 
 type stubTransitionRepo struct {
@@ -109,6 +148,17 @@ func (s *stubTransitionRepo) FindByFromState(ctx context.Context, tenantID uuid.
 		}
 	}
 	return result, nil
+}
+
+// DeleteBatchByDefinitionID deletes all transitions for a workflow definition.
+func (s *stubTransitionRepo) DeleteBatchByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) error {
+	delete(s.transitions, defID)
+	return nil
+}
+
+// DeleteBatchByDefinitionIDTx deletes all transitions for a workflow definition within a transaction.
+func (s *stubTransitionRepo) DeleteBatchByDefinitionIDTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, defID uuid.UUID) error {
+	return s.DeleteBatchByDefinitionID(ctx, tenantID, defID)
 }
 
 type stubInstanceRepo struct {

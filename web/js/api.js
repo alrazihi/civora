@@ -31,3 +31,26 @@ async function api(method, path, body) {
   }
   return res.json().catch(() => ({}));
 }
+
+function decodeJWT(t) {
+  try {
+    const parts = t.split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(b64));
+  } catch (e) {
+    return null;
+  }
+}
+
+function getCurrentUser() {
+  if (!token) return null;
+  const claims = decodeJWT(token);
+  if (!claims) return null;
+  return { id: claims.sub, organization_id: claims.organization_id, role: claims.role };
+}
+
+function currentUserIsAdmin() {
+  const u = getCurrentUser();
+  return !!(u && u.role === 'admin');
+}
