@@ -967,23 +967,18 @@ const app = {
   },
 
   async showWorkflowEditView(id) {
-    console.log('showWorkflowEditView called, id:', id);
     if (!currentUserIsAdmin()) {
-      console.log('not admin, returning');
       showToast('Only administrators can edit workflow definitions', 'error');
       return;
     }
-    console.log('admin ok, orgId:', orgId);
     this.switchView('view-new-workflow');
     this.workflowEditId = id;
     this.workflowCreateErrors = [];
     const container = document.getElementById('wf-create-container');
-    if (!container) { console.log('no container'); return; }
+    if (!container) return;
     container.innerHTML = '<p class="empty">Loading workflow definition…</p>';
     try {
-      console.log('about to wfGet');
       const res = await this.wfGet(id);
-      console.log('wfGet done:', JSON.stringify(res, null, 2));
       this.workflowDraft = {
         key: res.data.key,
         name: res.data.name,
