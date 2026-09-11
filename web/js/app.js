@@ -35,6 +35,50 @@ const SERVICE_DOMAIN = {
     },
     assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER'],
     sectionActionStates: {
+      eligibility: ['NEW', 'OPN'],
+      evidence: ['NEW', 'OPEN'],
+      assessment: ['IN_REVIEW', 'ASSESSMENT'],
+      decision: ['ASSESSMENT', 'DECISION_PENDING'],
+      assistance: ['APPROVED', 'IN_PROGRESS'],
+      followup: ['IN_PROGRESS', 'FOLLOW_UP']
+    }
+  },
+  FINANCIAL: {
+    label: 'Financial Assistance',
+    color: '#059669',
+    icon: '💰',
+    sections: {
+      eligibility: { title: 'Financial Eligibility', hint: 'Verify financial eligibility and means testing.' },
+      evidence: { title: 'Financial Evidence', hint: 'Collect income statements, bank records, and expense documentation.' },
+      assessment: { title: 'Financial Assessment', hint: 'Assess financial need and recommended support level.' },
+      decision: { title: 'Financial Decision', hint: 'Decision on financial assistance approval.' },
+      assistance: { title: 'Financial Assistance', hint: 'Provide grants, vouchers, or direct payments.' },
+      followup: { title: 'Financial Follow-up', hint: 'Review ongoing financial circumstances.' }
+    },
+    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'TRANSPORT', 'OTHER'],
+    sectionActionStates: {
+      eligibility: ['NEW', 'OPEN'],
+      evidence: ['NEW', 'OPEN'],
+      assessment: ['IN_REVIEW', 'ASSESSMENT'],
+      decision: ['ASSESSMENT', 'DECISION_PENDING'],
+      assistance: ['APPROVED', 'IN_PROGRESS'],
+      followup: ['IN_PROGRESS', 'FOLLOW_UP']
+    }
+  },
+  GENERAL: {
+    label: 'General Assistance',
+    color: '#6366f1',
+    icon: '📋',
+    sections: {
+      eligibility: { title: 'Eligibility Check', hint: 'Verify eligibility for general assistance.' },
+      evidence: { title: 'Evidence Collection', hint: 'Gather supporting documentation.' },
+      assessment: { title: 'Assessment', hint: 'Assess needs and circumstances.' },
+      decision: { title: 'Decision', hint: 'Record approval or rejection decision.' },
+      assistance: { title: 'Assistance', hint: 'Provide approved assistance.' },
+      followup: { title: 'Follow-up', hint: 'Schedule follow-up review.' }
+    },
+    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'MEDICAL', 'TRANSPORT', 'EDUCATION', 'OTHER'],
+    sectionActionStates: {
       eligibility: ['NEW', 'OPEN'],
       evidence: ['NEW', 'OPEN'],
       assessment: ['IN_REVIEW', 'ASSESSMENT'],
@@ -48,6 +92,19 @@ const SERVICE_DOMAIN = {
 function getTerminalStates(def) {
   if (!def || !Array.isArray(def.states)) return [];
   return def.states.filter(s => s.terminal).map(s => s.key);
+}
+
+function isCaseTerminal(caseStatus, workflowInstance) {
+  // Terminal case statuses (regardless of workflow)
+  const terminalCaseStatuses = ['CLOSED', 'REJECTED'];
+  if (terminalCaseStatuses.includes(caseStatus)) return true;
+
+  // Also check workflow instance terminal states
+  if (workflowInstance) {
+    const terminalStates = getTerminalStates(workflowInstance.definition);
+    if (terminalStates.includes(workflowInstance.instance.current_state)) return true;
+  }
+  return false;
 }
 
 function escapeHTML(str) {
@@ -83,7 +140,7 @@ styleEl.textContent = '';
 document.head.appendChild(styleEl);
 
 function getServiceDomain(serviceType) {
-  return SERVICE_DOMAIN[serviceType] || null;
+  return SERVICE_DOMAIN[serviceType] || SERVICE_DOMAIN.GENERAL || null;
 }
 
 const app = {
@@ -173,36 +230,132 @@ const app = {
   },
 
   async loadDashboard() {
+    const tbody = document.getElementById('case-table-body');
+    const statsEl = document.getElementById('dashboard-stats');
+    const loadingEl = document.getElementById('dashboard-loading');
+    const errorEl = document.getElementById('dashboard-error');
+    const emptyEl = document.getElementById('dashboard-empty');
+
+    // Show loading state
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (tbody) tbody.innerHTML = '';
+    if (statsEl) statsEl.innerHTML = '';
+
     try {
-      const res = await api('GET', this.orgPath('/cases?per_page=50'));
-      const cases = res.data || [];
-      const tbody = document.getElementById('case-table-body');
-      if (!cases.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No cases yet</td></tr>'; return; }
-      tbody.innerHTML = cases.map(c => `
-        <tr style="cursor:pointer" onclick="router.navigate('case','${c.id}')">
-          <td>${escapeHTML(c.case_number)}</td>
-          <td>${escapeHTML(c.title)}</td>
-          <td><span class="badge ${(c.status || '').toLowerCase().replace('_','-')}">${escapeHTML(c.status)}</span></td>
-          <td>${escapeHTML(c.service_type)}</td>
-          <td>${escapeHTML(c.priority)}</td>
-        </tr>
-      `).join('');
+      const casesRes = await api('GET', this.orgPath('/cases?per_page=200'));
+      const cases = casesRes.data || [];
+
+      // Compute statistics from real data
+      const stats = this.computeDashboardStats(cases);
+      this.renderDashboardStats(stats);
+
+      // Render recent cases table (limit to 20 most recent)
+      const recentCases = cases
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+        .slice(0, 20);
+
+      if (!recentCases.length) {
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        if (tbody) tbody.innerHTML = '';
+      } else {
+        if (tbody) {
+          tbody.innerHTML = recentCases.map(c => `
+            <tr style="cursor:pointer" onclick="router.navigate('case','${c.id}')">
+              <td>${escapeHTML(c.case_number)}</td>
+              <td>${escapeHTML(c.title)}</td>
+              <td><span class="badge ${(c.status || '').toLowerCase().replace('_','-')}">${escapeHTML(c.status)}</span></td>
+              <td>${escapeHTML(c.service_type)}</td>
+              <td>${escapeHTML(c.priority)}</td>
+              <td>${c.updated_at ? new Date(c.updated_at).toLocaleString() : '—'}</td>
+            </tr>
+          `).join('');
+        }
+      }
     } catch (err) {
       console.error(err);
+      if (errorEl) {
+        errorEl.textContent = `Failed to load dashboard: ${escapeHTML(err.message)}`;
+        errorEl.classList.remove('hidden');
+      }
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty" style="color:var(--danger)">Error loading cases</td></tr>';
+      if (statsEl) statsEl.innerHTML = '';
+    } finally {
+      if (loadingEl) loadingEl.classList.add('hidden');
     }
   },
 
+  computeDashboardStats(cases) {
+    const statusCounts = {};
+    const serviceTypeCounts = {};
+    const priorityCounts = {};
+
+    for (const c of cases) {
+      statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
+      serviceTypeCounts[c.service_type] = (serviceTypeCounts[c.service_type] || 0) + 1;
+      priorityCounts[c.priority] = (priorityCounts[c.priority] || 0) + 1;
+    }
+
+    const openStatuses = ['NEW', 'OPEN', 'IN_REVIEW', 'ASSESSMENT', 'DECISION_PENDING', 'APPROVED', 'IN_PROGRESS', 'FOLLOW_UP'];
+    const openCases = cases.filter(c => openStatuses.includes(c.status)).length;
+    const closedCases = cases.filter(c => c.status === 'CLOSED').length;
+    const rejectedCases = cases.filter(c => c.status === 'REJECTED').length;
+    const urgentCases = cases.filter(c => c.priority === 'URGENT').length;
+
+    return {
+      total: cases.length,
+      open: openCases,
+      closed: closedCases,
+      rejected: rejectedCases,
+      urgent: urgentCases,
+      byStatus: statusCounts,
+      byServiceType: serviceTypeCounts,
+      byPriority: priorityCounts,
+    };
+  },
+
+  renderDashboardStats(stats) {
+    const el = document.getElementById('dashboard-stats');
+    if (!el) return;
+
+    const statCards = [
+      { label: 'Total Cases', value: stats.total, key: 'total' },
+      { label: 'Open Cases', value: stats.open, key: 'open' },
+      { label: 'Closed Cases', value: stats.closed, key: 'closed' },
+      { label: 'Rejected Cases', value: stats.rejected, key: 'rejected' },
+      { label: 'Urgent Priority', value: stats.urgent, key: 'urgent' },
+      { label: 'Service Types', value: Object.keys(stats.by_service_type || {}).length, key: 'serviceTypes' },
+    ];
+
+    el.innerHTML = statCards.map(s => `
+      <div class="stat-card" role="status" aria-label="${s.label}: ${s.value}">
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${escapeHTML(s.label)}</div>
+      </div>
+    `).join('');
+  },
+
   async loadCase(id) {
+    const loadingEl = document.getElementById('case-loading');
+    const errorEl = document.getElementById('case-error');
+    const contentEl = document.getElementById('case-content');
+
+    // Show loading, hide error and content
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
+    if (contentEl) contentEl.style.display = 'none';
+
     try {
       const res = await api('GET', this.orgPath(`/cases/${id}`));
       this.currentCase = res.data;
       document.getElementById('case-title').textContent = res.data.title;
-      document.getElementById('case-number').textContent = res.data.case_number;
-      document.getElementById('case-status').textContent = res.data.status;
+      document.getElementById('case-number').textContent = `Case #${escapeHTML(res.data.case_number)}`;
+      document.getElementById('case-status').textContent = `Case: ${escapeHTML(res.data.status)}`;
       document.getElementById('case-status').className = `badge ${(res.data.status || '').toLowerCase().replace('_','-')}`;
-      document.getElementById('case-service').textContent = res.data.service_type;
-      document.getElementById('case-priority').textContent = res.data.priority;
-      document.getElementById('case-desc').textContent = res.data.description || 'No description';
+      document.getElementById('case-service').textContent = `Service: ${escapeHTML(res.data.service_type)}`;
+      document.getElementById('case-priority-badge').textContent = `Priority: ${escapeHTML(res.data.priority)}`;
+      document.getElementById('case-desc').textContent = res.data.description || 'No description provided.';
 
       this.renderServiceBanner(res.data.service_type);
       await this.loadWorkflow(id);
@@ -211,8 +364,17 @@ const app = {
       this.renderSectionActions();
       this.renderActions();
       await this.loadTimeline(id);
+
+      // Show content, hide loading
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (contentEl) contentEl.style.display = 'block';
     } catch (err) {
-      showToast(err.message, 'error');
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (errorEl) {
+        errorEl.textContent = `Failed to load case: ${escapeHTML(err.message)}`;
+        errorEl.classList.remove('hidden');
+      }
+      if (contentEl) contentEl.style.display = 'none';
     }
   },
 
@@ -224,13 +386,21 @@ const app = {
         const inst = this.currentWorkflow.instance;
         const def = this.currentWorkflow.definition;
 
-        document.getElementById('workflow-label').classList.remove('hidden');
-         document.getElementById('workflow-label').textContent = def ? `Workflow: ${def.name} (${def.key}, v${def.version || 1}) — ${def.status || 'DRAFT'}` : '';
+        const workflowMeta = document.getElementById('workflow-meta');
+        if (workflowMeta) workflowMeta.classList.remove('hidden');
 
-        const stateBadge = document.getElementById('workflow-state-badge');
+        document.getElementById('workflow-name').textContent = def ? `${escapeHTML(def.name)} (${def.key}, v${def.version || 1})` : 'Unknown';
+
+        const defStatus = document.getElementById('workflow-def-status');
+        if (defStatus && def) {
+          defStatus.textContent = def.status || 'DRAFT';
+          defStatus.className = `badge wf-status-${(def.status || 'DRAFT').toLowerCase()}`;
+        }
+
+        const stateBadge = document.getElementById('workflow-instance-state');
         const stateName = document.getElementById('workflow-state-name');
         if (stateBadge && inst.current_state) {
-          stateBadge.textContent = inst.current_state;
+          stateBadge.textContent = `State: ${escapeHTML(inst.current_state)}`;
           stateBadge.className = `badge ${inst.current_state.toLowerCase().replace('_','-')}`;
           stateBadge.style.display = 'inline-block';
         }
@@ -239,14 +409,14 @@ const app = {
           stateName.textContent = stateDef ? (stateDef.description || stateDef.name) : '';
         }
       } else {
-        document.getElementById('workflow-label').classList.add('hidden');
-        const stateBadge = document.getElementById('workflow-state-badge');
+        document.getElementById('workflow-meta')?.classList.add('hidden');
+        const stateBadge = document.getElementById('workflow-instance-state');
         if (stateBadge) stateBadge.style.display = 'none';
       }
     } catch (err) {
       this.currentWorkflow = null;
-      document.getElementById('workflow-label').classList.add('hidden');
-      const stateBadge = document.getElementById('workflow-state-badge');
+      document.getElementById('workflow-meta')?.classList.add('hidden');
+      const stateBadge = document.getElementById('workflow-instance-state');
       if (stateBadge) stateBadge.style.display = 'none';
     }
   },
@@ -288,6 +458,7 @@ const app = {
     }
     const terminalStates = getTerminalStates(def);
     const isTerminal = terminalStates.includes(currentState);
+
     const steps = stateKeys.map((state, idx) => {
       let cls = 'workflow-step';
       if (idx < currentIndex) cls += ' completed';
@@ -296,17 +467,81 @@ const app = {
       if (isTerminal && idx <= currentIndex) cls += ' completed';
       const stateDef = sortedStates[idx];
       const label = stateDef?.name || state;
-      return `<div class="${cls}"><span class="step-label">${escapeHTML(label)}</span></div>`;
+      const description = stateDef?.description || '';
+      return `
+        <div class="${cls}" data-state="${escapeHTML(state)}" role="listitem" aria-current="${idx === currentIndex ? 'step' : 'false'}">
+          <div class="step-marker" aria-hidden="true">
+            ${idx < currentIndex ? '✓' : (idx === currentIndex ? '' : (idx + 1))}
+          </div>
+          <div class="step-content">
+            <span class="step-label">${escapeHTML(label)}</span>
+            ${description ? `<span class="step-description">${escapeHTML(description)}</span>` : ''}
+          </div>
+        </div>
+      `;
     });
-    const connectors = stateKeys.slice(0, -1).map(() => '<div class="workflow-connector"></div>').join('');
-    container.innerHTML = steps.join(connectors ? connectors : '');
+
+    const connectors = stateKeys.slice(0, -1).map((_, idx) => `
+      <div class="workflow-connector ${idx < currentIndex ? 'completed' : ''} ${isTerminal && idx <= currentIndex ? 'completed' : ''}" aria-hidden="true"></div>
+    `).join('');
+
+    // Interleave steps and connectors
+    let html = '<div class="workflow-steps-container" role="list" aria-label="Workflow progress">';
+    for (let i = 0; i < steps.length; i++) {
+      html += steps[i];
+      if (i < connectors.length) {
+        html += connectors.split('</div>')[i] + '</div>'; // This is a bit hacky, let me fix
+      }
+    }
+    html += '</div>';
+
+    // Actually, let's do this more cleanly
+    let cleanHtml = '<div class="workflow-steps-container" role="list" aria-label="Workflow progress">';
+    stateKeys.forEach((state, idx) => {
+      let cls = 'workflow-step';
+      if (idx < currentIndex) cls += ' completed';
+      else if (idx === currentIndex) cls += ' active';
+      else cls += ' pending';
+      if (isTerminal && idx <= currentIndex) cls += ' completed';
+      const stateDef = sortedStates[idx];
+      const label = stateDef?.name || state;
+      const description = stateDef?.description || '';
+      cleanHtml += `
+        <div class="${cls}" data-state="${escapeHTML(state)}" role="listitem" aria-current="${idx === currentIndex ? 'step' : 'false'}">
+          <div class="step-marker" aria-hidden="true">
+            ${idx < currentIndex ? '✓' : (idx === currentIndex ? '' : (idx + 1))}
+          </div>
+          <div class="step-content">
+            <span class="step-label">${escapeHTML(label)}</span>
+            ${description ? `<span class="step-description">${escapeHTML(description)}</span>` : ''}
+          </div>
+        </div>
+      `;
+      if (idx < stateKeys.length - 1) {
+        const connectorCls = (idx < currentIndex || (isTerminal && idx <= currentIndex)) ? 'workflow-connector completed' : 'workflow-connector';
+        cleanHtml += `<div class="${connectorCls}" aria-hidden="true"></div>`;
+      }
+    });
+    cleanHtml += '</div>';
+
+    // Add legend
+    cleanHtml += `
+      <div class="workflow-legend" aria-hidden="true">
+        <span class="legend-item"><span class="legend-dot completed"></span> Completed</span>
+        <span class="legend-item"><span class="legend-dot active"></span> Current</span>
+        <span class="legend-item"><span class="legend-dot pending"></span> Pending</span>
+      </div>
+    `;
+
+    container.innerHTML = cleanHtml;
   },
 
-  renderSectionActions() {
+  async renderSectionActions() {
     if (!this.currentCase) return;
-    const state = this.currentWorkflow?.instance?.current_state;
+
+    const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow);
     const domain = getServiceDomain(this.currentCase.service_type);
-    const sectionActionStates = domain?.sectionActionStates || {};
+
     const containers = {
       eligibility: document.getElementById('sec-eligibility'),
       evidence: document.getElementById('sec-evidence'),
@@ -315,18 +550,51 @@ const app = {
       assistance: document.getElementById('sec-assistance'),
       followup: document.getElementById('sec-followup')
     };
+
+    // Fetch available workflow transitions to determine what actions are possible
+    let availableTransitions = [];
+    if (!isTerminal && this.currentWorkflow?.instance?.current_state) {
+      try {
+        const res = await api('GET', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions`));
+        availableTransitions = res.data || [];
+      } catch (err) {
+        console.warn('Could not fetch workflow transitions:', err);
+      }
+    }
+
+    // Map section names to their corresponding transition keys
+    // This is a loose mapping - the actual availability is determined by workflow transitions
+    const sectionTransitionMap = {
+      eligibility: ['open', 'review'], // Can add eligibility when case is NEW/OPEN
+      evidence: ['open', 'review', 'assess'], // Can add evidence in early states
+      assessment: ['assess2', 'decide'], // Assessment in IN_REVIEW/ASSESSMENT
+      decision: ['decide', 'approve', 'reject'], // Decision in DECISION_PENDING
+      assistance: ['start_assistance', 'follow_up'], // Assistance in APPROVED/IN_PROGRESS
+      followup: ['follow_up', 'complete'] // Follow-up in IN_PROGRESS/FOLLOW_UP
+    };
+
     for (const [name, el] of Object.entries(containers)) {
       if (!el) continue;
+      // Remove any existing action buttons
       el.querySelectorAll('.section-action-btn').forEach(btn => btn.remove());
+
       const hasData = el.querySelector('.empty') === null && !el.innerHTML.includes('Not yet recorded') && el.textContent.trim().length > 0;
       if (hasData) continue;
+
+      // For terminal cases, don't show add actions at all
+      if (isTerminal) continue;
+
+      // Check if any relevant transition is available
+      const relevantTransitions = sectionTransitionMap[name] || [];
+      const hasAvailableTransition = availableTransitions.some(t => relevantTransitions.includes(t.key));
+
       const actionBtn = document.createElement('button');
       actionBtn.className = 'btn section-action-btn';
       const title = domain?.sections[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
       actionBtn.innerHTML = `<span class="icon">➕</span> Add ${title}`;
       actionBtn.style.marginBottom = '8px';
-      const allowedStates = sectionActionStates[name] || [];
-      if (!state || !allowedStates.includes(state)) {
+
+      if (!hasAvailableTransition) {
         actionBtn.disabled = true;
         actionBtn.title = 'Not available in current workflow state';
       } else {
@@ -363,21 +631,67 @@ const app = {
     await this.loadSection('followup', this.orgPath(`/follow-ups/by-service-request/${id}`));
   },
 
-  async loadSection(name, path) {
+async loadSection(name, path) {
+    const el = document.getElementById(`sec-${name}`);
+    if (!el) return;
+
+    // Show loading state
+    el.innerHTML = '<div class="loading" style="padding:16px;text-align:center"><div class="loading-spinner"></div> Loading…</div>';
+
     try {
       const res = await api('GET', path);
-      const el = document.getElementById(`sec-${name}`);
-      if (!el) return;
       const data = res.data;
-      if (!data) { el.innerHTML = '<p class="empty">Not yet recorded</p>'; return; }
       const domain = getServiceDomain(this.currentCase?.service_type);
       const hint = domain?.sections[name]?.hint;
       let hintHTML = hint ? `<p class="section-hint">${escapeHTML(hint)}</p>` : '';
+
+      const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow);
+
+      if (!data) {
+        // Determine appropriate empty state message
+        let emptyMessage = '';
+        let emptyClass = 'empty';
+        if (isTerminal) {
+          emptyMessage = 'Not recorded (case is closed)';
+          emptyClass += ' terminal-empty';
+        } else {
+          // Check if this section is relevant for current workflow state
+          const state = this.currentWorkflow?.instance?.current_state;
+          const sectionTransitionMap = {
+            eligibility: ['open', 'review'],
+            evidence: ['open', 'review', 'assess'],
+            assessment: ['assess2', 'decide'],
+            decision: ['decide', 'approve', 'reject'],
+            assistance: ['start_assistance', 'follow_up'],
+            followup: ['follow_up', 'complete']
+          };
+          const relevantTransitions = sectionTransitionMap[name] || [];
+          let res2;
+          try {
+            res2 = await api('GET', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions`));
+          } catch (e) { res2 = { data: [] }; }
+          const availableTransitions = res2.data || [];
+          const hasAvailableTransition = availableTransitions.some(t => relevantTransitions.includes(t.key));
+
+          if (!hasAvailableTransition && state) {
+            emptyMessage = 'Not applicable in current workflow state';
+            emptyClass += ' not-applicable';
+          } else {
+            emptyMessage = 'Not yet recorded';
+            emptyClass += ' not-recorded';
+          }
+        }
+        el.innerHTML = `${hintHTML}<p class="${emptyClass}">${escapeHTML(emptyMessage)}</p>`;
+        return;
+      }
+
+      // Render data based on section type
       if (name === 'eligibility') {
-        el.innerHTML = `${hintHTML}<strong>Result:</strong> ${escapeHTML(data.result)}<br><strong>Explanation:</strong> ${escapeHTML(data.explanation)}`;
+        const resultClass = `badge ${(data.result || '').toLowerCase().replace('_','-')}`;
+        el.innerHTML = `${hintHTML}<strong>Result:</strong> <span class="${resultClass}">${escapeHTML(data.result)}</span><br><strong>Explanation:</strong> ${escapeHTML(data.explanation)}`;
       } else if (name === 'evidence') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No evidence yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No evidence recorded yet</p>'; return; }
           el.innerHTML = hintHTML + '<table><thead><tr><th>Type</th><th>Description</th></tr></thead><tbody>' +
             data.map(e => `<tr><td>${escapeHTML(e.type)}</td><td>${escapeHTML(e.description)}</td></tr>`).join('') +
             '</tbody></table>';
@@ -386,7 +700,7 @@ const app = {
         }
       } else if (name === 'assessment') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No assessment yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No assessment recorded yet</p>'; return; }
           const a = data[0];
           el.innerHTML = `${hintHTML}<strong>Findings:</strong> ${escapeHTML(a.findings)}<br><strong>Needs:</strong> ${escapeHTML(a.needs_identified || 'N/A')}<br><strong>Recommendation:</strong> ${escapeHTML(a.recommendation)}`;
         } else {
@@ -394,7 +708,7 @@ const app = {
         }
       } else if (name === 'decision') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No decision yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No decision recorded yet</p>'; return; }
           const d = data[0];
           el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${d.decision.toLowerCase().replace('_','-')}">${escapeHTML(d.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(d.reason)}`;
         } else {
@@ -402,7 +716,7 @@ const app = {
         }
       } else if (name === 'assistance') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No assistance yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No assistance recorded yet</p>'; return; }
           el.innerHTML = hintHTML + data.map(a => {
             const statusClass = (a.status || '').toLowerCase().replace('_','-');
             return `<div><strong class="badge ${statusClass}">${escapeHTML(a.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(a.status)}</span><br>${escapeHTML(a.description)}</div>`;
@@ -413,20 +727,20 @@ const app = {
         }
       } else if (name === 'followup') {
         if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty">No follow-up yet</p>'; return; }
+          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No follow-up scheduled yet</p>'; return; }
           el.innerHTML = hintHTML + data.map(f => `<div><strong>${escapeHTML(f.scheduled_date)}</strong> - ${escapeHTML(f.outcome)}</div>`).join('');
         } else {
           el.innerHTML = `${hintHTML}<strong>${escapeHTML(data.scheduled_date)}</strong> - ${escapeHTML(data.outcome)}`;
         }
       }
     } catch (err) {
-      const el = document.getElementById(`sec-${name}`);
-      if (el) {
-        if (err.message && err.message.includes('404')) {
-          el.innerHTML = '<p class="empty">Not yet recorded</p>';
-        } else {
-          el.innerHTML = `<p style="color:var(--danger)">Error loading: ${escapeHTML(err.message)}</p>`;
-        }
+      if (err.message && err.message.includes('404')) {
+        const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow);
+        let emptyMessage = isTerminal ? 'Not recorded (case is closed)' : 'Not yet recorded';
+        let emptyClass = isTerminal ? 'empty terminal-empty' : 'empty not-recorded';
+        el.innerHTML = `<p class="${emptyClass}">${escapeHTML(emptyMessage)}</p>`;
+      } else {
+        el.innerHTML = `<p style="color:var(--danger)">Error loading: ${escapeHTML(err.message)}</p>`;
       }
     }
   },
@@ -447,20 +761,32 @@ const app = {
   renderActions() {
     const container = document.getElementById('case-actions');
     if (!container || !this.currentCase) return;
+
+    const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow);
+
     this.loadWorkflowTransitions(this.currentCase.id).then(transitions => {
       let html = '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+
+      if (isTerminal) {
+        const terminalState = this.currentWorkflow?.instance?.current_state || this.currentCase.status;
+        html += '</div>';
+        html += `<div class="terminal-notice" style="margin-top:12px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary)">
+          <strong>This case is closed.</strong> No further workflow actions are available.
+          <br><small>Terminal state: <code>${escapeHTML(terminalState)}</code></small>
+        </div>`;
+        container.innerHTML = html;
+        return;
+      }
+
       for (const t of transitions) {
         html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
       }
       html += '</div>';
+
       const state = this.currentWorkflow?.instance?.current_state;
       if (state) {
-        const terminalStates = getTerminalStates(this.currentWorkflow?.definition);
-        const isTerminal = terminalStates.includes(state);
-        if (isTerminal) {
-          html += `<p class="empty" style="margin-top:8px;">This case is in a terminal state (<strong>${escapeHTML(state)}</strong>) and no further workflow actions are available.</p>`;
-        } else if (!transitions.length) {
-          html += `<p class="empty" style="margin-top:8px;">No actions available from the current state. The workflow may require conditions to be met.</p>`;
+        if (!transitions.length) {
+          html += `<p class="empty" style="margin-top:8px;">No actions available from the current state (<strong>${escapeHTML(state)}</strong>). The workflow may require conditions to be met.</p>`;
         }
       } else {
         html += '<p class="empty" style="margin-top:8px;">No workflow instance available for this case.</p>';

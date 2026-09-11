@@ -19,6 +19,9 @@ function clearAuth() {
 async function api(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if ((method === 'POST' || method === 'PUT') && !headers['Idempotency-Key']) {
+    headers['Idempotency-Key'] = crypto.randomUUID();
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,

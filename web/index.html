@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
   <div id="view-login" class="hidden">
     <div class="auth-form">
       <div class="card">
@@ -40,11 +41,11 @@
   </div>
 
   <div id="view-dashboard" class="hidden">
-    <div class="container">
+    <div class="container" id="main-content">
       <div class="header">
         <div>
-          <h1>Cases</h1>
-          <p>Service Requests</p>
+          <h1>Dashboard</h1>
+          <p>Operational Overview</p>
         </div>
         <nav>
           <button class="btn" onclick="router.navigate('new-case')"><span class="icon">➕</span> New Request</button>
@@ -52,22 +53,41 @@
           <button class="btn secondary" onclick="app.logout()"><span class="icon">🚪</span> Logout</button>
         </nav>
       </div>
+      <div class="stats-row" id="dashboard-stats" aria-live="polite"></div>
       <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <h2 style="margin:0">Recent Cases</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn secondary sm" onclick="app.loadDashboard()" aria-label="Refresh cases"><span class="icon">↻</span> Refresh</button>
+          </div>
+        </div>
+        <div id="dashboard-loading" class="loading hidden" style="padding:20px;text-align:center"><div class="loading-spinner"></div> Loading cases…</div>
+        <div id="dashboard-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center"></div>
         <table>
-          <thead><tr><th>Case #</th><th>Title</th><th>Status</th><th>Service</th><th>Priority</th></tr></thead>
+          <thead><tr><th>Case #</th><th>Title</th><th>Status</th><th>Service</th><th>Priority</th><th>Updated</th></tr></thead>
           <tbody id="case-table-body"></tbody>
         </table>
+        <div id="dashboard-empty" class="empty hidden">No cases yet. Create your first service request to get started.</div>
       </div>
     </div>
   </div>
 
   <div id="view-case" class="hidden">
-    <div class="container">
+    <div class="container" id="main-content">
       <div class="header">
         <div>
           <h1 id="case-title"></h1>
-          <p><span id="case-number"></span> · <span id="case-status" class="badge"></span> · <span id="case-service"></span> · Priority: <span id="case-priority"></span></p>
-          <p id="workflow-label" class="hidden" style="color:var(--text-muted);font-size:0.85rem;margin-top:4px"></p>
+          <p id="case-meta" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:8px;font-size:0.9rem">
+            <span id="case-number"></span>
+            <span id="case-status" class="badge" aria-live="polite"></span>
+            <span id="case-service" style="color:var(--text-secondary)"></span>
+            <span id="case-priority-badge" class="badge" style="background:var(--bg);color:var(--text-secondary);border:1px solid var(--border)"></span>
+          </p>
+          <div id="workflow-meta" class="hidden" style="margin-top:8px;padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);font-size:0.85rem">
+            <strong>Workflow:</strong> <span id="workflow-name"></span>
+            <span style="margin-left:12px"><strong>Definition:</strong> <span id="workflow-def-status" class="badge wf-status-draft"></span></span>
+            <span style="margin-left:12px"><strong>Instance:</strong> <span id="workflow-instance-state" class="badge"></span></span>
+          </div>
           <div id="service-banner" class="service-banner hidden" style="margin-top:8px;"></div>
         </div>
         <nav>
@@ -77,59 +97,64 @@
         </nav>
       </div>
 
-      <div class="card">
-        <h2>Description</h2>
-        <p id="case-desc" style="color:var(--text-secondary);line-height:1.7"></p>
-      </div>
+      <div id="case-loading" class="loading hidden" style="padding:40px;text-align:center"><div class="loading-spinner" style="margin:0 auto 12px"></div> Loading case…</div>
+      <div id="case-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger)"></div>
 
-      <div class="card">
-        <h2>Workflow</h2>
-        <div id="workflow-current-state" style="margin-bottom:16px;">
-          <span class="badge" id="workflow-state-badge" style="font-size:0.85rem;padding:6px 14px;"></span>
-          <span id="workflow-state-name" style="margin-left:8px;color:var(--text-secondary);font-weight:500;"></span>
+      <div id="case-content" style="display:block">
+        <div class="card">
+          <h2>Description</h2>
+          <p id="case-desc" style="color:var(--text-secondary);line-height:1.7"></p>
         </div>
-        <div id="workflow-progress" class="workflow-progress" style="margin-bottom:20px;"></div>
-        <div id="workflow-actions" style="margin-bottom:20px;">
-          <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Available Actions</h3>
-          <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-        </div>
-        <div>
-          <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Workflow Timeline</h3>
-          <div id="timeline" class="timeline"></div>
-        </div>
-      </div>
 
-      <div class="sections-grid">
         <div class="card">
-          <h2>Eligibility</h2>
-          <div id="sec-eligibility"></div>
+          <h2>Workflow</h2>
+          <div id="workflow-current-state" style="margin-bottom:16px;">
+            <span class="badge" id="workflow-state-badge" style="font-size:0.85rem;padding:6px 14px;"></span>
+            <span id="workflow-state-name" style="margin-left:8px;color:var(--text-secondary);font-weight:500;"></span>
+          </div>
+          <div id="workflow-progress" class="workflow-progress" style="margin-bottom:20px;"></div>
+          <div id="workflow-actions" style="margin-bottom:20px;">
+            <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Available Actions</h3>
+            <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+          </div>
+          <div>
+            <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Workflow Timeline</h3>
+            <div id="timeline" class="timeline"></div>
+          </div>
         </div>
-        <div class="card">
-          <h2>Evidence</h2>
-          <div id="sec-evidence"></div>
-        </div>
-        <div class="card">
-          <h2>Assessment</h2>
-          <div id="sec-assessment"></div>
-        </div>
-        <div class="card">
-          <h2>Decision</h2>
-          <div id="sec-decision"></div>
-        </div>
-        <div class="card">
-          <h2>Assistance</h2>
-          <div id="sec-assistance"></div>
-        </div>
-        <div class="card">
-          <h2>Follow-up</h2>
-          <div id="sec-followup"></div>
+
+        <div class="sections-grid">
+          <div class="card">
+            <h2>Eligibility</h2>
+            <div id="sec-eligibility"></div>
+          </div>
+          <div class="card">
+            <h2>Evidence</h2>
+            <div id="sec-evidence"></div>
+          </div>
+          <div class="card">
+            <h2>Assessment</h2>
+            <div id="sec-assessment"></div>
+          </div>
+          <div class="card">
+            <h2>Decision</h2>
+            <div id="sec-decision"></div>
+          </div>
+          <div class="card">
+            <h2>Assistance</h2>
+            <div id="sec-assistance"></div>
+          </div>
+          <div class="card">
+            <h2>Follow-up</h2>
+            <div id="sec-followup"></div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <div id="view-new-case" class="hidden">
-    <div class="container">
+    <div class="container" id="main-content">
       <div class="header">
         <h1>New Service Request</h1>
         <nav><button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">←</span> Back</button></nav>
@@ -192,10 +217,10 @@
           <label>Service Type</label>
           <select id="c-service">
             <option value="EMERGENCY">Emergency</option>
+            <option value="FINANCIAL">Financial</option>
             <option value="FOOD">Food</option>
             <option value="SHELTER">Shelter</option>
             <option value="MEDICAL">Medical</option>
-            <option value="FINANCIAL">Financial</option>
             <option value="TRANSPORT">Transport</option>
             <option value="EDUCATION">Education</option>
             <option value="GENERAL">General</option>
@@ -208,7 +233,7 @@
   </div>
 
   <div id="view-workflows" class="hidden">
-    <div class="container">
+    <div class="container" id="main-content">
       <div class="header">
         <div>
           <h1>Workflows</h1>
@@ -234,13 +259,13 @@
   </div>
 
   <div id="view-workflow-detail" class="hidden">
-    <div class="container">
+    <div class="container" id="main-content">
       <div id="wf-detail-container"></div>
     </div>
   </div>
 
   <div id="view-new-workflow" class="hidden">
-    <div class="container">
+    <div class="container" id="main-content">
       <div id="wf-create-container"></div>
     </div>
   </div>
