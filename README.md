@@ -136,9 +136,9 @@ A **Workflow Instance** is the execution of a Workflow Definition for a specific
 The existing Emergency Assistance workflow is now represented as a real Workflow Definition:
 
 ```
-REQUESTED → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING
-                                                    ├── APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
-                                                    └── REJECTED → CLOSED
+NEW → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING
+                                       ├── APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
+                                       └── REJECTED → CLOSED
 ```
 
 This means:
@@ -154,6 +154,8 @@ The workflow engine exposes REST endpoints for:
 - `GET /api/v1/organizations/{orgId}/workflows` — list definitions
 - `POST /api/v1/organizations/{orgId}/workflows` — create definition
 - `GET /api/v1/organizations/{orgId}/workflows/{id}` — get definition
+- `PUT /api/v1/organizations/{orgId}/workflows/{id}` — update a draft definition
+- `DELETE /api/v1/organizations/{orgId}/workflows/{id}` — delete a draft definition
 - `POST /api/v1/organizations/{orgId}/workflows/{id}/activate` — activate definition
 - `POST /api/v1/organizations/{orgId}/workflows/{id}/archive` — archive definition
 - `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow` — get case workflow instance

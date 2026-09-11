@@ -412,7 +412,7 @@ func (h *Handler) ExecuteTransition(w http.ResponseWriter, r *http.Request) {
 	actorRole := middleware.GetUserRole(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var req struct {
 		Reason string `json:"reason"`

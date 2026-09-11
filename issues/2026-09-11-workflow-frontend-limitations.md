@@ -2,35 +2,50 @@
 
 **Date:** 2026-09-11  
 **Author:** Kilo (Frontend Lead)  
-**Status:** Open  
+**Status:** Resolved (backend gaps closed) / Open (frontend v1 limitations remain)
 **Related work:** Frontend foundation for configurable workflows (workflow list, detail, and create/editor views)
 
 ---
 
-## 1. Backend API Gaps (cannot be solved on the frontend)
+## 0. Summary
 
-### 1.1 No edit/update endpoint for existing workflow definitions
-- **Impact:** Administrators cannot modify states, transitions, or metadata of an existing workflow definition.
-- **Current workaround:** Create a new version (same `key`, incremented `version`) and activate it. The old version remains in the database but is no longer used by new cases.
-- **Required backend change:** Introduce `PATCH/PUT /organizations/{orgId}/workflows/{workflowId}` with state/transition mutation support (add/update/delete states and transitions within a single definition version, or a re-creation strategy that retires the old version atomically).
+The backend API gaps originally documented below have all been closed. The
+remaining items are intentional frontend v1 limitations (documented in
+Section 2) and are not blocking. This document is retained for historical
+reference and to track the frontend-only limitations.
 
-### 1.2 No delete endpoint for workflow definitions
-- **Impact:** Orphaned draft or archived definitions accumulate in the database.
-- **Required backend change:** Introduce `DELETE /organizations/{orgId}/workflows/{workflowId}` with guards (e.g., cannot delete a definition that has active workflow instances).
+## 1. Backend API Status (verified 2026-09-11)
 
-### 1.3 No per-state/transition mutation endpoints
-- **Impact:** The editor cannot incrementally add or remove a single state or transition on an existing definition.
-- **Required backend change:** Either a full definition replace endpoint, or fine-grained endpoints (`POST/PUT/DELETE /workflows/{id}/states`, etc.).
+All workflow lifecycle endpoints are implemented and documented. The items
+originally listed in this section as gaps have been resolved.
 
-### 1.4 `CreatedAt` not set on workflow states/transitions during create
-- **Impact:** States and transitions created via `POST /workflows` have `created_at = 0001-01-01T00:00:00Z` because the service does not populate the `CreatedAt` field before the INSERT, and the repository passes it explicitly (so the DB default `now()` is not used).
-- **Severity:** Low (cosmetic — the field is not surfaced in the current UI).
-- **Required backend change:** Set `state.CreatedAt = time.Now()` and `transition.CreatedAt = time.Now()` in `CreateWorkflowDefinition` before calling `SaveBatch`.
+### 1.1 Update endpoint — IMPLEMENTED
+- `PUT /organizations/{orgId}/workflows/{workflowId}` updates a draft
+  workflow definition (key, name, description, version, initial state,
+  states, transitions, metadata). Only draft definitions can be updated.
+- The frontend exposes it via `app.wfUpdate(id, body)` and the Edit button
+  on the workflow list.
 
-### 1.5 OpenAPI spec documentation gap — missing `GET /workflows/{workflowId}`
-- **Impact:** API consumers relying only on the spec do not know that a single-definition GET exists.
-- **Current status:** The handler implements and tests this endpoint; only the spec is incomplete.
-- **Required change:** Document `GET /organizations/{orgId}/workflows/{workflowId}` in `api/openapi/openapi.yaml`.
+### 1.2 Delete endpoint — IMPLEMENTED
+- `DELETE /organizations/{orgId}/workflows/{workflowId}` deletes a draft
+  workflow definition and its states and transitions. Non-draft
+  definitions are rejected.
+- The frontend exposes it via `app.wfDelete(id)` and the Delete button.
+
+### 1.3 Per-state/transition mutation — NOT AVAILABLE (intentional)
+- Only full-definition replace is supported (PUT). Incremental
+  single-state or single-transition endpoints do not exist. This is a
+  deliberate scope decision for v1; the editor performs a full replace.
+
+### 1.4 `CreatedAt` on states/transitions — FIXED
+- `CreateWorkflowDefinition` now sets `state.CreatedAt` and
+  `transition.CreatedAt` to `time.Now().UTC()` before the batch INSERT
+  (`internal/workflow/application/service.go:148-150, 161-163`).
+
+### 1.5 OpenAPI spec — COMPLETE
+- All workflow endpoints are documented in `api/openapi/openapi.yaml`,
+  including `GET /organizations/{orgId}/workflows/{workflowId}`.
+- The spec passes `npx @redocly/cli lint`.
 
 ---
 
@@ -103,7 +118,7 @@
 
 The following backend files were already modified in the working tree before this session and are included in this commit as part of the complete workflow-engine feature:
 
-- `internal/workflow/api/handler.go` — workflow HTTP handlers (list, get, create, activate, archive, case-workflow endpoints)
+- `internal/workflow/api/handler.go` — workflow HTTP handlers (list, get, create, update, delete, activate, archive, case-workflow endpoints)
 - `internal/workflow/api/handler_test.go` — handler tests including tenant isolation
 - `internal/workflow/application/service.go` — `CreateWorkflowDefinition`, `ActivateWorkflowDefinition`, `ArchiveWorkflowDefinition`, case-workflow helpers
 - `internal/workflow/application/service_second_workflow_test.go` — service-level tests
