@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -127,6 +128,14 @@ func (s *WorkflowService) CreateWorkflowDefinition(ctx context.Context, params C
 	}
 
 	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
+		existing, err := s.defRepo.FindByKeyTx(ctx, tx, params.TenantID, params.Key)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to check duplicate key: %w", err)
+		}
+		if existing != nil {
+			return fmt.Errorf("workflow definition with key %s already exists", params.Key)
+		}
+
 		if err := s.defRepo.SaveTx(ctx, tx, def); err != nil {
 			return fmt.Errorf("failed to save workflow definition: %w", err)
 		}
@@ -183,7 +192,7 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
 		def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return domain.ErrWorkflowDefinitionNotFound{DefID: id}
 			}
 			return fmt.Errorf("workflow definition not found: %w", err)
@@ -192,7 +201,10 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 			return fmt.Errorf("only draft definitions can be activated")
 		}
 
-		activeDef, _ := s.defRepo.FindLatestActiveByKey(ctx, tenantID, def.Key)
+		activeDef, err := s.defRepo.FindLatestActiveByKeyTx(ctx, tx, tenantID, def.Key)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to check active definitions: %w", err)
+		}
 		if activeDef != nil && activeDef.ID != def.ID {
 			return fmt.Errorf("another active version (%d) already exists for key %s", activeDef.Version, def.Key)
 		}
@@ -234,7 +246,7 @@ func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantI
 	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
 		def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return domain.ErrWorkflowDefinitionNotFound{DefID: id}
 			}
 			return fmt.Errorf("workflow definition not found: %w", err)
@@ -288,7 +300,7 @@ func (s *WorkflowService) DeleteWorkflowDefinition(ctx context.Context, tenantID
 	if err := database.InTransaction(ctx, s.defRepo.DB(), func(tx *sql.Tx) error {
 		def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return domain.ErrWorkflowDefinitionNotFound{DefID: id}
 			}
 			return fmt.Errorf("workflow definition not found: %w", err)
@@ -347,13 +359,24 @@ func (s *WorkflowService) UpdateWorkflowDefinition(ctx context.Context, params U
 		var err error
 		def, err = s.defRepo.FindByIDTx(ctx, tx, params.TenantID, params.ID)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return domain.ErrWorkflowDefinitionNotFound{DefID: params.ID}
 			}
 			return fmt.Errorf("workflow definition not found: %w", err)
 		}
 		if def.Status != domain.WorkflowStatusDraft {
 			return fmt.Errorf("only draft definitions can be updated")
+		}
+
+		// Check for duplicate key if key is being changed
+		if params.Key != def.Key {
+			existing, err := s.defRepo.FindByKeyTx(ctx, tx, params.TenantID, params.Key)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("failed to check duplicate key: %w", err)
+			}
+			if existing != nil && existing.ID != def.ID {
+				return fmt.Errorf("workflow definition with key %s already exists", params.Key)
+			}
 		}
 
 		// Update definition fields
@@ -569,12 +592,18 @@ func (s *WorkflowService) ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx,
 func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, params ExecuteTransitionParams) (*domain.WorkflowInstance, error) {
 	instance, err := s.instanceRepo.FindByID(ctx, params.TenantID, params.InstanceID)
 	if err != nil {
-		return nil, domain.ErrWorkflowInstanceNotFound{InstanceID: params.InstanceID}
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrWorkflowInstanceNotFound{InstanceID: params.InstanceID}
+		}
+		return nil, fmt.Errorf("workflow instance not found: %w", err)
 	}
 
 	def, err := s.defRepo.FindByID(ctx, params.TenantID, instance.WorkflowDefID)
 	if err != nil {
-		return nil, domain.ErrWorkflowDefinitionNotFound{DefID: instance.WorkflowDefID}
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrWorkflowDefinitionNotFound{DefID: instance.WorkflowDefID}
+		}
+		return nil, fmt.Errorf("workflow definition not found: %w", err)
 	}
 	if def.TenantID != params.TenantID {
 		return nil, domain.ErrTenantViolation{}

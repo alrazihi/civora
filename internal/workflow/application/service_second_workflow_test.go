@@ -47,7 +47,21 @@ func (s *stubDefRepo) FindLatestActiveByKey(ctx context.Context, tenantID uuid.U
 			return d, nil
 		}
 	}
-	return nil, domain.ErrWorkflowDefinitionNotFound{DefID: uuid.Nil}
+	return nil, sql.ErrNoRows
+}
+func (s *stubDefRepo) FindLatestActiveByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
+	return s.FindLatestActiveByKey(ctx, tenantID, key)
+}
+func (s *stubDefRepo) FindByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
+	for _, d := range s.defs {
+		if d.TenantID == tenantID && d.Key == key {
+			return d, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+func (s *stubDefRepo) FindByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
+	return s.FindByKey(ctx, tenantID, key)
 }
 func (s *stubDefRepo) ListByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {
 	return nil, 0, nil

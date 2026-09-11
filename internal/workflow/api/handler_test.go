@@ -388,8 +388,9 @@ func TestExecuteTransition_Success(t *testing.T) {
 	r := setupWorkflowRouter(mockSvc)
 
 	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/workflow/transitions/open", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/workflow/transitions/open", strings.NewReader("{}"))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
@@ -418,8 +419,9 @@ func TestExecuteTransition_UnauthorizedTransition(t *testing.T) {
 	r := setupWorkflowRouter(mockSvc)
 
 	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "staff")
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/workflow/transitions/open", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/workflow/transitions/open", strings.NewReader("{}"))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
@@ -445,8 +447,9 @@ func TestExecuteTransition_InvalidTransition(t *testing.T) {
 	r := setupWorkflowRouter(mockSvc)
 
 	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/workflow/transitions/close", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/workflow/transitions/close", strings.NewReader("{}"))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
@@ -560,4 +563,236 @@ func TestCreateWorkflowDefinition_EmptyKeyRejected(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestUpdateWorkflowDefinition_Success(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		defs: []*workflowdomain.WorkflowDefinition{
+			{ID: workflowID, TenantID: orgID, Key: "test_wf", Name: "Test", Status: workflowdomain.WorkflowStatusDraft},
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	body := `{"key":"test_wf","name":"Updated Test","version":1,"initial_state":"NEW","states":[{"key":"NEW","name":"New","display_order":0}],"transitions":[]}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String(), strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+}
+
+func TestUpdateWorkflowDefinition_NotFound(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		mockUpdateDef: func(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error) {
+			return nil, workflowdomain.ErrWorkflowDefinitionNotFound{DefID: params.ID}
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	body := `{"key":"test_wf","name":"Updated Test","version":1,"initial_state":"NEW","states":[],"transitions":[]}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String(), strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestUpdateWorkflowDefinition_NotDraft(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		mockUpdateDef: func(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error) {
+			return nil, errors.New("only draft definitions can be updated")
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	body := `{"key":"test_wf","name":"Updated Test","version":1,"initial_state":"NEW","states":[],"transitions":[]}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String(), strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestDeleteWorkflowDefinition_Success(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		defs: []*workflowdomain.WorkflowDefinition{
+			{ID: workflowID, TenantID: orgID, Key: "test_wf", Name: "Test", Status: workflowdomain.WorkflowStatusDraft},
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+}
+
+func TestDeleteWorkflowDefinition_NotFound(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		mockDeleteDef: func(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
+			return workflowdomain.ErrWorkflowDefinitionNotFound{DefID: id}
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestDeleteWorkflowDefinition_NotDraft(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		mockDeleteDef: func(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
+			return errors.New("only draft definitions can be deleted")
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestArchiveWorkflowDefinition_Success(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String()+"/archive", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+}
+
+func TestArchiveWorkflowDefinition_NotActive(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowID := uuid.New()
+	mockSvc := &mockWorkflowService{
+		mockArchiveDef: func(ctx context.Context, tenantID, id, actorID uuid.UUID) error {
+			return errors.New("only active definitions can be archived")
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), orgID.String(), "admin")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/workflows/"+workflowID.String()+"/archive", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestWorkflowDefinition_UpdateTenantIsolation(t *testing.T) {
+	ownerOrgID := uuid.New()
+	otherOrgID := uuid.New()
+	userID := uuid.New()
+	defID := uuid.New()
+
+	defs := []*workflowdomain.WorkflowDefinition{
+		{ID: defID, Key: "test_wf", Name: "Test", TenantID: ownerOrgID, Status: workflowdomain.WorkflowStatusDraft},
+	}
+	mockSvc := &mockWorkflowService{
+		defs: defs,
+		mockUpdateDef: func(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error) {
+			for _, def := range defs {
+				if def.ID == params.ID {
+					if def.TenantID != params.TenantID {
+						return nil, workflowdomain.ErrTenantViolation{}
+					}
+					return def, nil
+				}
+			}
+			return nil, workflowdomain.ErrWorkflowDefinitionNotFound{DefID: params.ID}
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), ownerOrgID.String(), "admin")
+	body := `{"key":"test_wf","name":"Updated","version":1,"initial_state":"NEW","states":[],"transitions":[]}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/organizations/"+otherOrgID.String()+"/workflows/"+defID.String(), strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestWorkflowDefinition_DeleteTenantIsolation(t *testing.T) {
+	ownerOrgID := uuid.New()
+	otherOrgID := uuid.New()
+	userID := uuid.New()
+	defID := uuid.New()
+
+	defs := []*workflowdomain.WorkflowDefinition{
+		{ID: defID, Key: "test_wf", Name: "Test", TenantID: ownerOrgID, Status: workflowdomain.WorkflowStatusDraft},
+	}
+	mockSvc := &mockWorkflowService{
+		defs: defs,
+		mockDeleteDef: func(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error {
+			for _, def := range defs {
+				if def.ID == id {
+					if def.TenantID != tenantID {
+						return workflowdomain.ErrTenantViolation{}
+					}
+					return nil
+				}
+			}
+			return workflowdomain.ErrWorkflowDefinitionNotFound{DefID: id}
+		},
+	}
+	r := setupWorkflowRouter(mockSvc)
+
+	token := generateTestJWT("test-secret", userID.String(), ownerOrgID.String(), "admin")
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/organizations/"+otherOrgID.String()+"/workflows/"+defID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
 }

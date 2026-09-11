@@ -83,6 +83,29 @@ func (r *PostgresWorkflowDefinitionRepository) FindByKeyAndVersion(ctx context.C
 	return r.scanDefinition(r.db.QueryRowContext(ctx, query, tenantID, key, version))
 }
 
+func (r *PostgresWorkflowDefinitionRepository) FindByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE organization_id = $1 AND key = $2
+		ORDER BY version DESC
+		LIMIT 1
+	`
+	return r.scanDefinition(r.db.QueryRowContext(ctx, query, tenantID, key))
+}
+
+func (r *PostgresWorkflowDefinitionRepository) FindByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE organization_id = $1 AND key = $2
+		ORDER BY version DESC
+		LIMIT 1
+		FOR UPDATE
+	`
+	return r.scanDefinition(tx.QueryRowContext(ctx, query, tenantID, key))
+}
+
 func (r *PostgresWorkflowDefinitionRepository) FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
 	query := `
 		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
@@ -92,6 +115,18 @@ func (r *PostgresWorkflowDefinitionRepository) FindLatestActiveByKey(ctx context
 		LIMIT 1
 	`
 	return r.scanDefinition(r.db.QueryRowContext(ctx, query, tenantID, key))
+}
+
+func (r *PostgresWorkflowDefinitionRepository) FindLatestActiveByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE organization_id = $1 AND key = $2 AND status = 'ACTIVE'
+		ORDER BY version DESC
+		LIMIT 1
+		FOR UPDATE
+	`
+	return r.scanDefinition(tx.QueryRowContext(ctx, query, tenantID, key))
 }
 
 func (r *PostgresWorkflowDefinitionRepository) ListByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {

@@ -75,6 +75,15 @@ func (h *Handler) CreateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+	defer r.Body.Close()
+
 	var req struct {
 		Key          string                      `json:"key"`
 		Name         string                      `json:"name"`
@@ -92,12 +101,6 @@ func (h *Handler) CreateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 
 	if req.Version < 1 {
 		req.Version = 1
-	}
-
-	actorID := getUserID(r)
-	if actorID == uuid.Nil {
-		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
-		return
 	}
 
 	def, err := h.svc.CreateWorkflowDefinition(r.Context(), application.CreateWorkflowDefinitionParams{
@@ -187,6 +190,10 @@ func (h *Handler) ActivateWorkflowDefinition(w http.ResponseWriter, r *http.Requ
 	}
 
 	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
 
 	if err := h.svc.ActivateWorkflowDefinition(r.Context(), orgID, workflowID, actorID); err != nil {
 		writeWorkflowError(w, err)
@@ -209,6 +216,10 @@ func (h *Handler) ArchiveWorkflowDefinition(w http.ResponseWriter, r *http.Reque
 	}
 
 	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
 
 	if err := h.svc.ArchiveWorkflowDefinition(r.Context(), orgID, workflowID, actorID); err != nil {
 		writeWorkflowError(w, err)
@@ -258,6 +269,15 @@ func (h *Handler) UpdateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+	defer r.Body.Close()
+
 	var req struct {
 		Key          string                      `json:"key"`
 		Name         string                      `json:"name"`
@@ -275,12 +295,6 @@ func (h *Handler) UpdateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 
 	if req.Version < 1 {
 		req.Version = 1
-	}
-
-	actorID := getUserID(r)
-	if actorID == uuid.Nil {
-		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
-		return
 	}
 
 	def, err := h.svc.UpdateWorkflowDefinition(r.Context(), application.UpdateWorkflowDefinitionParams{
@@ -397,10 +411,16 @@ func (h *Handler) ExecuteTransition(w http.ResponseWriter, r *http.Request) {
 	}
 	actorRole := middleware.GetUserRole(r)
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+	defer r.Body.Close()
+
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
 
 	instance, err := h.svc.GetInstanceByCaseID(r.Context(), orgID, caseID)
 	if err != nil {
