@@ -19,7 +19,7 @@
           <input id="login-email" type="email" required placeholder="staff@org.org">
           <label>Password</label>
           <input id="login-password" type="password" required>
-          <button type="submit" class="btn" style="width:100%;justify-content:center">Sign In</button>
+          <button type="submit" class="btn" style="width:100%;justify-content:center"><span class="icon">🔑</span> Sign In</button>
         </form>
         <hr style="margin:20px 0;border-color:var(--border)">
         <p style="font-size:0.85rem;color:var(--text-muted);text-align:center;margin-bottom:16px">No account? Register below.</p>
@@ -32,7 +32,7 @@
           <input id="reg-email" type="email" required placeholder="jane@org.org">
           <label>Password (min 12 chars, 1 letter, 1 number)</label>
           <input id="reg-password" type="password" required minlength="12">
-          <button type="submit" class="btn secondary" style="width:100%;justify-content:center">Create Account</button>
+          <button type="submit" class="btn secondary" style="width:100%;justify-content:center"><span class="icon">📝</span> Create Account</button>
         </form>
         <p id="register-success" class="hidden" style="color:var(--success);text-align:center;margin-top:12px;font-weight:500">Registered! You can now sign in.</p>
       </div>
@@ -47,9 +47,9 @@
           <p>Service Requests</p>
         </div>
         <nav>
-          <button class="btn" onclick="router.navigate('new-case')">New Request</button>
-          <button class="btn secondary" onclick="router.navigate('workflows')">Workflows</button>
-          <button class="btn secondary" onclick="app.logout()">Logout</button>
+          <button class="btn" onclick="router.navigate('new-case')"><span class="icon">➕</span> New Request</button>
+          <button class="btn secondary" onclick="router.navigate('workflows')"><span class="icon">🔄</span> Workflows</button>
+          <button class="btn secondary" onclick="app.logout()"><span class="icon">🚪</span> Logout</button>
         </nav>
       </div>
       <div class="card">
@@ -71,9 +71,9 @@
           <div id="service-banner" class="service-banner hidden" style="margin-top:8px;"></div>
         </div>
         <nav>
-          <button class="btn secondary" onclick="router.navigate('dashboard')">Dashboard</button>
-          <button class="btn secondary" onclick="router.navigate('workflows')">Workflows</button>
-          <button class="btn secondary" onclick="app.logout()">Logout</button>
+          <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">🏠</span> Dashboard</button>
+          <button class="btn secondary" onclick="router.navigate('workflows')"><span class="icon">🔄</span> Workflows</button>
+          <button class="btn secondary" onclick="app.logout()"><span class="icon">🚪</span> Logout</button>
         </nav>
       </div>
 
@@ -132,7 +132,7 @@
     <div class="container">
       <div class="header">
         <h1>New Service Request</h1>
-        <nav><button class="btn secondary" onclick="router.navigate('dashboard')">Back</button></nav>
+        <nav><button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">←</span> Back</button></nav>
       </div>
       <div class="card">
         <h2>Step 1: Register Person</h2>
@@ -165,7 +165,7 @@
           <input id="p-address">
           <label>City</label>
           <input id="p-city">
-          <button type="submit" class="btn">Register Person</button>
+          <button type="submit" class="btn"><span class="icon">👤</span> Register Person</button>
         </form>
         <p id="person-result" style="margin-top:8px;color:var(--success);font-weight:500"></p>
       </div>
@@ -201,7 +201,7 @@
             <option value="GENERAL">General</option>
           </select>
           <input type="hidden" id="new-case-person-id">
-          <button type="submit" class="btn">Create Request</button>
+          <button type="submit" class="btn"><span class="icon">✨</span> Create Request</button>
         </form>
       </div>
     </div>
@@ -214,16 +214,18 @@
           <h1>Workflows</h1>
           <p>Workflow Definitions</p>
         </div>
-        <nav id="wf-list-actions"></nav>
+        <nav id="wf-list-actions">
+          <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">🏠</span> Dashboard</button>
+        </nav>
       </div>
       <div class="card">
         <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Name</th><th>Description</th><th>Version</th><th>Status</th><th>States</th><th>Transitions</th><th>Initial / Terminal</th><th>Created / Updated</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="wf-table-body"></tbody>
-        </table>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Description</th><th>Version</th><th>Status</th><th>States</th><th>Transitions</th><th>Initial / Terminal</th><th>Created / Updated</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="wf-table-body"></tbody>
+          </table>
         </div>
         <div id="wf-page-meta" style="margin-top:12px;color:var(--text-muted);font-size:0.85rem"></div>
         <div id="wf-pagination" style="margin-top:8px"></div>
@@ -250,8 +252,8 @@
         <label>Explanation</label>
         <textarea id="elig-explanation" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('eligibility-modal')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('eligibility-modal')"><span class="icon">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
         </div>
       </form>
     </div>
@@ -275,8 +277,8 @@
         <label>Storage Reference</label>
         <input id="ev-ref" required placeholder="s3://bucket/key or local path">
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('evidence-modal')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('evidence-modal')"><span class="icon">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
         </div>
       </form>
     </div>
@@ -293,8 +295,8 @@
         <label>Recommendation</label>
         <textarea id="as-rec" rows="2" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('assessment-modal')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('assessment-modal')"><span class="icon">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
         </div>
       </form>
     </div>
@@ -313,8 +315,8 @@
         <label>Reason</label>
         <textarea id="dec-reason" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('decision-modal')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('decision-modal')"><span class="icon">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
         </div>
       </form>
     </div>
@@ -339,8 +341,8 @@
         <label>Responsible Staff</label>
         <select id="asst-staff" required><option value="">Select staff...</option></select>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('assistance-modal')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('assistance-modal')"><span class="icon">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
         </div>
       </form>
     </div>
@@ -357,8 +359,8 @@
         <label>Notes</label>
         <textarea id="fu-notes" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('followup-modal')">Cancel</button>
-          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('followup-modal')"><span class="icon">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
         </div>
       </form>
     </div>

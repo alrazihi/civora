@@ -323,7 +323,7 @@ const app = {
       const actionBtn = document.createElement('button');
       actionBtn.className = 'btn section-action-btn';
       const title = domain?.sections[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
-      actionBtn.textContent = `Add ${title}`;
+      actionBtn.innerHTML = `<span class="icon">➕</span> Add ${title}`;
       actionBtn.style.marginBottom = '8px';
       const allowedStates = sectionActionStates[name] || [];
       if (!state || !allowedStates.includes(state)) {
@@ -432,7 +432,7 @@ const app = {
   },
 
   btn(label, onclick) {
-    return `<button class="btn" onclick="app.${onclick}">${label}</button>`;
+    return `<button class="btn" onclick="app.${onclick}"><span class="icon">⚡</span> ${label}</button>`;
   },
 
   async loadWorkflowTransitions(caseId) {
@@ -738,9 +738,10 @@ const app = {
   renderWorkflowListActions() {
     const actions = document.getElementById('wf-list-actions');
     if (!actions) return;
-    actions.innerHTML = currentUserIsAdmin()
-      ? `<button class="btn" onclick="app.showWorkflowCreateView()">Create Workflow</button>`
-      : '';
+    actions.innerHTML = `<button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">🏠</span> Dashboard</button>` +
+      (currentUserIsAdmin()
+        ? ` <button class="btn" onclick="app.showWorkflowCreateView()"><span class="icon">⚙️</span> Create Workflow</button>`
+        : '');
   },
 
   renderWorkflowRow(d) {
@@ -753,18 +754,18 @@ const app = {
     const canArchive = d.status === 'ACTIVE';
     const canEdit = d.status === 'DRAFT';
     const canDelete = d.status === 'DRAFT';
-    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${d.id}')">View</button>`;
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${d.id}')"><span class="icon">👁️</span> View</button>`;
     if (canEdit) {
-      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')">Edit</button>`;
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')"><span class="icon">✏️</span> Edit</button>`;
     }
     if (canActivate) {
-      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${d.id}')">Activate</button>`;
+      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${d.id}')"><span class="icon">▶️</span> Activate</button>`;
     }
     if (canArchive) {
-      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')">Archive</button>`;
+      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')"><span class="icon">📦</span> Archive</button>`;
     }
     if (canDelete) {
-      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')">Delete</button>`;
+      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')"><span class="icon">🗑️</span> Delete</button>`;
     }
     return `<tr>
       <td>${escapeHTML(d.name)} <span class="text-muted" style="font-size:0.8rem">(${escapeHTML(d.key)})</span></td>
@@ -865,11 +866,11 @@ const app = {
     const isArchived = def.status === 'ARCHIVED';
 
     const statusBadge = (status, text) => `<span class="badge wf-status-${status.toLowerCase()}" style="text-transform:none">${escapeHTML(text)}</span>`;
-    let actions = `<button class="btn secondary sm" onclick="app.showWorkflowsView()">Back to Workflows</button>`;
+    let actions = `<button class="btn secondary sm" onclick="app.showWorkflowsView()"><span class="icon">←</span> Back to Workflows</button>`;
     if (isDraft) {
-      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')">Activate</button>`;
+      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')"><span class="icon">▶️</span> Activate</button>`;
     } else if (isActive) {
-      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')">Archive</button>`;
+      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')"><span class="icon">📦</span> Archive</button>`;
     }
     const badge = statusBadge(def.status, def.status);
 
@@ -966,18 +967,23 @@ const app = {
   },
 
   async showWorkflowEditView(id) {
+    console.log('showWorkflowEditView called, id:', id);
     if (!currentUserIsAdmin()) {
+      console.log('not admin, returning');
       showToast('Only administrators can edit workflow definitions', 'error');
       return;
     }
+    console.log('admin ok, orgId:', orgId);
     this.switchView('view-new-workflow');
     this.workflowEditId = id;
     this.workflowCreateErrors = [];
     const container = document.getElementById('wf-create-container');
-    if (!container) return;
+    if (!container) { console.log('no container'); return; }
     container.innerHTML = '<p class="empty">Loading workflow definition…</p>';
     try {
+      console.log('about to wfGet');
       const res = await this.wfGet(id);
+      console.log('wfGet done:', JSON.stringify(res, null, 2));
       this.workflowDraft = {
         key: res.data.key,
         name: res.data.name,
@@ -1025,7 +1031,7 @@ const app = {
     container.innerHTML = `
       <div class="header" style="margin-bottom:16px">
         <h1>${title}</h1>
-        <nav><button class="btn secondary sm" onclick="app.cancelWorkflowCreate()">Cancel</button></nav>
+        <nav><button class="btn secondary sm" onclick="app.cancelWorkflowCreate()"><span class="icon">✖</span> Cancel</button></nav>
       </div>
       <div class="card">
         <h2>Workflow</h2>
@@ -1043,7 +1049,7 @@ const app = {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h2>States (${c.states.length})</h2>
-          <button class="btn success" onclick="app.addWorkflowState()">Add State</button>
+          <button class="btn success" onclick="app.addWorkflowState()"><span class="icon">➕</span> Add State</button>
         </div>
         <p class="section-hint">Define the lifecycle states. Mark one as the initial state and any number as terminal.</p>
         <div class="table-wrap">
@@ -1056,7 +1062,7 @@ const app = {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h2>Transitions (${c.transitions.length})</h2>
-          <button class="btn success" onclick="app.addWorkflowTransition()">Add Transition</button>
+          <button class="btn success" onclick="app.addWorkflowTransition()"><span class="icon">➕</span> Add Transition</button>
         </div>
         <p class="section-hint">Define transitions between states. A transition's source and target must reference existing state keys.</p>
         <div class="table-wrap">
@@ -1069,13 +1075,14 @@ const app = {
       <div class="card">
         <div id="wf-create-errors" style="color:var(--danger);margin-bottom:12px;"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn secondary" onclick="app.cancelWorkflowCreate()">Back</button>
+          <button class="btn secondary" onclick="app.cancelWorkflowCreate()"><span class="icon">←</span> Back</button>
           <button class="btn" onclick="app.validateAndSubmitWorkflow()">${submitLabel}</button>
         </div>
       </div>
-    `;
+      `;
     this.renderWorkflowStatesEditor();
     this.renderWorkflowTransitionsEditor();
+    this.refreshInitialSelect();
   },
 
   addWorkflowState() {
