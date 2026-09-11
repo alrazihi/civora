@@ -391,7 +391,9 @@ func (s *WorkflowService) UpdateWorkflowDefinition(ctx context.Context, params U
 		def.Description = params.Description
 		def.Version = params.Version
 		def.InitialState = params.InitialState
-		def.Metadata = params.Metadata
+		if params.Metadata != nil {
+			def.Metadata = params.Metadata
+		}
 		def.UpdatedAt = time.Now().UTC()
 
 		// Validate the updated definition

@@ -677,6 +677,8 @@ const app = {
   wfList(page) { return api('GET', this.orgPath(`/workflows?page=${page || 1}&per_page=50`)); },
   wfGet(id) { return api('GET', this.orgPath(`/workflows/${id}`)); },
   wfCreate(body) { return api('POST', this.orgPath('/workflows'), body); },
+  wfUpdate(id, body) { return api('PUT', this.orgPath(`/workflows/${id}`), body); },
+  wfDelete(id) { return api('DELETE', this.orgPath(`/workflows/${id}`)); },
   wfActivate(id) { return api('POST', this.orgPath(`/workflows/${id}/activate`), {}); },
   wfArchive(id) { return api('POST', this.orgPath(`/workflows/${id}/archive`), {}); },
 
@@ -749,12 +751,20 @@ const app = {
     const badge = `<span class="badge wf-status-${statusClass}" style="text-transform:none">${escapeHTML(d.status)}</span>`;
     const canActivate = d.status === 'DRAFT';
     const canArchive = d.status === 'ACTIVE';
+    const canEdit = d.status === 'DRAFT';
+    const canDelete = d.status === 'DRAFT';
     let actionBtns = `<button class="btn secondary" style="font-size:0.8rem;padding:4px 8px" onclick="app.showWorkflowDetail('${d.id}')">View</button>`;
+    if (canEdit) {
+      actionBtns += ` <button class="btn secondary" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')">Edit</button>`;
+    }
     if (canActivate) {
-      actionBtns += `<button class="btn" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.activateWorkflow('${d.id}')">Activate</button>`;
+      actionBtns += ` <button class="btn" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.activateWorkflow('${d.id}')">Activate</button>`;
     }
     if (canArchive) {
-      actionBtns += `<button class="btn warning" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')">Archive</button>`;
+      actionBtns += ` <button class="btn warning" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')">Archive</button>`;
+    }
+    if (canDelete) {
+      actionBtns += ` <button class="btn danger" style="font-size:0.8rem;padding:4px 8px;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')">Delete</button>`;
     }
     return `<tr>
       <td>${escapeHTML(d.name)} <span class="text-muted" style="font-size:0.8rem">(${escapeHTML(d.key)})</span></td>
@@ -802,6 +812,20 @@ const app = {
       await this.wfArchive(id);
       showToast('Workflow definition archived', 'success');
       this.refreshWorkflowLocation(id);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async deleteWorkflow(id) {
+    if (!confirm('Delete this workflow definition? This action is irreversible and will remove all associated states and transitions.')) return;
+    try {
+      await this.wfDelete(id);
+      showToast('Workflow definition deleted', 'success');
+      if (this.currentWorkflowDef && this.currentWorkflowDef.id === id) {
+        this.showWorkflowsView();
+      }
+      this.loadWorkflowList(this.workflowListPage || 1);
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -941,19 +965,71 @@ const app = {
     this.renderWorkflowCreateForm();
   },
 
-  renderWorkflowCreateForm() {
+  showWorkflowEditView(id) {
+    if (!currentUserIsAdmin()) {
+      showToast('Only administrators can edit workflow definitions', 'error');
+      return;
+    }
+    this.switchView('view-new-workflow');
+    this.workflowEditId = id;
+    this.workflowCreateErrors = [];
+    const container = document.getElementById('wf-create-container');
+    if (!container) return;
+    container.innerHTML = '<p class="empty">Loading workflow definition…</p>';
+    try {
+      const res = this.wfGet(id);
+      this.workflowDraft = {
+        key: res.data.key,
+        name: res.data.name,
+        description: res.data.description || '',
+        version: res.data.version || 1,
+        initial_state: res.data.initial_state || '',
+        states: (res.data.states || []).map(s => ({
+          key: s.key,
+          name: s.name || '',
+          description: s.description || '',
+          category: s.category || '',
+          terminal: !!s.terminal,
+          display_order: s.display_order || 0,
+          responsible_role: s.responsible_role || '',
+        })),
+        transitions: (res.data.transitions || []).map(t => ({
+          key: t.key || '',
+          name: t.name || '',
+          from_state: t.from_state || '',
+          to_state: t.to_state || '',
+          description: t.description || '',
+          conditions: t.conditions || [],
+          allowed_roles: t.allowed_roles || [],
+          active: t.active !== false,
+        })),
+      };
+      container.innerHTML = '';
+      this.renderWorkflowEditForm();
+    } catch (err) {
+      container.innerHTML = `<p class="empty" style="color:var(--danger)">Error loading workflow: ${escapeHTML(err.message)}</p>`;
+    }
+  },
+
+  renderWorkflowEditForm() {
+    this.renderWorkflowCreateForm(true);
+  },
+
+  renderWorkflowCreateForm(isEdit) {
     const c = this.workflowDraft;
     const stateKeys = c.states.map(s => s.key).filter(k => k);
     const container = document.getElementById('wf-create-container');
     if (!container) return;
+    const title = isEdit ? 'Edit Workflow Definition' : 'Create Workflow Definition';
+    const submitLabel = isEdit ? 'Update Definition' : 'Create Definition';
     container.innerHTML = `
       <div class="header" style="margin-bottom:16px">
-        <h1>Create Workflow Definition</h1>
+        <h1>${title}</h1>
         <nav><button class="btn secondary" onclick="app.cancelWorkflowCreate()">Cancel</button></nav>
       </div>
       <div class="card">
         <h2>Workflow</h2>
-        <p class="section-hint">A new definition is created in <strong>DRAFT</strong> status. Activate it to start using it for new cases.</p>
+        <p class="section-hint">${isEdit ? 'Editing a draft definition. Only draft definitions can be modified.' : 'A new definition is created in <strong>DRAFT</strong> status. Activate it to start using it for new cases.'}</p>
         <label>Key</label><input id="wf-key" value="${escapeHTML(c.key)}" oninput="app.onWorkflowMetaChange('key', this.value)">
         <label>Name</label><input id="wf-name" value="${escapeHTML(c.name)}" oninput="app.onWorkflowMetaChange('name', this.value)">
         <label>Description</label><textarea id="wf-desc" rows="2" oninput="app.onWorkflowMetaChange('description', this.value)">${escapeHTML(c.description)}</textarea>
@@ -994,7 +1070,7 @@ const app = {
         <div id="wf-create-errors" style="color:var(--danger);margin-bottom:12px;"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button class="btn secondary" onclick="app.cancelWorkflowCreate()">Cancel</button>
-          <button class="btn" onclick="app.validateAndSubmitWorkflow()">Create Definition</button>
+          <button class="btn" onclick="app.validateAndSubmitWorkflow()">${submitLabel}</button>
         </div>
       </div>
     `;
@@ -1119,22 +1195,18 @@ const app = {
     const stateKeys = c.states.map(s => s.key).filter(k => k);
     const tbody = document.getElementById('wf-transitions-tbody');
     if (!tbody) return;
+    const option = (val, label, selected) => `<option value="${escapeHTML(val)}"${selected ? ' selected' : ''}>${escapeHTML(label)}</option>`;
+    const selectOptions = (selected) => [option('', '— select —', !selected), ...stateKeys.map(k => option(k, k, k === selected))].join('');
     tbody.innerHTML = c.transitions.map((t, i) => {
-      const fromOptions = [{ v: '', l: '— select —' }, ...stateKeys.map(k => k)].map(k => {
-        const val = typeof k === 'string' ? k : k.v;
-        const label = typeof k === 'string' ? k : k.l;
-        return `<option value="${escapeHTML(val)}" ${val === t.from_state ? 'selected' : ''}>${escapeHTML(label)}</option>`;
-      }).join('');
-      const toOptions = fromOptions;
       return `<tr>
         <td><input style="width:110px" value="${escapeHTML(t.key)}" oninput="app.onTransitionFieldChange(${i}, 'key', this.value)"></td>
         <td><input value="${escapeHTML(t.name)}" oninput="app.onTransitionFieldChange(${i}, 'name', this.value)"></td>
-        <td><select onchange="app.onTransitionFieldChange(${i}, 'from_state', this.value)">${fromOptions}</select></td>
-        <td><select onchange="app.onTransitionFieldChange(${i}, 'to_state', this.value)">${toOptions}</select></td>
-        <td style="text-align:center"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="app.onTransitionFieldChange(${i}, 'active', this.checked)"></td>
+        <td><select onchange="app.onTransitionFieldChange(${i}, 'from_state', this.value)">${selectOptions(t.from_state)}</select></td>
+        <td><select onchange="app.onTransitionFieldChange(${i}, 'to_state', this.value)}">${selectOptions(t.to_state)}</select></td>
+        <td style="text-align:center"><input type="checkbox" ${t.active ? 'checked' : ''} onchange="app.onTransitionFieldChange(${i}, 'active', this.checked)}"></td>
         <td><input value="${Array.isArray(t.allowed_roles) ? t.allowed_roles.join(', ') : ''}" oninput="app.onTransitionFieldChange(${i}, 'allowed_roles_raw', this.value)" placeholder="admin, staff"></td>
         <td><input style="width:140px" value="${Array.isArray(t.conditions) && t.conditions.length ? JSON.stringify(t.conditions) : ''}" oninput="app.onTransitionFieldChange(${i}, 'conditions_raw', this.value)" placeholder="[]"></td>
-        <td><input value="${escapeHTML(t.description)}" oninput="app.onTransitionFieldChange(${i}, 'description', this.value)"></td>
+        <td><input value="${escapeHTML(t.description)}" oninput="app.onTransitionFieldChange(${i}, 'description', this.value)}"></td>
         <td style="white-space:nowrap"><button class="btn danger" style="font-size:0.75rem;padding:2px 6px" onclick="app.removeWorkflowTransition(${i})">✕</button></td>
       </tr>`;
     }).join('');
@@ -1205,7 +1277,11 @@ const app = {
       this.renderWorkflowErrors();
       return;
     }
-    this.submitWorkflowCreate();
+    if (this.workflowEditId) {
+      this.submitWorkflowUpdate();
+    } else {
+      this.submitWorkflowCreate();
+    }
   },
 
   renderWorkflowErrors() {
@@ -1259,8 +1335,28 @@ const app = {
     }
   },
 
+  async submitWorkflowUpdate() {
+    const payload = this.buildWorkflowPayload();
+    try {
+      const res = await this.wfUpdate(this.workflowEditId, payload);
+      const def = res.data || payload;
+      showToast('Workflow definition updated', 'success');
+      this.workflowDraft = null;
+      this.workflowEditId = null;
+      this.switchView('view-workflow-detail');
+      const container = document.getElementById('wf-detail-container');
+      if (container) {
+        container.innerHTML = '';
+        this.renderWorkflowDetail(def);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
   cancelWorkflowCreate() {
     this.workflowDraft = null;
+    this.workflowEditId = null;
     this.switchView('view-workflows');
     this.loadWorkflowList(this.workflowListPage || 1);
   },
