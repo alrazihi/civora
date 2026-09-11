@@ -85,7 +85,7 @@ func (r *PostgresAssessmentRepository) FindByOrganization(ctx context.Context, o
 	if err != nil {
 		return nil, fmt.Errorf("failed to query assessments: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*domain.Assessment
 	for rows.Next() {

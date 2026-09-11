@@ -123,7 +123,7 @@ func (r *PostgresAssistanceRepository) FindByOrganization(ctx context.Context, o
 	if err != nil {
 		return nil, fmt.Errorf("failed to query assistance: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*domain.Assistance
 	for rows.Next() {

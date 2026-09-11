@@ -85,7 +85,7 @@ func (r *PostgresDecisionRepository) FindByOrganization(ctx context.Context, org
 	if err != nil {
 		return nil, fmt.Errorf("failed to query decisions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*domain.Decision
 	for rows.Next() {

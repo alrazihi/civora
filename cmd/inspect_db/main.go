@@ -19,7 +19,7 @@ func main() {
 		fmt.Println("connect error:", err)
 		return
 	}
-	defer db.DB.Close()
+	defer func() { _ = db.DB.Close() }()
 
 	ctx := context.Background()
 	migrator := database.NewMigrator(db.DB, migrations.FS)
@@ -38,11 +38,14 @@ func main() {
 		fmt.Println("cols error:", err)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var v int
 		var n string
-		rows.Scan(&v, &n)
+		if err := rows.Scan(&v, &n); err != nil {
+			fmt.Println("scan error:", err)
+			return
+		}
 		fmt.Printf("applied: v%d %s\n", v, n)
 	}
 
@@ -52,10 +55,13 @@ func main() {
 		fmt.Println("cols error:", err)
 		return
 	}
-	defer rows2.Close()
+	defer func() { _ = rows2.Close() }()
 	for rows2.Next() {
 		var c string
-		rows2.Scan(&c)
+		if err := rows2.Scan(&c); err != nil {
+			fmt.Println("scan error:", err)
+			return
+		}
 		cols = append(cols, c)
 	}
 	fmt.Println("cases columns:", cols)
