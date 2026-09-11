@@ -317,6 +317,8 @@ const app = {
     for (const [name, el] of Object.entries(containers)) {
       if (!el) continue;
       el.querySelectorAll('.section-action-btn').forEach(btn => btn.remove());
+      const hasData = el.querySelector('.empty') === null && !el.innerHTML.includes('Not yet recorded') && el.textContent.trim().length > 0;
+      if (hasData) continue;
       const actionBtn = document.createElement('button');
       actionBtn.className = 'btn section-action-btn';
       const title = domain?.sections[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
