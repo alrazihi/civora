@@ -11,15 +11,7 @@ const SERVICE_DOMAIN = {
       assistance: { title: 'Emergency Assistance', hint: 'Deploy immediate assistance (food, shelter, transport, medical).' },
       followup: { title: 'Follow-up', hint: 'Schedule follow-up to verify ongoing safety and needs.' }
     },
-    assistanceTypes: ['FOOD', 'SHELTER', 'TRANSPORT', 'MEDICAL', 'FINANCIAL', 'OTHER'],
-    sectionActionStates: {
-      eligibility: ['NEW', 'OPEN'],
-      evidence: ['NEW', 'OPEN'],
-      assessment: ['IN_REVIEW', 'ASSESSMENT'],
-      decision: ['ASSESSMENT', 'DECISION_PENDING'],
-      assistance: ['APPROVED', 'IN_PROGRESS'],
-      followup: ['IN_PROGRESS', 'FOLLOW_UP']
-    }
+    assistanceTypes: ['FOOD', 'SHELTER', 'TRANSPORT', 'MEDICAL', 'FINANCIAL', 'OTHER']
   },
   MEDICAL: {
     label: 'Medical Assistance',
@@ -33,15 +25,7 @@ const SERVICE_DOMAIN = {
       assistance: { title: 'Medical Assistance', hint: 'Arrange medication, transport, treatment, and care.' },
       followup: { title: 'Medical Follow-up', hint: 'Monitor treatment progress and recovery.' }
     },
-    assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER'],
-    sectionActionStates: {
-      eligibility: ['NEW', 'OPN'],
-      evidence: ['NEW', 'OPEN'],
-      assessment: ['IN_REVIEW', 'ASSESSMENT'],
-      decision: ['ASSESSMENT', 'DECISION_PENDING'],
-      assistance: ['APPROVED', 'IN_PROGRESS'],
-      followup: ['IN_PROGRESS', 'FOLLOW_UP']
-    }
+    assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER']
   },
   FINANCIAL: {
     label: 'Financial Assistance',
@@ -55,15 +39,7 @@ const SERVICE_DOMAIN = {
       assistance: { title: 'Financial Assistance', hint: 'Provide grants, vouchers, or direct payments.' },
       followup: { title: 'Financial Follow-up', hint: 'Review ongoing financial circumstances.' }
     },
-    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'TRANSPORT', 'OTHER'],
-    sectionActionStates: {
-      eligibility: ['NEW', 'OPEN'],
-      evidence: ['NEW', 'OPEN'],
-      assessment: ['IN_REVIEW', 'ASSESSMENT'],
-      decision: ['ASSESSMENT', 'DECISION_PENDING'],
-      assistance: ['APPROVED', 'IN_PROGRESS'],
-      followup: ['IN_PROGRESS', 'FOLLOW_UP']
-    }
+    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'TRANSPORT', 'OTHER']
   },
   GENERAL: {
     label: 'General Assistance',
@@ -77,15 +53,7 @@ const SERVICE_DOMAIN = {
       assistance: { title: 'Assistance', hint: 'Provide approved assistance.' },
       followup: { title: 'Follow-up', hint: 'Schedule follow-up review.' }
     },
-    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'MEDICAL', 'TRANSPORT', 'EDUCATION', 'OTHER'],
-    sectionActionStates: {
-      eligibility: ['NEW', 'OPEN'],
-      evidence: ['NEW', 'OPEN'],
-      assessment: ['IN_REVIEW', 'ASSESSMENT'],
-      decision: ['ASSESSMENT', 'DECISION_PENDING'],
-      assistance: ['APPROVED', 'IN_PROGRESS'],
-      followup: ['IN_PROGRESS', 'FOLLOW_UP']
-    }
+    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'MEDICAL', 'TRANSPORT', 'EDUCATION', 'OTHER']
   }
 };
 
@@ -140,7 +108,9 @@ styleEl.textContent = '';
 document.head.appendChild(styleEl);
 
 function getServiceDomain(serviceType) {
-  return SERVICE_DOMAIN[serviceType] || SERVICE_DOMAIN.GENERAL || null;
+  if (SERVICE_DOMAIN[serviceType]) return SERVICE_DOMAIN[serviceType];
+  if (SERVICE_DOMAIN.GENERAL) return SERVICE_DOMAIN.GENERAL;
+  return null;
 }
 
 const app = {
@@ -247,9 +217,15 @@ const app = {
       const casesRes = await api('GET', this.orgPath('/cases?per_page=200'));
       const cases = casesRes.data || [];
 
-      // Compute statistics from real data
-      const stats = this.computeDashboardStats(cases);
-      this.renderDashboardStats(stats);
+      let stats = null;
+      try {
+        const statsRes = await api('GET', this.orgPath('/cases/dashboard/statistics'));
+        stats = statsRes.data || {};
+      } catch (e) {
+        stats = this.computeDashboardStats(cases);
+      }
+
+      this.renderDashboardStats(stats, cases);
 
       // Render recent cases table (limit to 20 most recent)
       const recentCases = cases
@@ -315,17 +291,17 @@ const app = {
     };
   },
 
-  renderDashboardStats(stats) {
+  renderDashboardStats(stats, cases) {
     const el = document.getElementById('dashboard-stats');
     if (!el) return;
-
+    cases = cases || [];
     const statCards = [
-      { label: 'Total Cases', value: stats.total, key: 'total' },
-      { label: 'Open Cases', value: stats.open, key: 'open' },
-      { label: 'Closed Cases', value: stats.closed, key: 'closed' },
-      { label: 'Rejected Cases', value: stats.rejected, key: 'rejected' },
-      { label: 'Urgent Priority', value: stats.urgent, key: 'urgent' },
-      { label: 'Service Types', value: Object.keys(stats.by_service_type || {}).length, key: 'serviceTypes' },
+      { label: 'Total Cases', value: (stats && stats.total != null) ? stats.total : cases.length, key: 'total' },
+      { label: 'Open Cases', value: (stats && stats.open != null) ? stats.open : 0, key: 'open' },
+      { label: 'Closed Cases', value: (stats && stats.closed != null) ? stats.closed : 0, key: 'closed' },
+      { label: 'Rejected Cases', value: (stats && stats.rejected != null) ? stats.rejected : 0, key: 'rejected' },
+      { label: 'Urgent Priority', value: (stats && stats.urgent != null) ? stats.urgent : 0, key: 'urgent' },
+      { label: 'Service Types', value: (stats && stats.by_service_type) ? Object.keys(stats.by_service_type).length : 0, key: 'serviceTypes' },
     ];
 
     el.innerHTML = statCards.map(s => `
@@ -351,14 +327,19 @@ const app = {
       this.currentCase = res.data;
       document.getElementById('case-title').textContent = res.data.title;
       document.getElementById('case-number').textContent = `Case #${escapeHTML(res.data.case_number)}`;
-      document.getElementById('case-status').textContent = `Case: ${escapeHTML(res.data.status)}`;
-      document.getElementById('case-status').className = `badge ${(res.data.status || '').toLowerCase().replace('_','-')}`;
+      document.getElementById('case-status').textContent = res.data.status;
+      document.getElementById('case-status').className = `badge case-status ${(res.data.status || '').toLowerCase().replace('_','-')}`;
       document.getElementById('case-service').textContent = `Service: ${escapeHTML(res.data.service_type)}`;
       document.getElementById('case-priority-badge').textContent = `Priority: ${escapeHTML(res.data.priority)}`;
       document.getElementById('case-desc').textContent = res.data.description || 'No description provided.';
 
       this.renderServiceBanner(res.data.service_type);
+      this.currentCase = res.data;
       await this.loadWorkflow(id);
+
+      const isTerminal = isCaseTerminal(res.data.status, this.currentWorkflow);
+      const terminalNotice = document.getElementById('case-terminal-notice');
+      if (terminalNotice) { terminalNotice.classList.toggle('hidden', !isTerminal); }
       this.renderWorkflowProgress();
       await this.loadCaseSections(id);
       this.renderSectionActions();
@@ -485,17 +466,6 @@ const app = {
       <div class="workflow-connector ${idx < currentIndex ? 'completed' : ''} ${isTerminal && idx <= currentIndex ? 'completed' : ''}" aria-hidden="true"></div>
     `).join('');
 
-    // Interleave steps and connectors
-    let html = '<div class="workflow-steps-container" role="list" aria-label="Workflow progress">';
-    for (let i = 0; i < steps.length; i++) {
-      html += steps[i];
-      if (i < connectors.length) {
-        html += connectors.split('</div>')[i] + '</div>'; // This is a bit hacky, let me fix
-      }
-    }
-    html += '</div>';
-
-    // Actually, let's do this more cleanly
     let cleanHtml = '<div class="workflow-steps-container" role="list" aria-label="Workflow progress">';
     stateKeys.forEach((state, idx) => {
       let cls = 'workflow-step';
@@ -540,7 +510,6 @@ const app = {
     if (!this.currentCase) return;
 
     const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow);
-    const domain = getServiceDomain(this.currentCase.service_type);
 
     const containers = {
       eligibility: document.getElementById('sec-eligibility'),
@@ -551,7 +520,6 @@ const app = {
       followup: document.getElementById('sec-followup')
     };
 
-    // Fetch available workflow transitions once
     let availableTransitions = [];
     if (!isTerminal && this.currentWorkflow?.instance?.current_state) {
       try {
@@ -562,34 +530,32 @@ const app = {
       }
     }
 
-    // Derive section-to-transition mapping from workflow definition if available
-    // Falls back to standard Emergency Assistance mapping
     const sectionTransitionMap = this.buildSectionTransitionMap(availableTransitions);
 
     for (const [name, el] of Object.entries(containers)) {
       if (!el) continue;
-      // Remove any existing action buttons
       el.querySelectorAll('.section-action-btn').forEach(btn => btn.remove());
 
-      const hasData = el.querySelector('.empty') === null && !el.innerHTML.includes('Not yet recorded') && el.textContent.trim().length > 0;
+      const hasData = el.querySelector('.empty') === null && el.textContent.trim().length > 0;
       if (hasData) continue;
 
-      // For terminal cases, don't show add actions at all
       if (isTerminal) continue;
 
-      // Check if any relevant transition is available
       const relevantTransitions = sectionTransitionMap[name] || [];
       const hasAvailableTransition = availableTransitions.some(t => relevantTransitions.includes(t.key));
 
       const actionBtn = document.createElement('button');
       actionBtn.className = 'btn section-action-btn';
-      const title = domain?.sections[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
-      actionBtn.innerHTML = `<span class="icon">➕</span> Add ${title}`;
+      actionBtn.type = 'button';
+      const sectionDomain = getServiceDomain(this.currentCase.service_type);
+      const title = sectionDomain?.sections?.[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
+      actionBtn.innerHTML = `<span class="icon" aria-hidden="true">+</span> Add ${title}`;
       actionBtn.style.marginBottom = '8px';
 
       if (!hasAvailableTransition) {
         actionBtn.disabled = true;
         actionBtn.title = 'Not available in current workflow state';
+        actionBtn.setAttribute('aria-disabled', 'true');
       } else {
         actionBtn.onclick = () => this.showSectionForm(name);
       }
@@ -598,40 +564,50 @@ const app = {
   },
 
   buildSectionTransitionMap(availableTransitions) {
-    // Default mapping for standard Emergency Assistance workflow
-    const defaultMap = {
-      eligibility: ['open', 'review'],
-      evidence: ['open', 'review', 'assess'],
-      assessment: ['assess2', 'decide'],
-      decision: ['decide', 'approve', 'reject'],
-      assistance: ['start_assistance', 'follow_up'],
-      followup: ['follow_up', 'complete']
+    const map = {
+      eligibility: [], evidence: [], assessment: [],
+      decision: [], assistance: [], followup: []
     };
 
-    // If we have the workflow definition, try to derive a more accurate mapping
-    // based on state categories and transition patterns
-    if (this.currentWorkflow?.definition?.states && this.currentWorkflow?.definition?.transitions) {
-      const def = this.currentWorkflow.definition;
-      const stateByKey = {};
-      def.states.forEach(s => { stateByKey[s.key] = s; });
+    for (const t of availableTransitions) {
+      const key = (t.key || '').toLowerCase();
+      const name = (t.name || '').toLowerCase();
 
-      // Group transitions by from_state to understand state phases
-      const transitionsFromState = {};
-      def.transitions.forEach(t => {
-        if (t.active !== false) {
-          if (!transitionsFromState[t.from_state]) transitionsFromState[t.from_state] = [];
-          transitionsFromState[t.from_state].push(t.key);
-        }
-      });
-
-      // If workflow uses standard state keys, we can trust the default map
-      // Otherwise, we could attempt to infer from state display_order, but
-      // that requires domain knowledge. For now, default map is used.
-      // TODO: Implement dynamic mapping based on state categories when available
-      return defaultMap;
+      if (key.includes('elig') || key === 'open' || key === 'review' || key === 'reopen')
+        map.eligibility.push(t.key);
+      if (key.includes('evidence') || key.includes('doc') || key.includes('upload') || key === 'open' || key === 'review')
+        map.evidence.push(t.key);
+      if (key.includes('assess'))
+        map.assessment.push(t.key);
+      if (key.includes('decide') || key.includes('approve') || key.includes('reject'))
+        map.decision.push(t.key);
+      if (key.includes('assist') || key.includes('start') || key.includes('progress') || key.includes('follow') || key === 'complete')
+        map.assistance.push(t.key);
+      if (key.includes('follow') || key === 'complete')
+        map.followup.push(t.key);
     }
 
-    return defaultMap;
+    for (const t of availableTransitions) {
+      const key = (t.key || '').toLowerCase();
+      const name = (t.name || '').toLowerCase();
+      if (!map.eligibility.includes(t.key) && (name.includes('elig') || name.includes('open') || name.includes('review')))
+        map.eligibility.push(t.key);
+      if (!map.evidence.includes(t.key) && (name.includes('evidence') || name.includes('document') || name.includes('open') || name.includes('review')))
+        map.evidence.push(t.key);
+      if (!map.assessment.includes(t.key) && name.includes('assess'))
+        map.assessment.push(t.key);
+      if (!map.decision.includes(t.key) && (name.includes('decide') || name.includes('approve') || name.includes('reject')))
+        map.decision.push(t.key);
+      if (!map.assistance.includes(t.key) && (name.includes('assist') || name.includes('start') || name.includes('progress') || name.includes('follow')))
+        map.assistance.push(t.key);
+      if (!map.followup.includes(t.key) && name.includes('follow'))
+        map.followup.push(t.key);
+    }
+
+    for (const k of Object.keys(map))
+      map[k] = [...new Set(map[k])];
+
+    return map;
   },
 
   showSectionForm(name) {
@@ -792,16 +768,17 @@ async loadSection(name, path) {
     const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow);
 
     this.loadWorkflowTransitions(this.currentCase.id).then(transitions => {
+      const tan = document.getElementById('terminal-action-notice');
+      if (tan) tan.classList.add('hidden');
       let html = '<div style="display:flex;gap:8px;flex-wrap:wrap">';
 
       if (isTerminal) {
         const terminalState = this.currentWorkflow?.instance?.current_state || this.currentCase.status;
-        html += '</div>';
-        html += `<div class="terminal-notice" style="margin-top:12px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary)">
-          <strong>This case is closed.</strong> No further workflow actions are available.
-          <br><small>Terminal state: <code>${escapeHTML(terminalState)}</code></small>
-        </div>`;
-        container.innerHTML = html;
+        container.innerHTML = '';
+        const tsn = document.getElementById('terminal-state-name');
+        if (tsn) tsn.textContent = escapeHTML(terminalState);
+        const tan = document.getElementById('terminal-action-notice');
+        if (tan) tan.classList.remove('hidden');
         return;
       }
 

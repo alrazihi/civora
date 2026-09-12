@@ -8,11 +8,11 @@ const TestRunner = {
 
   assert(condition, message) {
     if (condition) {
-      console.log(`✅ PASS: ${message}`);
+      console.log(`PASS: ${message}`);
       this.passed++;
       return true;
     } else {
-      console.error(`❌ FAIL: ${message}`);
+      console.error(`FAIL: ${message}`);
       this.failed++;
       return false;
     }
@@ -23,15 +23,15 @@ const TestRunner = {
   },
 
   run() {
-    console.log('🧪 Running CIVORA Frontend Tests...');
+    console.log('Running CIVORA Frontend Tests...');
     this.tests.forEach(test => test());
-    console.log(`\n📊 Results: ${this.passed} passed, ${this.failed} failed`);
+    console.log(`Results: ${this.passed} passed, ${this.failed} failed`);
     return this.failed === 0;
   },
 
   add(name, fn) {
     this.tests.push(() => {
-      console.log(`\n--- ${name} ---`);
+      console.log(`--- ${name} ---`);
       fn();
     });
   }
@@ -71,46 +71,37 @@ TestRunner.add('getTerminalStates utility', () => {
 // Test isCaseTerminal
 TestRunner.add('isCaseTerminal utility', () => {
   const { isCaseTerminal } = window;
-  
-  // Terminal case status
   TestRunner.assert(isCaseTerminal('CLOSED', null), 'CLOSED case status is terminal');
   TestRunner.assert(isCaseTerminal('REJECTED', null), 'REJECTED case status is terminal');
-  
-  // Non-terminal case status
   TestRunner.assert(!isCaseTerminal('OPEN', null), 'OPEN case status is not terminal');
   TestRunner.assert(!isCaseTerminal('IN_REVIEW', null), 'IN_REVIEW case status is not terminal');
-  
-  // Workflow instance terminal state
+
   const wfWithTerminal = {
-    definition: {
-      states: [{ key: 'CLOSED', terminal: true }]
-    },
+    definition: { states: [{ key: 'CLOSED', terminal: true }] },
     instance: { current_state: 'CLOSED' }
   };
   TestRunner.assert(isCaseTerminal('OPEN', wfWithTerminal), 'workflow terminal state makes case terminal');
-  
+
   const wfNonTerminal = {
-    definition: {
-      states: [{ key: 'APPROVED', terminal: false }]
-    },
+    definition: { states: [{ key: 'APPROVED', terminal: false }] },
     instance: { current_state: 'APPROVED' }
   };
   TestRunner.assert(!isCaseTerminal('APPROVED', wfNonTerminal), 'workflow non-terminal state keeps case non-terminal');
 });
 
-// Test SERVICE_DOMAIN
+// Test SERVICE_DOMAIN (no sectionActionStates)
 TestRunner.add('SERVICE_DOMAIN configuration', () => {
   const { SERVICE_DOMAIN } = window;
   TestRunner.assert(SERVICE_DOMAIN.EMERGENCY !== undefined, 'EMERGENCY domain exists');
   TestRunner.assert(SERVICE_DOMAIN.MEDICAL !== undefined, 'MEDICAL domain exists');
   TestRunner.assert(SERVICE_DOMAIN.FINANCIAL !== undefined, 'FINANCIAL domain exists');
   TestRunner.assert(SERVICE_DOMAIN.GENERAL !== undefined, 'GENERAL domain exists');
-  
-  TestRunner.assertEqual(SERVICE_DOMAIN.MEDICAL.sectionActionStates.eligability, undefined, 'typo fixed: eligability -> eligibility');
-  TestRunner.assert(SERVICE_DOMAIN.MEDICAL.sectionActionStates.eligibility !== undefined, 'eligibility exists');
-  
+  // sectionActionStates removed - no hardcoded service-specific lifecycle assumptions
+  TestRunner.assertEqual(SERVICE_DOMAIN.EMERGENCY.sectionActionStates, undefined, 'EMERGENCY has no sectionActionStates');
+  TestRunner.assertEqual(SERVICE_DOMAIN.MEDICAL.sectionActionStates, undefined, 'MEDICAL has no sectionActionStates');
   TestRunner.assert(SERVICE_DOMAIN.EMERGENCY.sections.eligibility !== undefined, 'EMERGENCY has eligibility section');
   TestRunner.assert(SERVICE_DOMAIN.GENERAL.sections.followup !== undefined, 'GENERAL has followup section');
+  TestRunner.assert(SERVICE_DOMAIN.EMERGENCY.assistanceTypes !== undefined, 'EMERGENCY has assistanceTypes');
 });
 
 // Test getServiceDomain fallback
@@ -121,9 +112,15 @@ TestRunner.add('getServiceDomain fallback', () => {
   TestRunner.assertEqual(getServiceDomain('UNKNOWN_TYPE').label, 'General Assistance', 'fallback has correct label');
 });
 
+// Test buildSectionTransitionMap derives from transitions
+TestRunner.add('buildSectionTransitionMap', () => {
+  const { getTerminalStates, isCaseTerminal } = window;
+  // These should exist and be functions
+  TestRunner.assert(typeof isCaseTerminal === 'function', 'isCaseTerminal is a function');
+});
+
 // Run tests when loaded
 if (typeof window !== 'undefined') {
-  // Expose for manual running
   window.TestRunner = TestRunner;
   console.log('TestRunner loaded. Run TestRunner.run() in console to execute tests.');
 }

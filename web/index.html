@@ -14,26 +14,26 @@
         <h1 style="text-align:center;margin-bottom:4px;font-size:2rem">CIVORA</h1>
         <p style="text-align:center;color:var(--text-muted);margin-bottom:24px;font-size:1rem">Public Service Delivery Platform</p>
         <form id="login-form" onsubmit="app.login(event)">
-          <label>Organization Slug</label>
+          <label for="login-org">Organization Slug</label>
           <input id="login-org" required placeholder="e.g. emergency-response">
-          <label>Email</label>
+          <label for="login-email">Email</label>
           <input id="login-email" type="email" required placeholder="staff@org.org">
-          <label>Password</label>
+          <label for="login-password">Password</label>
           <input id="login-password" type="password" required>
-          <button type="submit" class="btn" style="width:100%;justify-content:center"><span class="icon">🔑</span> Sign In</button>
+          <button type="submit" class="btn" style="width:100%;justify-content:center"><span class="icon" aria-hidden="true">🔑</span> Sign In</button>
         </form>
         <hr style="margin:20px 0;border-color:var(--border)">
         <p style="font-size:0.85rem;color:var(--text-muted);text-align:center;margin-bottom:16px">No account? Register below.</p>
         <form id="register-form" onsubmit="app.register(event)">
-          <label>Organization Slug</label>
+          <label for="reg-org">Organization Slug</label>
           <input id="reg-org" required placeholder="e.g. emergency-response">
-          <label>Full Name</label>
+          <label for="reg-name">Full Name</label>
           <input id="reg-name" required placeholder="Jane Doe">
-          <label>Email</label>
+          <label for="reg-email">Email</label>
           <input id="reg-email" type="email" required placeholder="jane@org.org">
-          <label>Password (min 12 chars, 1 letter, 1 number)</label>
+          <label for="reg-password">Password (min 12 chars, 1 letter, 1 number)</label>
           <input id="reg-password" type="password" required minlength="12">
-          <button type="submit" class="btn secondary" style="width:100%;justify-content:center"><span class="icon">📝</span> Create Account</button>
+          <button type="submit" class="btn secondary" style="width:100%;justify-content:center"><span class="icon" aria-hidden="true">📝</span> Create Account</button>
         </form>
         <p id="register-success" class="hidden" style="color:var(--success);text-align:center;margin-top:12px;font-weight:500">Registered! You can now sign in.</p>
       </div>
@@ -47,27 +47,36 @@
           <h1>Dashboard</h1>
           <p>Operational Overview</p>
         </div>
-        <nav>
-          <button class="btn" onclick="router.navigate('new-case')"><span class="icon">➕</span> New Request</button>
-          <button class="btn secondary" onclick="router.navigate('workflows')"><span class="icon">🔄</span> Workflows</button>
-          <button class="btn secondary" onclick="app.logout()"><span class="icon">🚪</span> Logout</button>
+        <nav aria-label="Dashboard actions">
+          <button class="btn" onclick="router.navigate('new-case')" aria-label="Create new service request"><span class="icon" aria-hidden="true">➕</span> New Request</button>
+          <button class="btn secondary" onclick="router.navigate('workflows')" aria-label="View workflows"><span class="icon" aria-hidden="true">🔄</span> Workflows</button>
+          <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true">🚪</span> Logout</button>
         </nav>
+      </div>
+      <div id="dashboard-stats-loading" class="loading hidden" style="padding:8px 0"><div class="loading-spinner" aria-hidden="true"></div> Loading statistics…</div>
+      <div id="dashboard-stats-error" class="card hidden" style="color:var(--danger);border-color:var(--danger);padding:16px;margin-bottom:16px" role="alert">
+        <strong>Failed to load statistics</strong>
+        <p id="dashboard-stats-error-msg" style="margin:4px 0 0"></p>
+        <button class="btn sm" style="margin-top:8px" onclick="app.loadDashboard()">Retry</button>
       </div>
       <div class="stats-row" id="dashboard-stats" aria-live="polite"></div>
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
           <h2 style="margin:0">Recent Cases</h2>
           <div style="display:flex;gap:8px">
-            <button class="btn secondary sm" onclick="app.loadDashboard()" aria-label="Refresh cases"><span class="icon">↻</span> Refresh</button>
+            <button class="btn secondary sm" onclick="app.loadDashboard()" aria-label="Refresh cases"><span class="icon" aria-hidden="true">↻</span> Refresh</button>
           </div>
         </div>
-        <div id="dashboard-loading" class="loading hidden" style="padding:20px;text-align:center"><div class="loading-spinner"></div> Loading cases…</div>
-        <div id="dashboard-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center"></div>
-        <table>
-          <thead><tr><th>Case #</th><th>Title</th><th>Status</th><th>Service</th><th>Priority</th><th>Updated</th></tr></thead>
+        <div id="dashboard-cases-loading" class="loading hidden" style="padding:20px;text-align:center"><div class="loading-spinner" aria-hidden="true"></div> Loading cases…</div>
+        <div id="dashboard-cases-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger)" role="alert">
+          <p id="dashboard-cases-error-msg"></p>
+          <button class="btn sm" style="margin-top:8px" onclick="app.loadDashboard()">Retry</button>
+        </div>
+        <table id="dashboard-table" aria-label="Recent cases">
+          <thead><tr><th scope="col">Case #</th><th scope="col">Title</th><th scope="col">Case Status</th><th scope="col">Service Type</th><th scope="col">Priority</th><th scope="col">Updated</th></tr></thead>
           <tbody id="case-table-body"></tbody>
         </table>
-        <div id="dashboard-empty" class="empty hidden">No cases yet. Create your first service request to get started.</div>
+        <div id="dashboard-empty" class="empty hidden">No cases yet. <a href="#/new-case" style="color:var(--primary);font-weight:600">Create your first service request</a> to get started.</div>
       </div>
     </div>
   </div>
@@ -84,21 +93,24 @@
             <span id="case-priority-badge" class="badge" style="background:var(--bg);color:var(--text-secondary);border:1px solid var(--border)"></span>
           </p>
           <div id="workflow-meta" class="hidden" style="margin-top:8px;padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);font-size:0.85rem">
-            <strong>Workflow:</strong> <span id="workflow-name"></span>
-            <span style="margin-left:12px"><strong>Definition:</strong> <span id="workflow-def-status" class="badge wf-status-draft"></span></span>
-            <span style="margin-left:12px"><strong>Instance:</strong> <span id="workflow-instance-state" class="badge"></span></span>
+            <div style="margin-bottom:4px"><strong>Workflow Definition:</strong> <span id="workflow-name"></span> — Status: <span id="workflow-def-status" class="badge wf-status-draft"></span></div>
+            <div><strong>Instance State:</strong> <span id="workflow-instance-state" class="badge"></span> <span id="workflow-state-name" style="color:var(--text-secondary);font-weight:500;"></span></div>
           </div>
           <div id="service-banner" class="service-banner hidden" style="margin-top:8px;"></div>
         </div>
-        <nav>
-          <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">🏠</span> Dashboard</button>
-          <button class="btn secondary" onclick="router.navigate('workflows')"><span class="icon">🔄</span> Workflows</button>
-          <button class="btn secondary" onclick="app.logout()"><span class="icon">🚪</span> Logout</button>
+        <nav aria-label="Case actions">
+          <button class="btn secondary" onclick="router.navigate('dashboard')" aria-label="Back to dashboard"><span class="icon" aria-hidden="true">🏠</span> Dashboard</button>
+          <button class="btn secondary" onclick="router.navigate('workflows')" aria-label="View workflows"><span class="icon" aria-hidden="true">🔄</span> Workflows</button>
+          <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true">🚪</span> Logout</button>
         </nav>
       </div>
 
-      <div id="case-loading" class="loading hidden" style="padding:40px;text-align:center"><div class="loading-spinner" style="margin:0 auto 12px"></div> Loading case…</div>
-      <div id="case-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger)"></div>
+      <div id="case-terminal-notice" class="card hidden terminal-notice" role="status">
+        <strong>This case is closed.</strong> No further workflow actions are available. History and audit records remain accessible.
+      </div>
+
+      <div id="case-loading" class="loading hidden" style="padding:40px;text-align:center"><div class="loading-spinner" style="margin:0 auto 12px" aria-hidden="true"></div> Loading case…</div>
+      <div id="case-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger)" role="alert"></div>
 
       <div id="case-content" style="display:block">
         <div class="card">
@@ -107,15 +119,22 @@
         </div>
 
         <div class="card">
-          <h2>Workflow</h2>
+          <h2>Workflow Progress</h2>
           <div id="workflow-current-state" style="margin-bottom:16px;">
             <span class="badge" id="workflow-state-badge" style="font-size:0.85rem;padding:6px 14px;"></span>
             <span id="workflow-state-name" style="margin-left:8px;color:var(--text-secondary);font-weight:500;"></span>
           </div>
           <div id="workflow-progress" class="workflow-progress" style="margin-bottom:20px;"></div>
+        </div>
+
+        <div class="card">
+          <h2>Workflow Actions</h2>
           <div id="workflow-actions" style="margin-bottom:20px;">
-            <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Available Actions</h3>
-            <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+            <div id="case-actions" style="display:flex;gap:8px;flex-wrap:wrap;" aria-live="polite"></div>
+            <div id="terminal-action-notice" class="hidden" style="margin-top:12px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary)" role="status">
+              <strong>This case is in a terminal state.</strong> No further workflow actions are available.
+              <br><small>Terminal state: <code id="terminal-state-name"></code></small>
+            </div>
           </div>
           <div>
             <h3 style="margin:0 0 8px 0;font-size:0.9rem;color:var(--text-secondary);font-weight:600;">Workflow Timeline</h3>
@@ -124,27 +143,27 @@
         </div>
 
         <div class="sections-grid">
-          <div class="card">
+          <div class="card" id="card-eligibility">
             <h2>Eligibility</h2>
             <div id="sec-eligibility"></div>
           </div>
-          <div class="card">
+          <div class="card" id="card-evidence">
             <h2>Evidence</h2>
             <div id="sec-evidence"></div>
           </div>
-          <div class="card">
+          <div class="card" id="card-assessment">
             <h2>Assessment</h2>
             <div id="sec-assessment"></div>
           </div>
-          <div class="card">
+          <div class="card" id="card-decision">
             <h2>Decision</h2>
             <div id="sec-decision"></div>
           </div>
-          <div class="card">
+          <div class="card" id="card-assistance">
             <h2>Assistance</h2>
             <div id="sec-assistance"></div>
           </div>
-          <div class="card">
+          <div class="card" id="card-followup">
             <h2>Follow-up</h2>
             <div id="sec-followup"></div>
           </div>
@@ -157,40 +176,40 @@
     <div class="container" id="main-content">
       <div class="header">
         <h1>New Service Request</h1>
-        <nav><button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">←</span> Back</button></nav>
+        <nav aria-label="Navigation"><button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon" aria-hidden="true">←</span> Back</button></nav>
       </div>
       <div class="card">
         <h2>Step 1: Register Person</h2>
         <form onsubmit="app.createPerson(event)">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
             <div>
-              <label>First Name</label>
+              <label for="p-first">First Name</label>
               <input id="p-first" required>
             </div>
             <div>
-              <label>Last Name</label>
+              <label for="p-last">Last Name</label>
               <input id="p-last" required>
             </div>
           </div>
-          <label>Preferred Language</label>
+          <label for="p-lang">Preferred Language</label>
           <input id="p-lang" value="en">
-          <label>Date of Birth (YYYY-MM-DD)</label>
+          <label for="p-dob">Date of Birth (YYYY-MM-DD)</label>
           <input id="p-dob" type="date">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
             <div>
-              <label>Email</label>
+              <label for="p-email">Email</label>
               <input id="p-email" type="email">
             </div>
             <div>
-              <label>Phone</label>
+              <label for="p-phone">Phone</label>
               <input id="p-phone">
             </div>
           </div>
-          <label>Address</label>
+          <label for="p-address">Address</label>
           <input id="p-address">
-          <label>City</label>
+          <label for="p-city">City</label>
           <input id="p-city">
-          <button type="submit" class="btn"><span class="icon">👤</span> Register Person</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">👤</span> Register Person</button>
         </form>
         <p id="person-result" style="margin-top:8px;color:var(--success);font-weight:500"></p>
       </div>
@@ -199,11 +218,11 @@
         <form onsubmit="app.createCase(event)">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
             <div>
-              <label>Title</label>
+              <label for="c-title">Title</label>
               <input id="c-title" required>
             </div>
             <div>
-              <label>Priority</label>
+              <label for="c-priority">Priority</label>
               <select id="c-priority">
                 <option value="URGENT">Urgent</option>
                 <option value="HIGH">High</option>
@@ -212,9 +231,9 @@
               </select>
             </div>
           </div>
-          <label>Description</label>
+          <label for="c-desc">Description</label>
           <textarea id="c-desc" rows="3"></textarea>
-          <label>Service Type</label>
+          <label for="c-service">Service Type</label>
           <select id="c-service">
             <option value="EMERGENCY">Emergency</option>
             <option value="FINANCIAL">Financial</option>
@@ -226,7 +245,7 @@
             <option value="GENERAL">General</option>
           </select>
           <input type="hidden" id="new-case-person-id">
-          <button type="submit" class="btn"><span class="icon">✨</span> Create Request</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">✨</span> Create Request</button>
         </form>
       </div>
     </div>
@@ -239,15 +258,15 @@
           <h1>Workflows</h1>
           <p>Workflow Definitions</p>
         </div>
-        <nav id="wf-list-actions">
-          <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">🏠</span> Dashboard</button>
+        <nav id="wf-list-actions" aria-label="Workflow actions">
+          <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon" aria-hidden="true">🏠</span> Dashboard</button>
         </nav>
       </div>
       <div class="card">
         <div class="table-wrap">
-          <table>
+          <table aria-label="Workflow definitions">
             <thead>
-              <tr><th>Name</th><th>Description</th><th>Version</th><th>Status</th><th>States</th><th>Transitions</th><th>Initial / Terminal</th><th>Created / Updated</th><th>Actions</th></tr>
+              <tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Version</th><th scope="col">Status</th><th scope="col">States</th><th scope="col">Transitions</th><th scope="col">Initial / Terminal</th><th scope="col">Created / Updated</th><th scope="col">Actions</th></tr>
             </thead>
             <tbody id="wf-table-body"></tbody>
           </table>
@@ -270,25 +289,25 @@
     </div>
   </div>
 
-  <div id="eligibility-modal" class="hidden modal-overlay">
+  <div id="eligibility-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="elig-modal-title">
     <div class="card" style="max-width:500px;width:100%">
-      <h2>Add Eligibility</h2>
+      <h2 id="elig-modal-title">Add Eligibility</h2>
       <form onsubmit="app.submitEligibility(event)">
-        <label>Explanation</label>
+        <label for="elig-explanation">Explanation</label>
         <textarea id="elig-explanation" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('eligibility-modal')"><span class="icon">✖</span> Cancel</button>
-          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('eligibility-modal')"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">💾</span> Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="evidence-modal" class="hidden modal-overlay">
+  <div id="evidence-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ev-modal-title">
     <div class="card" style="max-width:500px;width:100%">
-      <h2>Add Evidence</h2>
+      <h2 id="ev-modal-title">Add Evidence</h2>
       <form onsubmit="app.submitEvidence(event)">
-        <label>Type</label>
+        <label for="ev-type">Type</label>
         <select id="ev-type">
           <option value="IDENTITY_DOCUMENT">Identity Document</option>
           <option value="PROOF_OF_RESIDENCE">Proof of Residence</option>
@@ -297,61 +316,61 @@
           <option value="PHOTOGRAPH">Photograph</option>
           <option value="STAFF_NOTE">Staff Note</option>
         </select>
-        <label>Description</label>
+        <label for="ev-desc">Description</label>
         <input id="ev-desc" required>
-        <label>Storage Reference</label>
-        <input id="ev-ref" required placeholder="s3://bucket/key or local path">
+        <label for="ev-ref">Storage Reference</label>
+        <input id="ev-ref" required placeholder="s3://bucket/key">
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('evidence-modal')"><span class="icon">✖</span> Cancel</button>
-          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('evidence-modal')"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">💾</span> Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="assessment-modal" class="hidden modal-overlay">
+  <div id="assessment-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="as-modal-title">
     <div class="card" style="max-width:500px;width:100%">
-      <h2>Add Assessment</h2>
+      <h2 id="as-modal-title">Add Assessment</h2>
       <form onsubmit="app.submitAssessment(event)">
-        <label>Findings</label>
+        <label for="as-findings">Findings</label>
         <textarea id="as-findings" rows="3" required></textarea>
-        <label>Needs Identified</label>
+        <label for="as-needs">Needs Identified</label>
         <textarea id="as-needs" rows="2"></textarea>
-        <label>Recommendation</label>
+        <label for="as-rec">Recommendation</label>
         <textarea id="as-rec" rows="2" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('assessment-modal')"><span class="icon">✖</span> Cancel</button>
-          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('assessment-modal')"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">💾</span> Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="decision-modal" class="hidden modal-overlay">
+  <div id="decision-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="dec-modal-title">
     <div class="card" style="max-width:500px;width:100%">
-      <h2>Record Decision</h2>
+      <h2 id="dec-modal-title">Record Decision</h2>
       <form onsubmit="app.submitDecision(event)">
-        <label>Decision</label>
+        <label for="dec-decision">Decision</label>
         <select id="dec-decision">
           <option value="APPROVED">Approve</option>
           <option value="REJECTED">Reject</option>
           <option value="NEEDS_MORE_INFORMATION">Needs More Information</option>
         </select>
-        <label>Reason</label>
+        <label for="dec-reason">Reason</label>
         <textarea id="dec-reason" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('decision-modal')"><span class="icon">✖</span> Cancel</button>
-          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('decision-modal')"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">💾</span> Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="assistance-modal" class="hidden modal-overlay">
+  <div id="assistance-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="asst-modal-title">
     <div class="card" style="max-width:500px;width:100%">
-      <h2>Add Assistance</h2>
+      <h2 id="asst-modal-title">Add Assistance</h2>
       <form onsubmit="app.submitAssistance(event)">
-        <label>Type</label>
+        <label for="asst-type">Type</label>
         <select id="asst-type">
           <option value="FINANCIAL">Financial</option>
           <option value="FOOD">Food</option>
@@ -361,31 +380,31 @@
           <option value="TRANSPORT">Transport</option>
           <option value="OTHER">Other</option>
         </select>
-        <label>Description</label>
+        <label for="asst-desc">Description</label>
         <textarea id="asst-desc" rows="3" required></textarea>
-        <label>Responsible Staff</label>
+        <label for="asst-staff">Responsible Staff</label>
         <select id="asst-staff" required><option value="">Select staff...</option></select>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('assistance-modal')"><span class="icon">✖</span> Cancel</button>
-          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('assistance-modal')"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">💾</span> Save</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="followup-modal" class="hidden modal-overlay">
+  <div id="followup-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="fu-modal-title">
     <div class="card" style="max-width:500px;width:100%">
-      <h2>Add Follow-up</h2>
+      <h2 id="fu-modal-title">Add Follow-up</h2>
       <form onsubmit="app.submitFollowUp(event)">
-        <label>Scheduled Date (YYYY-MM-DD)</label>
+        <label for="fu-date">Scheduled Date (YYYY-MM-DD)</label>
         <input id="fu-date" type="date" required>
-        <label>Outcome</label>
+        <label for="fu-outcome">Outcome</label>
         <input id="fu-outcome" required>
-        <label>Notes</label>
+        <label for="fu-notes">Notes</label>
         <textarea id="fu-notes" rows="3" required></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button type="button" class="btn secondary" onclick="app.hideModal('followup-modal')"><span class="icon">✖</span> Cancel</button>
-          <button type="submit" class="btn"><span class="icon">💾</span> Save</button>
+          <button type="button" class="btn secondary" onclick="app.hideModal('followup-modal')"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+          <button type="submit" class="btn"><span class="icon" aria-hidden="true">💾</span> Save</button>
         </div>
       </form>
     </div>

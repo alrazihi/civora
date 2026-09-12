@@ -90,7 +90,7 @@ body {
   100% { background-position: 200% 0; }
 }
 
-/* ── Header ── */
+/* â”€â”€ Header â”€â”€ */
 .header {
   display: flex;
   justify-content: space-between;
@@ -128,7 +128,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* ── Card ── */
+/* â”€â”€ Card â”€â”€ */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -178,7 +178,7 @@ body {
   flex-shrink: 0;
 }
 
-/* ── Buttons ── */
+/* â”€â”€ Buttons â”€â”€ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -281,7 +281,7 @@ body {
 
 .btn.sm { padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; }
 
-/* ── Forms ── */
+/* â”€â”€ Forms â”€â”€ */
 input, select, textarea {
   width: 100%;
   padding: 11px 14px;
@@ -332,7 +332,7 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
   gap: 4px;
 }
 
-/* ── Tables ── */
+/* â”€â”€ Tables â”€â”€ */
 .table-wrap { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); -webkit-overflow-scrolling: touch; }
 
 table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border-radius: var(--radius-sm); overflow: hidden; min-width: 600px; }
@@ -379,7 +379,16 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
   th, td { padding: 10px 12px; font-size: 0.85rem; }
 }
 
-/* ── Badges ── */
+/* Dashboard table specific responsiveness */
+#dashboard-table { min-width: unset; }
+@media (max-width: 600px) {
+  #dashboard-table th,
+  #dashboard-table td { padding: 8px 6px; font-size: 0.78rem; }
+  #dashboard-table th:nth-child(2),
+  #dashboard-table td:nth-child(2) { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* â”€â”€ Badges â”€â”€ */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -393,7 +402,16 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
   transition: var(--transition);
 }
 
-.badge.new { background: #eff6ff; color: #3b82f6; }
+.badge.new { background: #eff6ff; color: #1e40af; }
+.badge.open { background: #fffbeb; color: #92400e; }
+.badge.in-review { background: #fdf2f8; color: #9d174d; }
+.badge.assessment { background: #eef2ff; color: #3730a3; }
+.badge.decision-pending { background: #faf5ff; color: #6b21a8; }
+.badge.approved { background: #ecfdf5; color: #065f46; }
+.badge.rejected { background: #fef2f2; color: #991b1b; }
+.badge.in-progress { background: #f0fdfa; color: #115e59; }
+.badge.follow-up { background: #fff7ed; color: #9a3412; }
+.badge.closed { background: #f1f5f9; color: #475569; }
 .badge.open { background: #fffbeb; color: #d97706; }
 .badge.in-review { background: #fdf2f8; color: #db2777; }
 .badge.assessment { background: #eef2ff; color: #6366f1; }
@@ -411,7 +429,20 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 .wf-status-active { background: var(--success-light); color: #065f46; }
 .wf-status-archived { background: #e2e8f0; color: #475569; }
 
-/* ── Timeline ── */
+/* Case status badges - distinct from workflow definition badges */
+.case-status { font-weight: 700; letter-spacing: 0.04em; }
+.case-status.new { background: #eff6ff; color: #1d4ed8; }
+.case-status.open { background: #fffbeb; color: #b45309; }
+.case-status.in-review { background: #fdf2f8; color: #be185d; }
+.case-status.assessment { background: #eef2ff; color: #4338ca; }
+.case-status.decision-pending { background: #faf5ff; color: #6b21a8; }
+.case-status.approved { background: #ecfdf5; color: #047857; }
+.case-status.rejected { background: #fef2f2; color: #991b1b; }
+.case-status.in-progress { background: #f0fdfa; color: #0f766e; }
+.case-status.follow-up { background: #fff7ed; color: #c2410c; }
+.case-status.closed { background: #f1f5f9; color: #475569; }
+
+/* â”€â”€ Timeline â”€â”€ */
 .timeline {
   position: relative;
   padding-left: 28px;
@@ -462,7 +493,7 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 .timeline-reason { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; background: var(--bg); padding: 4px 10px; border-radius: 6px; display: inline-block; }
 .timeline-transition { font-size: 0.75rem; color: var(--primary); font-weight: 500; background: #eef2ff; padding: 2px 8px; border-radius: 4px; }
 
-/* ── Service Banner ── */
+/* â”€â”€ Service Banner â”€â”€ */
 .service-banner {
   display: inline-flex;
   align-items: center;
@@ -477,8 +508,9 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 
 .service-icon { font-size: 1.2rem; }
 .service-label { font-size: 0.9rem; }
+.service-banner .service-context { font-size: 0.78rem; opacity: 0.8; margin-left: 4px; }
 
-/* ── Workflow Progress ── */
+/* â”€â”€ Workflow Progress â”€â”€ */
 .workflow-progress {
   display: flex;
   flex-direction: column;
@@ -665,7 +697,7 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
   .legend-item { font-size: 0.65rem; }
 }
 
-/* ── Auth Form ── */
+/* â”€â”€ Auth Form â”€â”€ */
 .auth-form {
   max-width: 440px;
   margin: 48px auto;
@@ -678,7 +710,7 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
   box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0,0,0,0.02);
 }
 
-/* ── Empty States ── */
+/* â”€â”€ Empty States â”€â”€ */
 .empty {
   text-align: center;
   color: var(--text-muted);
@@ -708,6 +740,32 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 
 .section-action-btn { margin-bottom: 10px; }
 
+#terminal-action-notice {
+  background: var(--warning-light);
+  border: 1px solid var(--warning);
+  border-left: 4px solid var(--warning);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  color: #78350f;
+  margin-top: 12px;
+  animation: fadeInUp 0.3s ease both;
+}
+
+#terminal-action-notice strong { color: #92400e; }
+
+#case-terminal-notice {
+  background: var(--warning-light);
+  border: 1px solid var(--warning);
+  border-left: 4px solid var(--warning);
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  color: var(--text);
+  animation: fadeInUp 0.3s ease both;
+}
+
+#case-terminal-notice strong { color: #92400e; font-size: 1rem; }
+
 .section-hint {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -719,7 +777,7 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 
 hr { margin: 16px 0; border-color: var(--border); }
 
-/* ── Modal Overlay ── */
+/* â”€â”€ Modal Overlay â”€â”€ */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -743,7 +801,7 @@ hr { margin: 16px 0; border-color: var(--border); }
   overflow: hidden;
 }
 
-/* ── Toast Container ── */
+/* â”€â”€ Toast Container â”€â”€ */
 #toast-container {
   position: fixed;
   bottom: 24px;
@@ -782,7 +840,7 @@ hr { margin: 16px 0; border-color: var(--border); }
 .toast.error { background: var(--danger); }
 .toast.info { background: var(--primary); }
 
-/* ── Section Grid for Case View ── */
+/* â”€â”€ Section Grid for Case View â”€â”€ */
 .sections-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -791,7 +849,7 @@ hr { margin: 16px 0; border-color: var(--border); }
 
 .sections-grid .card { margin-bottom: 0; }
 
-/* ── Stats Row ── */
+/* â”€â”€ Stats Row â”€â”€ */
 .stats-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -831,7 +889,7 @@ hr { margin: 16px 0; border-color: var(--border); }
   margin-top: 4px;
 }
 
-/* ── Loading State ── */
+/* â”€â”€ Loading State â”€â”€ */
 .loading {
   display: inline-flex;
   align-items: center;
@@ -853,7 +911,7 @@ hr { margin: 16px 0; border-color: var(--border); }
   to { transform: rotate(360deg); }
 }
 
-/* ── Checkbox ── */
+/* â”€â”€ Checkbox â”€â”€ */
 input[type="checkbox"] {
   width: auto;
   margin-bottom: 0;
@@ -862,7 +920,7 @@ input[type="checkbox"] {
   transform: scale(1.15);
 }
 
-/* ── Code ── */
+/* â”€â”€ Code â”€â”€ */
 code {
   background: #f1f5f9;
   padding: 2px 8px;
@@ -872,7 +930,7 @@ code {
   color: var(--primary-dark);
 }
 
-/* ── Workflow Detail Header ── */
+/* â”€â”€ Workflow Detail Header â”€â”€ */
 .wf-detail-header {
   display: flex;
   justify-content: space-between;
@@ -888,7 +946,7 @@ code {
   letter-spacing: -0.02em;
 }
 
-/* ── Responsive ── */
+/* â”€â”€ Responsive â”€â”€ */
 @media (max-width: 768px) {
   .container { padding: 16px; }
   .header { flex-direction: column; gap: 12px; }
@@ -914,7 +972,7 @@ code {
   .timeline-item::before { left: -18px; width: 12px; height: 12px; }
 }
 
-/* ── Accessibility ── */
+/* â”€â”€ Accessibility â”€â”€ */
 .skip-link {
   position: absolute;
   top: -100%;
@@ -962,5 +1020,17 @@ code {
   }
 }
 
-/* ── Utility ── */
+/* â”€â”€ Utility â”€â”€ */
 .hidden { display: none !important; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
