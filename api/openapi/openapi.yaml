@@ -360,6 +360,12 @@ components:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        workflow_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+          description: Optional workflow definition ID to use instead of the default service-type mapping. Must be an ACTIVE workflow belonging to the organization. If omitted, the workflow is determined by the service_type via WorkflowKeyForServiceType.
 
     ChangeCaseStatusRequest:
       type: object
@@ -1744,6 +1750,51 @@ paths:
                 $ref: '#/components/schemas/WorkflowDefinition'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/workflows/selectable:
+    get:
+      operationId: listSelectableWorkflows
+      tags: [Workflows]
+      summary: List active workflow definitions for case creation
+      description: Lists ACTIVE workflow definitions that can be used for case creation. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of active workflow definitions usable for case creation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowDefinition'
+                  meta:
+                    type: object
         '401':
           $ref: '#/components/responses/Unauthorized'
 

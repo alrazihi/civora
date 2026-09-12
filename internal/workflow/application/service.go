@@ -505,6 +505,29 @@ func (s *WorkflowService) ListWorkflowDefinitions(ctx context.Context, tenantID 
 	return definitions, total, nil
 }
 
+// ListActiveForSelection lists ACTIVE workflow definitions for an organization
+// that are usable for case creation. Supports pagination.
+func (s *WorkflowService) ListActiveForSelection(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {
+	definitions, _, err := s.defRepo.ListByOrganization(ctx, tenantID, 10000, 0)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list workflow definitions: %w", err)
+	}
+	var active []*domain.WorkflowDefinition
+	for _, def := range definitions {
+		if def.Status == domain.WorkflowStatusActive {
+			active = append(active, def)
+		}
+	}
+	if offset >= len(active) {
+		return nil, len(active), nil
+	}
+	end := offset + limit
+	if end > len(active) {
+		end = len(active)
+	}
+	return active[offset:end], len(active), nil
+}
+
 // FindLatestActiveByKey finds the latest active workflow definition by key.
 func (s *WorkflowService) FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
 	def, err := s.defRepo.FindLatestActiveByKey(ctx, tenantID, key)
@@ -541,6 +564,81 @@ func (s *WorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, c
 // CreateInstanceForCaseTx creates a workflow instance within an existing transaction.
 func (s *WorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
 	return s.createInstanceForCase(ctx, tx, tenantID, caseID, workflowDefKey, actorID)
+}
+
+// CreateInstanceForCaseByDefID creates a workflow instance for a case using a specific
+// workflow definition ID. The definition must belong to the tenant and be ACTIVE.
+func (s *WorkflowService) CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
+	var instance *domain.WorkflowInstance
+	err := database.InTransaction(ctx, s.instanceRepo.DB(), func(tx *sql.Tx) error {
+		var err error
+		instance, err = s.createInstanceForCaseByDefID(ctx, tx, tenantID, caseID, workflowDefID, actorID)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return instance, nil
+}
+
+// CreateInstanceForCaseByDefIDTx creates a workflow instance within an existing transaction
+// using a specific workflow definition ID.
+func (s *WorkflowService) CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
+	return s.createInstanceForCaseByDefID(ctx, tx, tenantID, caseID, workflowDefID, actorID)
+}
+
+func (s *WorkflowService) createInstanceForCaseByDefID(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*domain.WorkflowInstance, error) {
+	def, err := s.defRepo.FindByIDTx(ctx, tx, tenantID, workflowDefID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrWorkflowDefinitionNotFound{DefID: workflowDefID}
+		}
+		return nil, fmt.Errorf("workflow definition not found: %w", err)
+	}
+	if def.Status != domain.WorkflowStatusActive {
+		return nil, domain.ErrWorkflowDefinitionNotActive{DefID: workflowDefID}
+	}
+
+	now := time.Now().UTC()
+	instance := &domain.WorkflowInstance{
+		ID:                 uuid.New(),
+		TenantID:           tenantID,
+		WorkflowDefID:      def.ID,
+		WorkflowDefVersion: def.Version,
+		CaseID:             caseID,
+		CurrentState:       def.InitialState,
+		StartedAt:          now,
+		Metadata:           map[string]interface{}{},
+		Version:            1,
+	}
+
+	if err := s.instanceRepo.SaveTx(ctx, tx, instance); err != nil {
+		return nil, fmt.Errorf("failed to create workflow instance: %w", err)
+	}
+
+	if s.auditor != nil {
+		instanceIDStr := instance.ID.String()
+		if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			OrganizationID: tenantID,
+			ActorID:        &actorID,
+			Action:         "workflow.instance_created",
+			Resource:       "workflow_instance",
+			ResourceID:     &instanceIDStr,
+			Outcome:        "success",
+			RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+			Metadata: map[string]interface{}{
+				"workflow_definition_id":      def.ID.String(),
+				"workflow_definition_version": def.Version,
+				"case_id":                     caseID.String(),
+				"initial_state":               def.InitialState,
+			},
+		}); err != nil {
+			return nil, fmt.Errorf("failed to record audit event: %w", err)
+		}
+	}
+
+	instance.Definition = def
+	return instance, nil
 }
 
 func (s *WorkflowService) createInstanceForCase(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error) {

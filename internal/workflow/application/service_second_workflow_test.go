@@ -66,6 +66,15 @@ func (s *stubDefRepo) FindByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid
 func (s *stubDefRepo) ListByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {
 	return nil, 0, nil
 }
+func (s *stubDefRepo) ListActiveByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {
+	return nil, 0, nil
+}
+func (s *stubDefRepo) GetActiveByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error) {
+	if d, ok := s.defs[id]; ok && d.TenantID == tenantID && d.Status == domain.WorkflowStatusActive {
+		return d, nil
+	}
+	return nil, domain.ErrWorkflowDefinitionNotFound{DefID: id}
+}
 func (s *stubDefRepo) UpdateStatus(ctx context.Context, tenantID, id uuid.UUID, status domain.WorkflowDefinitionStatus, version int) error {
 	if d, ok := s.defs[id]; ok {
 		d.Status = status
@@ -409,4 +418,87 @@ func TestWorkflowEngine_SecondWorkflowWithoutEngineChanges(t *testing.T) {
 	history, err := historyRepo.FindByCaseID(ctx, tenantID, caseID, 100, 0)
 	require.NoError(t, err)
 	assert.Len(t, history, 7)
+}
+
+func TestCreateInstanceForCaseByDefID_Validation(t *testing.T) {
+	ctx := context.Background()
+	tenantID := uuid.New()
+	otherTenant := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	defRepo := &stubDefRepo{defs: make(map[uuid.UUID]*domain.WorkflowDefinition)}
+	stateRepo := &stubStateRepo{states: make(map[uuid.UUID][]domain.WorkflowState)}
+	transitionRepo := &stubTransitionRepo{transitions: make(map[uuid.UUID][]domain.WorkflowTransition)}
+	instanceRepo := &stubInstanceRepo{instances: make(map[uuid.UUID]*domain.WorkflowInstance), byCase: make(map[uuid.UUID]*domain.WorkflowInstance)}
+	historyRepo := &stubHistoryRepo{histories: nil}
+	auditRepo := &stubAuditRepo{}
+
+	auditService := application.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
+	svc := NewWorkflowService(defRepo, stateRepo, transitionRepo, instanceRepo, historyRepo, auditService)
+
+	// Create an ACTIVE definition
+	activeDef, _ := svc.CreateWorkflowDefinition(ctx, CreateWorkflowDefinitionParams{
+		TenantID:     tenantID,
+		Key:          "active_def",
+		Name:         "Active Def",
+		Description:  "desc",
+		Version:      1,
+		InitialState: "NEW",
+		States:       []domain.WorkflowState{{ID: uuid.New(), TenantID: tenantID, Key: "NEW", Name: "New", Terminal: false, DisplayOrder: 0, CreatedAt: time.Now().UTC()}},
+		Transitions:  nil,
+		Metadata:     nil,
+	})
+	_ = svc.ActivateWorkflowDefinition(ctx, tenantID, activeDef.ID, actorID)
+
+	// Create DRAFT definition
+	draftDef, _ := svc.CreateWorkflowDefinition(ctx, CreateWorkflowDefinitionParams{
+		TenantID:     tenantID,
+		Key:          "draft_def",
+		Name:         "Draft Def",
+		Description:  "desc",
+		Version:      1,
+		InitialState: "NEW",
+		States:       []domain.WorkflowState{{ID: uuid.New(), TenantID: tenantID, Key: "NEW", Name: "New", Terminal: false, DisplayOrder: 0, CreatedAt: time.Now().UTC()}},
+		Transitions:  nil,
+		Metadata:     nil,
+	})
+
+	// Create ARCHIVED definition
+	archivedDef, _ := svc.CreateWorkflowDefinition(ctx, CreateWorkflowDefinitionParams{
+		TenantID:     tenantID,
+		Key:          "archived_def",
+		Name:         "Archived Def",
+		Description:  "desc",
+		Version:      1,
+		InitialState: "NEW",
+		States:       []domain.WorkflowState{{ID: uuid.New(), TenantID: tenantID, Key: "NEW", Name: "New", Terminal: false, DisplayOrder: 0, CreatedAt: time.Now().UTC()}},
+		Transitions:  nil,
+		Metadata:     nil,
+	})
+	_ = svc.ArchiveWorkflowDefinition(ctx, tenantID, archivedDef.ID, actorID)
+
+	// 1. ACTIVE definition should succeed
+	_, err := svc.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, activeDef.ID, actorID)
+	assert.NoError(t, err)
+
+	// 2. DRAFT definition should fail with ErrWorkflowDefinitionNotActive
+	_, err = svc.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, draftDef.ID, actorID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrWorkflowDefinitionNotActive{})
+
+	// 3. ARCHIVED definition should fail with ErrWorkflowDefinitionNotActive
+	_, err = svc.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, archivedDef.ID, actorID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrWorkflowDefinitionNotActive{})
+
+	// 4. Non-existent definition should fail with ErrWorkflowDefinitionNotFound
+	unknownID := uuid.New()
+	_, err = svc.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, unknownID, actorID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrWorkflowDefinitionNotFound{DefID: unknownID})
+
+	// 5. Cross-tenant definition should fail with ErrWorkflowDefinitionNotFound
+	_, err = svc.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, otherTenant, actorID)
+	assert.Error(t, err)
 }

@@ -153,6 +153,7 @@ type (
 		TransitionKey string
 		AllowedRoles  []string
 	}
+	ErrWorkflowDefinitionNotActive struct{ DefID uuid.UUID }
 )
 
 func (e ErrWorkflowInstanceNotFound) Error() string {
@@ -188,6 +189,15 @@ func (e TerminalStateError) Error() string {
 
 func (e TerminalStateError) Is(target error) bool {
 	_, ok := target.(TerminalStateError)
+	return ok
+}
+
+func (e ErrWorkflowDefinitionNotActive) Error() string {
+	return "workflow definition not active: " + e.DefID.String()
+}
+
+func (e ErrWorkflowDefinitionNotActive) Is(target error) bool {
+	_, ok := target.(ErrWorkflowDefinitionNotActive)
 	return ok
 }
 

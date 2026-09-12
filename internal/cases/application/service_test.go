@@ -252,6 +252,16 @@ func (m *mockWorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *s
 	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
 }
 
+func (m *mockWorkflowService) CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	m.caseID = caseID
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+}
+
+func (m *mockWorkflowService) CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	m.caseID = caseID
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+}
+
 func (m *mockWorkflowService) GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
 }
@@ -290,6 +300,10 @@ func (m *mockWorkflowService) GetValidTransitions(ctx context.Context, tenantID,
 		result = append(result, tr)
 	}
 	return result, nil
+}
+
+func (m *mockWorkflowService) ListActiveForSelection(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*workflowdomain.WorkflowDefinition, int, error) {
+	return nil, 0, nil
 }
 
 func (m *mockWorkflowService) SetTransitionObserver(observer workflowapp.TransitionObserver) {
@@ -796,4 +810,75 @@ func TestGetStatistics_IsTenantScoped(t *testing.T) {
 	assert.Equal(t, 1, stats.Urgent)
 	assert.Equal(t, 1, stats.ByStatus[string(domain.CaseStatusClosed)])
 	assert.Equal(t, 1, stats.ByServiceType[string(domain.ServiceTypeEmergency)])
+}
+
+func TestCreateCase_WithWorkflowID(t *testing.T) {
+	repo := newMockCaseRepo()
+	wf := newMockWorkflowService("NEW")
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil, wf)
+	if registrar, ok := any(wf).(workflowapp.TransitionObserverRegistrar); ok {
+		registrar.SetTransitionObserver(svc)
+	}
+
+	orgID := uuid.New()
+	userID := uuid.New()
+	wfID := uuid.New()
+
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Emergency Assistance",
+		Description:    "Need help",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityHigh,
+		WorkflowID:     &wfID,
+		CreatedByID:    userID,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, c)
+	assert.Equal(t, wfID, *c.WorkflowID)
+	assert.Equal(t, "", c.WorkflowKey, "WorkflowKey should be empty when WorkflowID is provided")
+	assert.Equal(t, domain.CaseStatusNew, c.Status)
+}
+
+func TestCreateCase_WithNilWorkflowID(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	orgID := uuid.New()
+	userID := uuid.New()
+
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeEmergency,
+		Priority:       domain.PriorityHigh,
+		WorkflowID:     nil,
+		CreatedByID:    userID,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, c)
+	assert.Equal(t, domain.WorkflowKeyForServiceType(domain.ServiceTypeEmergency), c.WorkflowKey)
+	assert.Nil(t, c.WorkflowID)
+}
+
+func TestCreateCase_WithZeroWorkflowIDRejected(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	orgID := uuid.New()
+	userID := uuid.New()
+	wfID := uuid.Nil
+
+	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		WorkflowID:     &wfID,
+		CreatedByID:    userID,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid workflow ID")
 }

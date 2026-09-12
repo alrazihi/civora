@@ -73,6 +73,7 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 		ServiceType string  `json:"service_type"`
 		Priority    string  `json:"priority"`
 		PersonID    *string `json:"person_id"`
+		WorkflowID  *string `json:"workflow_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
@@ -96,6 +97,16 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 		personID = &pid
 	}
 
+	var workflowID *uuid.UUID
+	if req.WorkflowID != nil && *req.WorkflowID != "" {
+		wid, err := uuid.Parse(*req.WorkflowID)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
+			return
+		}
+		workflowID = &wid
+	}
+
 	c, err := h.svc.CreateCase(r.Context(), application.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          req.Title,
@@ -104,6 +115,7 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 		Priority:       domain.Priority(req.Priority),
 		PersonID:       personID,
 		CreatedByID:    actorID,
+		WorkflowID:     workflowID,
 	})
 	if err != nil {
 		writeCaseError(w, err)

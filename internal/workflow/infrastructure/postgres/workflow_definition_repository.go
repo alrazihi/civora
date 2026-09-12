@@ -164,6 +164,51 @@ func (r *PostgresWorkflowDefinitionRepository) ListByOrganization(ctx context.Co
 	return definitions, total, nil
 }
 
+func (r *PostgresWorkflowDefinitionRepository) ListActiveByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE organization_id = $1 AND status = 'ACTIVE'
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	rows, err := r.db.QueryContext(ctx, query, tenantID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query active workflow definitions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var definitions []*domain.WorkflowDefinition
+	for rows.Next() {
+		def, err := r.scanDefinitionFromRows(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		definitions = append(definitions, def)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	var total int
+	err = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM workflow_definitions WHERE organization_id = $1 AND status = 'ACTIVE'", tenantID).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count active workflow definitions: %w", err)
+	}
+
+	return definitions, total, nil
+}
+
+func (r *PostgresWorkflowDefinitionRepository) GetActiveByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE id = $1 AND organization_id = $2 AND status = 'ACTIVE'
+	`
+	row := r.db.QueryRowContext(ctx, query, id, tenantID)
+	return r.scanDefinition(row)
+}
+
 func (r *PostgresWorkflowDefinitionRepository) Update(ctx context.Context, def *domain.WorkflowDefinition) error {
 	return r.updateDefinition(ctx, r.db, def)
 }

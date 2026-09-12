@@ -32,10 +32,13 @@ var (
 type WorkflowTransitionExecutor interface {
 	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 	GetValidTransitions(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error)
+	ListActiveForSelection(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*workflowdomain.WorkflowDefinition, int, error)
 }
 
 type UserChecker interface {
@@ -85,6 +88,7 @@ type CreateCaseParams struct {
 	Priority       domain.Priority
 	PersonID       *uuid.UUID
 	CreatedByID    uuid.UUID
+	WorkflowID     *uuid.UUID
 }
 
 func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (*domain.Case, error) {
@@ -105,6 +109,18 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 	c, err := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCaseInvalidInput, err)
+	}
+
+	var workflowDefKey string
+	if params.WorkflowID != nil {
+		if *params.WorkflowID == uuid.Nil {
+			return nil, fmt.Errorf("%w: invalid workflow ID", ErrCaseInvalidInput)
+		}
+		c.WorkflowID = params.WorkflowID
+	} else {
+		key := domain.WorkflowKeyForServiceType(c.ServiceType)
+		c.WorkflowKey = key
+		workflowDefKey = key
 	}
 
 	const maxRetries = 3
@@ -134,9 +150,15 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 			}
 
 			if s.workflowSvc != nil {
-				instance, err := s.workflowSvc.CreateInstanceForCaseTx(ctx, tx, c.OrganizationID, c.ID, domain.WorkflowKeyForServiceType(c.ServiceType), c.CreatedByID)
-				if err != nil {
-					return fmt.Errorf("failed to create workflow instance for case: %w", err)
+				var instance *workflowdomain.WorkflowInstance
+				var instanceErr error
+				if params.WorkflowID != nil {
+					instance, instanceErr = s.workflowSvc.CreateInstanceForCaseByDefIDTx(ctx, tx, c.OrganizationID, c.ID, *params.WorkflowID, c.CreatedByID)
+				} else {
+					instance, instanceErr = s.workflowSvc.CreateInstanceForCaseTx(ctx, tx, c.OrganizationID, c.ID, workflowDefKey, c.CreatedByID)
+				}
+				if instanceErr != nil {
+					return fmt.Errorf("failed to create workflow instance for case: %w", instanceErr)
 				}
 				instanceID := instance.ID
 				c.WorkflowInstanceID = &instanceID

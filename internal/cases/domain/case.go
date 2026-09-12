@@ -89,6 +89,8 @@ type Case struct {
 	UpdatedAt          time.Time   `json:"updated_at"`
 	ClosedAt           *time.Time  `json:"closed_at"`
 	WorkflowInstanceID *uuid.UUID  `json:"workflow_instance_id"`
+	WorkflowKey        string      `json:"workflow_key,omitempty"`
+	WorkflowID         *uuid.UUID  `json:"workflow_id,omitempty"`
 	Version            int         `json:"version"`
 }
 

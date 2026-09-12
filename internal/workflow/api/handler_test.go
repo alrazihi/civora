@@ -23,23 +23,24 @@ import (
 )
 
 type mockWorkflowService struct {
-	defs                 []*workflowdomain.WorkflowDefinition
-	instances            []*workflowdomain.WorkflowInstance
-	histories            []workflowdomain.WorkflowTransitionHistory
-	mockCreateDef        func(ctx context.Context, params workflowapp.CreateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error)
-	mockUpdateDef        func(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error)
-	mockDeleteDef        func(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error
-	mockActivateDef      func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
-	mockArchiveDef       func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
-	mockGetDef           func(ctx context.Context, tenantID, id uuid.UUID) (*workflowdomain.WorkflowDefinition, error)
-	mockListDefs         func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*workflowdomain.WorkflowDefinition, int, error)
-	mockCreateInstance   func(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
-	mockExecTransition   func(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
-	mockExecTransitionTx func(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
-	mockGetByCaseID      func(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
-	mockGetValidTrans    func(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error)
-	mockGetHistory       func(ctx context.Context, tenantID, caseID uuid.UUID) ([]workflowdomain.WorkflowTransitionHistory, error)
-	mockFindLatestActive func(ctx context.Context, tenantID uuid.UUID, key string) (*workflowdomain.WorkflowDefinition, error)
+	defs                      []*workflowdomain.WorkflowDefinition
+	instances                 []*workflowdomain.WorkflowInstance
+	histories                 []workflowdomain.WorkflowTransitionHistory
+	mockCreateDef             func(ctx context.Context, params workflowapp.CreateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error)
+	mockUpdateDef             func(ctx context.Context, params workflowapp.UpdateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error)
+	mockDeleteDef             func(ctx context.Context, tenantID, id uuid.UUID, actorID uuid.UUID) error
+	mockActivateDef           func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
+	mockArchiveDef            func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
+	mockGetDef                func(ctx context.Context, tenantID, id uuid.UUID) (*workflowdomain.WorkflowDefinition, error)
+	mockListDefs              func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*workflowdomain.WorkflowDefinition, int, error)
+	mockCreateInstance        func(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	mockCreateInstanceByDefID func(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	mockExecTransition        func(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
+	mockExecTransitionTx      func(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
+	mockGetByCaseID           func(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
+	mockGetValidTrans         func(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error)
+	mockGetHistory            func(ctx context.Context, tenantID, caseID uuid.UUID) ([]workflowdomain.WorkflowTransitionHistory, error)
+	mockFindLatestActive      func(ctx context.Context, tenantID uuid.UUID, key string) (*workflowdomain.WorkflowDefinition, error)
 }
 
 func (m *mockWorkflowService) CreateWorkflowDefinition(ctx context.Context, params workflowapp.CreateWorkflowDefinitionParams) (*workflowdomain.WorkflowDefinition, error) {
@@ -93,6 +94,34 @@ func (m *mockWorkflowService) CreateInstanceForCase(ctx context.Context, tenantI
 		return m.mockCreateInstance(ctx, tenantID, caseID, workflowDefKey, actorID)
 	}
 	return &workflowdomain.WorkflowInstance{ID: uuid.New(), TenantID: tenantID, CaseID: caseID}, nil
+}
+func (m *mockWorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	return m.CreateInstanceForCase(ctx, tenantID, caseID, workflowDefKey, actorID)
+}
+func (m *mockWorkflowService) CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	if m.mockCreateInstanceByDefID != nil {
+		return m.mockCreateInstanceByDefID(ctx, tenantID, caseID, workflowDefID, actorID)
+	}
+	return &workflowdomain.WorkflowInstance{ID: uuid.New(), TenantID: tenantID, CaseID: caseID}, nil
+}
+func (m *mockWorkflowService) CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	return m.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, workflowDefID, actorID)
+}
+func (m *mockWorkflowService) ListActiveForSelection(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*workflowdomain.WorkflowDefinition, int, error) {
+	var active []*workflowdomain.WorkflowDefinition
+	for _, def := range m.defs {
+		if def.Status == workflowdomain.WorkflowStatusActive {
+			active = append(active, def)
+		}
+	}
+	if offset >= len(active) {
+		return nil, len(active), nil
+	}
+	end := offset + limit
+	if end > len(active) {
+		end = len(active)
+	}
+	return active[offset:end], len(active), nil
 }
 func (m *mockWorkflowService) ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
 	if m.mockExecTransition != nil {
