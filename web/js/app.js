@@ -62,8 +62,16 @@ function getTerminalStates(def) {
   return def.states.filter(s => s.terminal).map(s => s.key);
 }
 
-function isCaseTerminal(caseStatus, workflowInstance) {
-  if (caseStatus === 'CLOSED') return true;
+function cssStateClass(state) {
+  if (!state) return '';
+  const base = state.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return base;
+}
+
+function isCaseTerminal(caseStatus, workflowInstance, terminalStateSet) {
+  if (!caseStatus) return false;
+  if (FALLBACK_TERMINAL_STATES.includes(caseStatus)) return true;
+  if (terminalStateSet && terminalStateSet.has(caseStatus)) return true;
   if (workflowInstance && workflowInstance.definition) {
     const terminalStates = getTerminalStates(workflowInstance.definition);
     if (terminalStates.includes(caseStatus)) return true;
@@ -75,10 +83,10 @@ function isCaseTerminal(caseStatus, workflowInstance) {
 function escapeHTML(str) {
   if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
 
@@ -104,6 +112,39 @@ const styleEl = document.createElement('style');
 styleEl.textContent = '';
 document.head.appendChild(styleEl);
 
+const SERVICE_TYPE_WORKFLOW_KEYS = {
+  EMERGENCY: 'emergency_assistance',
+  MEDICAL: 'medical_assistance',
+  FINANCIAL: 'financial_assistance',
+  FOOD: 'food_assistance',
+  SHELTER: 'shelter_assistance',
+  EDUCATION: 'education_assistance',
+  TRANSPORT: 'transport_assistance',
+  GENERAL: 'general_assistance'
+};
+
+const FALLBACK_TERMINAL_STATES = ['CLOSED', 'REJECTED'];
+
+function deriveServiceTypeForWorkflow(def) {
+  if (!def || def.status !== 'ACTIVE') return null;
+  const md = def.metadata || {};
+  if (typeof md.service_type === 'string' && SERVICE_DOMAIN[md.service_type]) {
+    return md.service_type;
+  }
+  for (const [serviceType, key] of Object.entries(SERVICE_TYPE_WORKFLOW_KEYS)) {
+    if (key === def.key) return serviceType;
+  }
+  return null;
+}
+
+function computeTerminalStateSet(defs) {
+  const set = new Set(FALLBACK_TERMINAL_STATES);
+  (Array.isArray(defs) ? defs : [])
+    .filter(d => Array.isArray(d.states))
+    .forEach(d => d.states.forEach(s => { if (s.terminal) set.add(s.key); }));
+  return set;
+}
+
 function getServiceDomain(serviceType) {
   if (SERVICE_DOMAIN[serviceType]) return SERVICE_DOMAIN[serviceType];
   if (SERVICE_DOMAIN.GENERAL) return SERVICE_DOMAIN.GENERAL;
@@ -114,6 +155,10 @@ const app = {
   currentCase: null,
   currentWorkflow: null,
   workflowDraft: null,
+  activeWorkflows: [],
+  selectedWorkflow: null,
+  _terminalStates: new Set(FALLBACK_TERMINAL_STATES),
+  _cachedTransitions: [],
 
   orgPath(path) {
     return `/organizations/${orgId}${path}`;
@@ -180,19 +225,146 @@ const app = {
 
   async createCase(e) {
     e.preventDefault();
+    const workflow = this.selectedWorkflow;
+    if (!workflow) {
+      showToast('Select a workflow definition before creating a case', 'error');
+      return;
+    }
+    const serviceType = deriveServiceTypeForWorkflow(workflow);
+    if (!serviceType) {
+      showToast(`Workflow "${workflow.name}" cannot be used to create a case with the current API. Only service-type workflows are supported.`, 'error');
+      return;
+    }
     const data = {
       title: document.getElementById('c-title').value.trim(),
       description: document.getElementById('c-desc').value.trim(),
-      service_type: document.getElementById('c-service').value || 'EMERGENCY',
-      priority: document.getElementById('c-priority').value || 'HIGH',
+      service_type: serviceType,
+      priority: document.getElementById('c-priority').value || 'NORMAL',
       person_id: document.getElementById('new-case-person-id').value || undefined,
     };
+    if (!data.title) {
+      showToast('Title is required', 'error');
+      return;
+    }
     try {
       const res = await api('POST', this.orgPath('/cases'), data);
+      const created = res.data;
+      if (!created || !created.id) {
+        throw new Error('Case creation response did not include an id');
+      }
+      await this.verifyCaseWorkflow(created.id, workflow.id);
       showToast('Case created successfully', 'success');
-      router.navigate('case', res.data.id);
+      router.navigate('case', created.id);
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  },
+
+  async verifyCaseWorkflow(caseId, expectedDefId) {
+    const res = await api('GET', this.orgPath(`/cases/${caseId}/workflow`));
+    const instance = res.data && res.data.instance;
+    if (!instance || !instance.workflow_definition_id) {
+      throw new Error('No workflow instance was attached to the created case');
+    }
+    if (String(instance.workflow_definition_id) !== String(expectedDefId)) {
+      throw new Error(`Selected workflow was not attached to the case (expected definition ${expectedDefId}, got ${instance.workflow_definition_id}). The backend does not currently support explicit workflow selection by definition id; it binds workflows by service_type.`);
+    }
+  },
+
+  async loadNewCaseWorkflows(preselectId) {
+    const container = document.getElementById('workflow-selector');
+    if (container) container.innerHTML = '<p class="empty">Loading workflows…</p>';
+    try {
+      const defs = await this.loadAllWorkflows();
+      this.activeWorkflows = defs;
+      this._terminalStates = computeTerminalStateSet(defs);
+      this.renderWorkflowSelector(defs, preselectId);
+    } catch (err) {
+      if (container) container.innerHTML = `<p class="empty" style="color:var(--danger)">Failed to load workflows: ${escapeHTML(err.message)}</p>`;
+    }
+  },
+
+  async loadAllWorkflows() {
+    let defs = [];
+    let page = 1;
+    for (;;) {
+      const res = await api('GET', this.orgPath(`/workflows?page=${page}&per_page=100`));
+      const pageDefs = res.data || [];
+      defs = defs.concat(pageDefs);
+      const totalPages = (res.meta && res.meta.total_pages) || 1;
+      if (page >= totalPages || pageDefs.length < 100) break;
+      page++;
+    }
+    return defs;
+  },
+
+  renderWorkflowSelector(defs) {
+    const container = document.getElementById('workflow-selector');
+    if (!container) return;
+    const hidden = document.getElementById('selected-workflow-id');
+    if (hidden) hidden.value = '';
+    const active = defs.filter(d => d.status === 'ACTIVE');
+    if (!defs.length) {
+      container.innerHTML = '<p class="empty">No workflow definitions are available for your organization. Create one in the Workflows admin area first.</p>';
+      return;
+    }
+    if (!active.length) {
+      container.innerHTML = '<p class="empty">No active workflow definitions are available. Contact an administrator to activate a workflow before creating a case.</p>';
+      return;
+    }
+    const preselected = preselectId ? active.find(d => d.id === preselectId) : null;
+    const firstActive = preselected || active[0];
+    container.innerHTML = active.map(d => this.renderWorkflowOptionCard(d, d.id === firstActive.id)).join('');
+    this.selectWorkflow(firstActive.id);
+  },
+
+  renderWorkflowOptionCard(d, selected) {
+    const usable = d.status === 'ACTIVE';
+    const states = (d.states || []).length;
+    const transitions = (d.transitions || []).length;
+    const selectedMark = selected ? ' selected' : '';
+    const disabledAttr = usable ? '' : 'disabled';
+    return `<div class="wf-option-card${selectedMark}${usable ? '' : ' wf-unusable'}" data-wf-id="${escapeHTML(d.id)}" onclick="${usable ? `app.selectWorkflow('${d.id}')` : ''}">
+      <div class="wf-option-header">
+        <span class="wf-option-name">${escapeHTML(d.name)} <span class="text-muted" style="font-weight:400">(${escapeHTML(d.key)})</span></span>
+        <span class="badge wf-status-${(d.status || 'DRAFT').toLowerCase()}">${escapeHTML(d.status || 'DRAFT')}</span>
+      </div>
+      <div class="wf-option-body">
+        <div class="wf-option-meta"><span class="text-muted">Version</span> <strong>${d.version || 1}</strong></div>
+        <div class="wf-option-meta"><span class="text-muted">States</span> <strong>${states}</strong></div>
+        <div class="wf-option-meta"><span class="text-muted">Transitions</span> <strong>${transitions}</strong></div>
+        <div class="wf-option-meta"><span class="text-muted">Initial State</span> <strong>${escapeHTML(d.initial_state || '—')}</strong></div>
+        <p class="wf-option-desc">${escapeHTML(d.description || 'No description provided.')}</p>
+        ${!usable ? '<p class="wf-option-note">Not usable: only active workflows can be selected.</p>' : ''}
+      </div>
+    </div>`;
+  },
+
+  selectWorkflow(id) {
+    const defs = this.activeWorkflows;
+    const wf = defs.find(d => d.id === id);
+    if (!wf) {
+      showToast('Selected workflow not found', 'error');
+      return;
+    }
+    this.selectedWorkflow = wf;
+    const hidden = document.getElementById('selected-workflow-id');
+    if (hidden) hidden.value = wf.id;
+    const cards = document.querySelectorAll('.wf-option-card');
+    cards.forEach(c => {
+      const isSelected = c.getAttribute('data-wf-id') === id;
+      c.classList.toggle('selected', isSelected);
+    });
+    const preview = document.getElementById('workflow-preview');
+    if (preview) {
+      const usable = deriveServiceTypeForWorkflow(wf);
+      preview.innerHTML = `
+        <h3 style="margin-top:0">Selected Workflow</h3>
+        <p style="margin:4px 0"><strong>${escapeHTML(wf.name)}</strong> <span class="badge wf-status-${(wf.status || 'DRAFT').toLowerCase()}">${escapeHTML(wf.status || 'DRAFT')}</span></p>
+        <p class="text-muted" style="margin:4px 0">Key: ${escapeHTML(wf.key)} · Version ${wf.version || 1} · Initial state: ${escapeHTML(wf.initial_state || '—')}</p>
+        <p class="text-muted" style="margin:4px 0">States: ${(wf.states || []).length} · Transitions: ${(wf.transitions || []).length}</p>
+        ${usable ? '' : '<p style="color:var(--warning);margin:4px 0">This workflow is not directly usable for case creation.</p>'}
+      `;
     }
   },
 
@@ -219,6 +391,7 @@ const app = {
         const statsRes = await api('GET', this.orgPath('/cases/dashboard/statistics'));
         stats = statsRes.data || {};
       } catch (e) {
+        try { this._terminalStates = computeTerminalStateSet(await this.loadAllWorkflows()); } catch (_) {}
         stats = this.computeDashboardStats(cases);
       }
 
@@ -238,7 +411,7 @@ const app = {
             <tr style="cursor:pointer" onclick="router.navigate('case','${c.id}')">
               <td>${escapeHTML(c.case_number)}</td>
               <td>${escapeHTML(c.title)}</td>
-              <td><span class="badge ${(c.status || '').toLowerCase().replace('_','-')}">${escapeHTML(c.status)}</span></td>
+              <td><span class="badge case-status ${cssStateClass(c.status)}">${escapeHTML(c.status)}</span></td>
               <td>${escapeHTML(c.service_type)}</td>
               <td>${escapeHTML(c.priority)}</td>
               <td>${c.updated_at ? new Date(c.updated_at).toLocaleString() : '—'}</td>
@@ -253,7 +426,9 @@ const app = {
         errorEl.classList.remove('hidden');
       }
       if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty" style="color:var(--danger)">Error loading cases</td></tr>';
-      if (statsEl) statsEl.innerHTML = '';
+    if (statsEl) statsEl.innerHTML = '';
+    const breakdownEl = document.getElementById('dashboard-breakdown');
+    if (breakdownEl) { breakdownEl.classList.add('hidden'); breakdownEl.innerHTML = ''; }
     } finally {
       if (loadingEl) loadingEl.classList.add('hidden');
     }
@@ -270,17 +445,16 @@ const app = {
       priorityCounts[c.priority] = (priorityCounts[c.priority] || 0) + 1;
     }
 
-    const openStatuses = ['NEW', 'OPEN', 'IN_REVIEW', 'ASSESSMENT', 'DECISION_PENDING', 'APPROVED', 'IN_PROGRESS', 'FOLLOW_UP'];
-    const openCases = cases.filter(c => openStatuses.includes(c.status)).length;
-    const closedCases = cases.filter(c => c.status === 'CLOSED').length;
-    const rejectedCases = cases.filter(c => c.status === 'REJECTED').length;
+    const terminalStates = this._terminalStates || new Set(FALLBACK_TERMINAL_STATES);
+    const isClosed = s => !s || terminalStates.has(s);
+    const closedCases = cases.filter(c => isClosed(c.status)).length;
+    const openCases = cases.length - closedCases;
     const urgentCases = cases.filter(c => c.priority === 'URGENT').length;
 
     return {
       total: cases.length,
       open: openCases,
       closed: closedCases,
-      rejected: rejectedCases,
       urgent: urgentCases,
       byStatus: statusCounts,
       byServiceType: serviceTypeCounts,
@@ -291,22 +465,40 @@ const app = {
   renderDashboardStats(stats, cases) {
     const el = document.getElementById('dashboard-stats');
     if (!el) return;
-    cases = cases || [];
     const statCards = [
-      { label: 'Total Cases', value: (stats && stats.total != null) ? stats.total : cases.length, key: 'total' },
+      { label: 'Total Cases', value: (stats && stats.total != null) ? stats.total : (cases || []).length, key: 'total' },
       { label: 'Open Cases', value: (stats && stats.open != null) ? stats.open : 0, key: 'open' },
       { label: 'Closed Cases', value: (stats && stats.closed != null) ? stats.closed : 0, key: 'closed' },
       { label: 'Rejected Cases', value: (stats && stats.rejected != null) ? stats.rejected : 0, key: 'rejected' },
-      { label: 'Urgent Priority', value: (stats && stats.urgent != null) ? stats.urgent : 0, key: 'urgent' },
-      { label: 'Service Types', value: (stats && stats.by_service_type) ? Object.keys(stats.by_service_type).length : 0, key: 'serviceTypes' },
+      { label: 'Urgent Cases', value: (stats && stats.urgent != null) ? stats.urgent : 0, key: 'urgent' },
+      { label: 'Service Types', value: (stats && stats.by_service_type) ? Object.keys(stats.by_service_type).length : (stats && stats.byServiceType ? Object.keys(stats.byServiceType).length : 0), key: 'serviceTypes' },
     ];
 
-    el.innerHTML = statCards.map(s => `
+    let html = statCards.map(s => `
       <div class="stat-card" role="status" aria-label="${s.label}: ${s.value}">
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${escapeHTML(s.label)}</div>
       </div>
     `).join('');
+
+    el.innerHTML = html;
+
+    const breakdownEl = document.getElementById('dashboard-breakdown');
+    if (breakdownEl) {
+      const byStatus = (stats && (stats.by_status || stats.byStatus)) || {};
+      const statusKeys = Object.keys(byStatus);
+      if (statusKeys.length) {
+        let bhtml = '<div class="stat-breakdown"><h3>Cases by Status</h3></div>';
+        statusKeys.forEach(k => {
+          bhtml += `<div class="stat-breakdown-grid"><span class="badge case-status ${cssStateClass(k)}">${escapeHTML(k)}</span><span class="stat-breakdown-count">${byStatus[k]}</span></div>`;
+        });
+        breakdownEl.innerHTML = bhtml;
+        breakdownEl.classList.remove('hidden');
+      } else {
+        breakdownEl.classList.add('hidden');
+        breakdownEl.innerHTML = '';
+      }
+    }
   },
 
   async loadCase(id) {
@@ -325,7 +517,7 @@ const app = {
       document.getElementById('case-title').textContent = res.data.title;
       document.getElementById('case-number').textContent = `Case #${escapeHTML(res.data.case_number)}`;
       document.getElementById('case-status').textContent = res.data.status;
-      document.getElementById('case-status').className = `badge case-status ${(res.data.status || '').toLowerCase().replace('_','-')}`;
+      document.getElementById('case-status').className = `badge case-status ${cssStateClass(res.data.status)}`;
       document.getElementById('case-service').textContent = `Service: ${escapeHTML(res.data.service_type)}`;
       document.getElementById('case-priority-badge').textContent = `Priority: ${escapeHTML(res.data.priority)}`;
       document.getElementById('case-desc').textContent = res.data.description || 'No description provided.';
@@ -333,12 +525,16 @@ const app = {
       this.renderServiceBanner(res.data.service_type);
       this.currentCase = res.data;
       await this.loadWorkflow(id);
+      this._terminalStates = computeTerminalStateSet(this.currentWorkflow?.definition ? [this.currentWorkflow.definition] : []);
 
-      const isTerminal = isCaseTerminal(res.data.status, this.currentWorkflow);
+      const isTerminal = isCaseTerminal(res.data.status, this.currentWorkflow, this._terminalStates);
       const terminalNotice = document.getElementById('case-terminal-notice');
       if (terminalNotice) { terminalNotice.classList.toggle('hidden', !isTerminal); }
       this.renderWorkflowProgress();
-      await this.loadCaseSections(id);
+      this._cachedTransitions = this.currentWorkflow?.instance?.current_state
+        ? await this.loadWorkflowTransitions(id)
+        : [];
+      await this.loadCaseSections(id, this._cachedTransitions);
       this.renderSectionActions();
       this.renderActions();
       await this.loadTimeline(id);
@@ -376,15 +572,15 @@ const app = {
         }
 
         const stateBadge = document.getElementById('workflow-instance-state');
-        const stateName = document.getElementById('workflow-state-name');
+        const stateDesc = document.getElementById('workflow-state-desc');
         if (stateBadge && inst.current_state) {
           stateBadge.textContent = `State: ${escapeHTML(inst.current_state)}`;
-          stateBadge.className = `badge ${inst.current_state.toLowerCase().replace('_','-')}`;
+          stateBadge.className = `badge ${cssStateClass(inst.current_state)}`;
           stateBadge.style.display = 'inline-block';
         }
-        if (stateName && def) {
+        if (stateDesc && def) {
           const stateDef = def.states ? def.states.find(s => s.key === inst.current_state) : null;
-          stateName.textContent = stateDef ? (stateDef.description || stateDef.name) : '';
+          stateDesc.textContent = stateDef ? (stateDef.description || stateDef.name) : '';
         }
       } else {
         document.getElementById('workflow-meta')?.classList.add('hidden');
@@ -479,7 +675,7 @@ const app = {
   async renderSectionActions() {
     if (!this.currentCase) return;
 
-    const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow);
+    const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow, this._terminalStates);
 
     const containers = {
       eligibility: document.getElementById('sec-eligibility'),
@@ -492,11 +688,15 @@ const app = {
 
     let availableTransitions = [];
     if (!isTerminal && this.currentWorkflow?.instance?.current_state) {
-      try {
-        const res = await api('GET', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions`));
-        availableTransitions = res.data || [];
-      } catch (err) {
-        console.warn('Could not fetch workflow transitions:', err);
+      availableTransitions = this._cachedTransitions || [];
+      if (!availableTransitions.length) {
+        try {
+          const res = await api('GET', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions`));
+          availableTransitions = res.data || [];
+          this._cachedTransitions = availableTransitions;
+        } catch (err) {
+          console.warn('Could not fetch workflow transitions:', err);
+        }
       }
     }
 
@@ -599,12 +799,11 @@ const app = {
     }
   },
 
-  async loadCaseSections(id) {
-    // Fetch transitions once for all sections to use
-    this.loadWorkflowTransitions(id).then(transitions => {
-      this._cachedTransitions = transitions || [];
-      this._loadCaseSectionsWithTransitions(id);
-    });
+  async loadCaseSections(id, cachedTransitions) {
+    if (cachedTransitions) {
+      this._cachedTransitions = cachedTransitions;
+    }
+    await this._loadCaseSectionsWithTransitions(id);
   },
 
   async _loadCaseSectionsWithTransitions(id) {
@@ -628,9 +827,21 @@ async loadSection(name, path) {
       const data = res.data;
       const domain = getServiceDomain(this.currentCase?.service_type);
       const hint = domain?.sections[name]?.hint;
-      let hintHTML = hint ? `<p class="section-hint">${escapeHTML(hint)}</p>` : '';
+      const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow, this._terminalStates);
+      const ts = this.buildSectionTransitionMap(this._cachedTransitions || []);
+      const rel = ts[name] || [];
+      const hasTransition = (this._cachedTransitions || []).some(t => rel.includes(t.key));
 
-      const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow);
+      let statusLabel = '';
+      if (data) {
+        statusLabel = '<span class="badge completed" style="margin-bottom:6px">Completed</span> ';
+      } else if (!isTerminal && hasTransition) {
+        statusLabel = '<span class="badge" style="margin-bottom:6px">Available</span> ';
+      } else if (!isTerminal) {
+        statusLabel = '<span class="badge" style="background:#fef3c7;color:#92400e;margin-bottom:6px">Not applicable</span> ';
+      }
+      let hintHTML = hint ? `<p class="section-hint">${escapeHTML(hint)}</p>` : '';
+      hintHTML = statusLabel + hintHTML;
 
       if (!data) {
         // Determine appropriate empty state message
@@ -680,26 +891,26 @@ async loadSection(name, path) {
         } else {
           el.innerHTML = `${hintHTML}<strong>Findings:</strong> ${escapeHTML(data.findings)}<br><strong>Needs:</strong> ${escapeHTML(data.needs_identified || 'N/A')}<br><strong>Recommendation:</strong> ${escapeHTML(data.recommendation)}`;
         }
-      } else if (name === 'decision') {
-        if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No decision recorded yet</p>'; return; }
-          const d = data[0];
-          el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${d.decision.toLowerCase().replace('_','-')}">${escapeHTML(d.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(d.reason)}`;
-        } else {
-          el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${data.decision.toLowerCase().replace('_','-')}">${escapeHTML(data.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(data.reason)}`;
-        }
-      } else if (name === 'assistance') {
-        if (Array.isArray(data)) {
-          if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No assistance recorded yet</p>'; return; }
-          el.innerHTML = hintHTML + data.map(a => {
-            const statusClass = (a.status || '').toLowerCase().replace('_','-');
-            return `<div><strong class="badge ${statusClass}">${escapeHTML(a.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(a.status)}</span><br>${escapeHTML(a.description)}</div>`;
-          }).join('');
-        } else {
-          const statusClass = (data.status || '').toLowerCase().replace('_','-');
-          el.innerHTML = `${hintHTML}<strong class="badge ${statusClass}">${escapeHTML(data.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(data.status)}</span><br>${escapeHTML(data.description)}`;
-        }
-      } else if (name === 'followup') {
+        } else if (name === 'decision') {
+          if (Array.isArray(data)) {
+            if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No decision recorded yet</p>'; return; }
+            const d = data[0];
+            el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${cssStateClass(d.decision)}">${escapeHTML(d.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(d.reason)}`;
+          } else {
+            el.innerHTML = `${hintHTML}<strong>Decision:</strong> <span class="badge ${cssStateClass(data.decision)}">${escapeHTML(data.decision)}</span><br><strong>Reason:</strong> ${escapeHTML(data.reason)}`;
+          }
+        } else if (name === 'assistance') {
+          if (Array.isArray(data)) {
+            if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No assistance recorded yet</p>'; return; }
+            el.innerHTML = hintHTML + data.map(a => {
+              const statusClass = cssStateClass(a.status);
+              return `<div><strong class="badge ${statusClass}">${escapeHTML(a.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(a.status)}</span><br>${escapeHTML(a.description)}</div>`;
+            }).join('');
+          } else {
+            const statusClass = cssStateClass(data.status);
+            el.innerHTML = `${hintHTML}<strong class="badge ${statusClass}">${escapeHTML(data.type)}</strong> - <span class="badge assistance-status ${statusClass}">${escapeHTML(data.status)}</span><br>${escapeHTML(data.description)}`;
+          }
+        } else if (name === 'followup') {
         if (Array.isArray(data)) {
           if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No follow-up scheduled yet</p>'; return; }
           el.innerHTML = hintHTML + data.map(f => `<div><strong>${escapeHTML(f.scheduled_date)}</strong> - ${escapeHTML(f.outcome)}</div>`).join('');
@@ -709,10 +920,12 @@ async loadSection(name, path) {
       }
     } catch (err) {
       if (err.message && err.message.includes('404')) {
-        const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow);
+        const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow, this._terminalStates);
         let emptyMessage = isTerminal ? 'Not recorded (case is closed)' : 'Not yet recorded';
         let emptyClass = isTerminal ? 'empty terminal-empty' : 'empty not-recorded';
         el.innerHTML = `<p class="${emptyClass}">${escapeHTML(emptyMessage)}</p>`;
+      } else if (err.message && err.message.includes('403')) {
+        el.innerHTML = `<p class="empty not-applicable">Not applicable for your role</p>`;
       } else {
         el.innerHTML = `<p style="color:var(--danger)">Error loading: ${escapeHTML(err.message)}</p>`;
       }
@@ -736,9 +949,10 @@ async loadSection(name, path) {
     const container = document.getElementById('case-actions');
     if (!container || !this.currentCase) return;
 
-    const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow);
+    const isTerminal = isCaseTerminal(this.currentCase.status, this.currentWorkflow, this._terminalStates);
 
-    this.loadWorkflowTransitions(this.currentCase.id).then(transitions => {
+    const renderFrom = async (transitions) => {
+      this._cachedTransitions = transitions;
       const tan = document.getElementById('terminal-action-notice');
       if (tan) tan.classList.add('hidden');
       let html = '<div style="display:flex;gap:8px;flex-wrap:wrap">';
@@ -767,7 +981,13 @@ async loadSection(name, path) {
         html += '<p class="empty" style="margin-top:8px;">No workflow instance available for this case.</p>';
       }
       container.innerHTML = html;
-    });
+    };
+
+    if (this._cachedTransitions && this._cachedTransitions.length) {
+      renderFrom(this._cachedTransitions);
+    } else {
+      this.loadWorkflowTransitions(this.currentCase.id).then(renderFrom);
+    }
   },
 
   async loadTimeline(id) {
@@ -1171,6 +1391,7 @@ async loadSection(name, path) {
     if (isDraft) {
       actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')"><span class="icon">▶️</span> Activate</button>`;
     } else if (isActive) {
+      actions += ` <button class="btn sm" onclick="router.navigate('new-case', '${def.id}')"><span class="icon">➕</span> Use for New Case</button>`;
       actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')"><span class="icon">📦</span> Archive</button>`;
     }
     const badge = statusBadge(def.status, def.status);
@@ -1724,7 +1945,7 @@ router.on('case', async (id) => {
   await app.loadCase(id);
 });
 
-router.on('new-case', () => {
+router.on('new-case', (preselectId) => {
   document.getElementById('view-login').classList.add('hidden');
   document.getElementById('view-dashboard').classList.add('hidden');
   document.getElementById('view-case').classList.add('hidden');
@@ -1732,6 +1953,8 @@ router.on('new-case', () => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  app.selectedWorkflow = null;
+  app.loadNewCaseWorkflows(preselectId);
 });
 
 router.on('workflows', () => {

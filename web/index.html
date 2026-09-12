@@ -60,6 +60,7 @@
         <button class="btn sm" style="margin-top:8px" onclick="app.loadDashboard()">Retry</button>
       </div>
       <div class="stats-row" id="dashboard-stats" aria-live="polite"></div>
+      <div id="dashboard-breakdown" class="empty hidden"></div>
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
           <h2 style="margin:0">Recent Cases</h2>
@@ -94,7 +95,7 @@
           </p>
           <div id="workflow-meta" class="hidden" style="margin-top:8px;padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);font-size:0.85rem">
             <div style="margin-bottom:4px"><strong>Workflow Definition:</strong> <span id="workflow-name"></span> — Status: <span id="workflow-def-status" class="badge wf-status-draft"></span></div>
-            <div><strong>Instance State:</strong> <span id="workflow-instance-state" class="badge"></span> <span id="workflow-state-name" style="color:var(--text-secondary);font-weight:500;"></span></div>
+            <div><strong>Instance State:</strong> <span id="workflow-instance-state" class="badge"></span> <span id="workflow-state-desc" style="color:var(--text-secondary);font-weight:500;"></span></div>
           </div>
           <div id="service-banner" class="service-banner hidden" style="margin-top:8px;"></div>
         </div>
@@ -214,7 +215,7 @@
         <p id="person-result" style="margin-top:8px;color:var(--success);font-weight:500"></p>
       </div>
       <div class="card">
-        <h2>Step 2: Create Case</h2>
+        <h2>Step 2: Select Workflow &amp; Create Case</h2>
         <form onsubmit="app.createCase(event)">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
             <div>
@@ -233,18 +234,16 @@
           </div>
           <label for="c-desc">Description</label>
           <textarea id="c-desc" rows="3"></textarea>
-          <label for="c-service">Service Type</label>
-          <select id="c-service">
-            <option value="EMERGENCY">Emergency</option>
-            <option value="FINANCIAL">Financial</option>
-            <option value="FOOD">Food</option>
-            <option value="SHELTER">Shelter</option>
-            <option value="MEDICAL">Medical</option>
-            <option value="TRANSPORT">Transport</option>
-            <option value="EDUCATION">Education</option>
-            <option value="GENERAL">General</option>
-          </select>
+          <label>Workflow Definition</label>
+          <div id="workflow-selector" class="wf-selector" style="margin-bottom:12px">
+            <p class="empty">Loading workflows…</p>
+          </div>
+          <div id="workflow-preview" class="card" style="padding:16px;margin-bottom:12px">
+            <p class="empty">Select a workflow to see details.</p>
+          </div>
           <input type="hidden" id="new-case-person-id">
+          <input type="hidden" id="selected-workflow-id">
+          <div id="new-case-workflow-error" class="form-error hidden" role="alert"></div>
           <button type="submit" class="btn"><span class="icon" aria-hidden="true">✨</span> Create Request</button>
         </form>
       </div>
