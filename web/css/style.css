@@ -1034,3 +1034,124 @@ code {
   white-space: nowrap;
   border-width: 0;
 }
+
+.text-muted { color: var(--text-muted); }
+
+/* Workflow selector for new case */
+.wf-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wf-option-card {
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.wf-option-card:hover {
+  border-color: rgba(99,102,241,0.4);
+  box-shadow: var(--shadow-sm);
+}
+
+.wf-option-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  background: var(--surface-hover);
+}
+
+.wf-option-card.wf-unusable {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wf-option-card.wf-unusable:hover {
+  border-color: var(--border);
+  box-shadow: none;
+  background: var(--surface);
+}
+
+.wf-option-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.wf-option-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.wf-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wf-option-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.wf-option-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.wf-option-note {
+  font-size: 0.8rem;
+  color: var(--warning);
+  margin-top: 4px;
+}
+
+/* Dashboard breakdown */
+.stat-breakdown {
+  grid-column: 1 / -1;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.stat-breakdown h3 {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 10px 0;
+}
+
+.stat-breakdown-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.stat-breakdown-count {
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+/* Generic workflow state badges (arbitrary state names) */
+.wf-state-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+}
