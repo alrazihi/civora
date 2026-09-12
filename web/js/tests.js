@@ -466,6 +466,15 @@ if (typeof window !== 'undefined') {
    const state = renderForm(formDef, container);
    container.querySelector('#form-field-name').value = 'Alice';
    const payload = getSubmissionPayload(state);
-   TestRunner.assertEqual(payload.name, 'Alice', 'payload contains field value');
-   document.body.removeChild(container);
- });
+    TestRunner.assertEqual(payload.name, 'Alice', 'payload contains field value');
+    document.body.removeChild(container);
+  });
+
+  // Test form field key validation
+  TestRunner.add('Form field key validation', () => {
+    const validKeys = ['full_name', 'email', 'field_1', 'a'];
+    const invalidKeys = ['Full Name', '123abc', 'has space', 'has-hyphen', 'has.dot'];
+    const pattern = /^[a-z][a-z0-9_]*$/;
+    validKeys.forEach(k => TestRunner.assert(pattern.test(k), `${k} is a valid key`));
+    invalidKeys.forEach(k => TestRunner.assert(!pattern.test(k), `${k} is an invalid key`));
+  });

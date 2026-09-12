@@ -800,7 +800,8 @@ hr { margin: 16px 0; border-color: var(--border); }
   margin: 0;
   box-shadow: var(--shadow-xl), 0 0 0 1px rgba(0,0,0,0.04);
   border: none;
-  overflow: hidden;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 /* â”€â”€ Toast Container â”€â”€ */

@@ -208,10 +208,19 @@ async function assignFormToWorkflowState(formId, assignment) {
   return res.data || null;
 }
 
+async function getFormAssignments(formId) {
+  const res = await api('GET', `/organizations/${orgId}/forms/${formId}/assignments`);
+  return (res.data || []).filter(Boolean);
+}
+
+async function removeFormAssignment(formId, assignmentId) {
+  await api('DELETE', `/organizations/${orgId}/forms/${formId}/assignments/${assignmentId}`);
+}
+
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
 } else {
   // Browser global
-  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState };
+  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
 }

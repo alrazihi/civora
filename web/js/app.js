@@ -2272,19 +2272,24 @@ async loadSection(name, path) {
       // Load workflow assignments
       const assignmentsContainer = document.getElementById('form-workflow-assignments');
       if (assignmentsContainer) {
-        const assignments = form.assignments || [];
-        if (assignments.length) {
-          assignmentsContainer.innerHTML = assignments.map(a => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-              <div>
-                <strong>${escapeHTML(a.workflow_name || a.workflow_key || '')}</strong>
-                <span class="text-muted" style="font-size:0.85rem"> → State: ${escapeHTML(a.state_key)}</span>
-                ${a.required ? '<span class="badge" style="font-size:0.7rem">Required</span>' : ''}
+        assignmentsContainer.innerHTML = '<p class="text-muted">Loading assignments…</p>';
+        try {
+          const assignments = await FormAPI.getFormAssignments(form.id);
+          if (assignments.length) {
+            assignmentsContainer.innerHTML = assignments.map(a => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+                <div>
+                  <strong>${escapeHTML(a.workflow_name || a.workflow_key || '')}</strong>
+                  <span class="text-muted" style="font-size:0.85rem"> → State: ${escapeHTML(a.state_key)}</span>
+                  ${a.required ? '<span class="badge" style="font-size:0.7rem">Required</span>' : ''}
+                </div>
+                <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${form.id}', '${a.id}')">Remove</button>
               </div>
-              <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${form.id}', '${a.workflow_id}')">Remove</button>
-            </div>
-          `).join('');
-        } else {
+            `).join('');
+          } else {
+            assignmentsContainer.innerHTML = '<p class="text-muted">No workflow assignments yet.</p>';
+          }
+        } catch (err) {
           assignmentsContainer.innerHTML = '<p class="text-muted">No workflow assignments yet.</p>';
         }
       }
@@ -2609,7 +2614,7 @@ async loadSection(name, path) {
     }
 
     this.fieldEditIndex = -1;
-    this.renderFieldModal(-1, null);
+    this.cancelFieldModal();
     this.renderFormFields();
   },
 
@@ -2722,7 +2727,11 @@ async loadSection(name, path) {
     modal.style.display = 'flex';
 
     const titleEl = document.getElementById('form-modal-title');
-    if (titleEl) titleEl.textContent = `${this.formDraft.name || 'Preview'} (Draft)`;
+    if (titleEl) {
+      const nameInput = document.getElementById('form-name');
+      const formName = (nameInput && nameInput.value.trim()) || this.formDraft.name;
+      titleEl.textContent = `${formName || 'Preview'} (Draft)`;
+    }
 
     // Use the runtime form renderer for preview
     const body = document.getElementById('form-modal-body');
@@ -2834,8 +2843,7 @@ async loadSection(name, path) {
   async removeFormAssignment(formId, workflowId) {
     if (!confirm('Remove this form assignment?')) return;
     try {
-      // DELETE the assignment
-      await api('DELETE', this.orgPath(`/forms/${formId}/assignments/${workflowId}`));
+      await FormAPI.removeFormAssignment(formId, workflowId);
       showToast('Assignment removed', 'success');
       this.showFormDetail(formId);
     } catch (err) {
