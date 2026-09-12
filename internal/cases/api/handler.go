@@ -34,8 +34,11 @@ type CaseService interface {
 	AssignCase(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
 	GetCaseForms(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.CaseFormAvailability, error)
 	SubmitForm(ctx context.Context, orgID, caseID, submittedBy uuid.UUID, formVersionID uuid.UUID, data map[string]interface{}) (*application.SubmissionResponse, error)
+	SubmitFormByKey(ctx context.Context, orgID, caseID, submittedBy uuid.UUID, formKey string, data map[string]interface{}) (*application.SubmissionResponse, error)
 	GetSubmission(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error)
+	GetFormSubmissionByKey(ctx context.Context, orgID, caseID uuid.UUID, formKey string) (*application.SubmissionResponse, error)
 	ListSubmissions(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
+	GetCaseFormSubmissions(ctx context.Context, orgID, caseID uuid.UUID) (map[string]*application.SubmissionResponse, error)
 	GetWorkflowRequirements(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
 }
 
@@ -58,8 +61,12 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Get("/{caseId}/forms", h.GetCaseForms)
 			r.Get("/{caseId}/form-submissions", h.ListSubmissions)
 			r.Get("/{caseId}/workflow/requirements", h.GetWorkflowRequirements)
+			r.Get("/{caseId}/workflow/forms", h.GetCaseForms)
+			r.Get("/{caseId}/workflow/form-submissions", h.GetCaseFormSubmissions)
 		})
 		r.Post("/{caseId}/form-submissions", h.SubmitForm)
+		r.Post("/{caseId}/form/submission", h.SubmitFormByKey)
+		r.Get("/{caseId}/form/{formKey}/submission", h.GetFormSubmissionByKey)
 		r.Get("/{caseId}/form-submissions/{submissionId}", h.GetSubmission)
 	})
 }
@@ -485,6 +492,93 @@ func (h *Handler) SubmitForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shared.WriteSuccess(w, http.StatusCreated, submission, nil)
+}
+
+func (h *Handler) SubmitFormByKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+	userID := getUserID(r)
+
+	var req struct {
+		Values       map[string]interface{} `json:"values"`
+		FormKey      string                 `json:"form_key"`
+		SubmissionID string                 `json:"submission_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	if req.FormKey == "" {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form_key is required")
+		return
+	}
+
+	submission, err := h.svc.SubmitFormByKey(ctx, orgID, caseID, userID, req.FormKey, req.Values)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusCreated, submission, nil)
+}
+
+func (h *Handler) GetFormSubmissionByKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+	formKey := chi.URLParam(r, "formKey")
+	if formKey == "" {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form_key is required")
+		return
+	}
+
+	submission, err := h.svc.GetFormSubmissionByKey(ctx, orgID, caseID, formKey)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, submission, nil)
+}
+
+func (h *Handler) GetCaseFormSubmissions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	submissions, err := h.svc.GetCaseFormSubmissions(ctx, orgID, caseID)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, submissions, nil)
 }
 
 func (h *Handler) GetSubmission(w http.ResponseWriter, r *http.Request) {

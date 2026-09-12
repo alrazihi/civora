@@ -864,6 +864,174 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 	}, nil
 }
 
+func (s *CaseService) SubmitFormByKey(ctx context.Context, orgID, caseID, submittedBy uuid.UUID, formKey string, data map[string]interface{}) (*SubmissionResponse, error) {
+	caseEntity, err := s.repo.FindByID(ctx, orgID, caseID)
+	if err != nil {
+		return nil, ErrCaseNotFound
+	}
+
+	if caseEntity.WorkflowInstanceID == nil {
+		return nil, ErrWorkflowInstanceNotFound
+	}
+
+	instance, err := s.workflowInstanceRepo.FindByID(ctx, orgID, *caseEntity.WorkflowInstanceID)
+	if err != nil {
+		return nil, ErrWorkflowInstanceNotFound
+	}
+
+	assignments, err := s.assignmentRepo.FindByWorkflowAndState(ctx, orgID, instance.WorkflowDefID, instance.CurrentState)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get form assignments: %w", err)
+	}
+
+	var targetFormVersionID uuid.UUID
+	found := false
+	for _, assignment := range assignments {
+		if !assignment.Active {
+			continue
+		}
+		form, err := s.formRepo.FindByID(ctx, orgID, assignment.FormID)
+		if err != nil {
+			continue
+		}
+		if form.Key == formKey {
+			targetFormVersionID = assignment.FormVersionID
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, ErrFormNotAssigned
+	}
+
+	return s.SubmitForm(ctx, orgID, caseID, submittedBy, targetFormVersionID, data)
+}
+
+func (s *CaseService) GetFormSubmissionByKey(ctx context.Context, orgID, caseID uuid.UUID, formKey string) (*SubmissionResponse, error) {
+	if s.submissionRepo == nil || s.assignmentRepo == nil {
+		return nil, fmt.Errorf("form services not initialized")
+	}
+
+	caseEntity, err := s.repo.FindByID(ctx, orgID, caseID)
+	if err != nil {
+		return nil, ErrCaseNotFound
+	}
+
+	if caseEntity.WorkflowInstanceID == nil {
+		return nil, ErrWorkflowInstanceNotFound
+	}
+
+	instance, err := s.workflowInstanceRepo.FindByID(ctx, orgID, *caseEntity.WorkflowInstanceID)
+	if err != nil {
+		return nil, ErrWorkflowInstanceNotFound
+	}
+
+	assignments, err := s.assignmentRepo.FindByWorkflowAndState(ctx, orgID, instance.WorkflowDefID, instance.CurrentState)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get form assignments: %w", err)
+	}
+
+	var targetFormVersionID uuid.UUID
+	found := false
+	for _, assignment := range assignments {
+		if !assignment.Active {
+			continue
+		}
+		form, err := s.formRepo.FindByID(ctx, orgID, assignment.FormID)
+		if err != nil {
+			continue
+		}
+		if form.Key == formKey {
+			targetFormVersionID = assignment.FormVersionID
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, ErrFormNotAssigned
+	}
+
+	submission, err := s.submissionRepo.FindByCaseAndFormVersion(ctx, orgID, caseID, targetFormVersionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SubmissionResponse{
+		ID:            submission.ID,
+		CaseID:        submission.CaseID,
+		FormID:        submission.FormID,
+		FormVersionID: submission.FormVersionID,
+		Status:        submission.Status,
+		Data:          submission.Data,
+		SubmittedBy:   submission.SubmittedBy,
+		SubmittedAt:   submission.SubmittedAt,
+		UpdatedAt:     submission.UpdatedAt,
+	}, nil
+}
+
+func (s *CaseService) GetCaseFormSubmissions(ctx context.Context, orgID, caseID uuid.UUID) (map[string]*SubmissionResponse, error) {
+	if s.submissionRepo == nil || s.assignmentRepo == nil || s.workflowInstanceRepo == nil {
+		return nil, fmt.Errorf("form services not initialized")
+	}
+
+	caseEntity, err := s.repo.FindByID(ctx, orgID, caseID)
+	if err != nil {
+		return nil, ErrCaseNotFound
+	}
+
+	if caseEntity.WorkflowInstanceID == nil {
+		return map[string]*SubmissionResponse{}, nil
+	}
+
+	instance, err := s.workflowInstanceRepo.FindByID(ctx, orgID, *caseEntity.WorkflowInstanceID)
+	if err != nil {
+		return nil, ErrWorkflowInstanceNotFound
+	}
+
+	assignments, err := s.assignmentRepo.FindByWorkflowAndState(ctx, orgID, instance.WorkflowDefID, instance.CurrentState)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get form assignments: %w", err)
+	}
+
+	submissions, err := s.submissionRepo.ListByCase(ctx, orgID, caseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list submissions: %w", err)
+	}
+
+	submissionsByVersion := make(map[uuid.UUID]*SubmissionResponse)
+	for _, sub := range submissions {
+		submissionsByVersion[sub.FormVersionID] = &SubmissionResponse{
+			ID:            sub.ID,
+			CaseID:        sub.CaseID,
+			FormID:        sub.FormID,
+			FormVersionID: sub.FormVersionID,
+			Status:        sub.Status,
+			Data:          sub.Data,
+			SubmittedBy:   sub.SubmittedBy,
+			SubmittedAt:   sub.SubmittedAt,
+			UpdatedAt:     sub.UpdatedAt,
+		}
+	}
+
+	result := make(map[string]*SubmissionResponse)
+	for _, assignment := range assignments {
+		if !assignment.Active {
+			continue
+		}
+		form, err := s.formRepo.FindByID(ctx, orgID, assignment.FormID)
+		if err != nil {
+			continue
+		}
+		if sub, ok := submissionsByVersion[assignment.FormVersionID]; ok {
+			result[form.Key] = sub
+		} else {
+			result[form.Key] = nil
+		}
+	}
+
+	return result, nil
+}
+
 func (s *CaseService) GetSubmission(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*SubmissionResponse, error) {
 	if s.submissionRepo == nil {
 		return nil, fmt.Errorf("form services not initialized")

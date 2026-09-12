@@ -1,91 +1,81 @@
 openapi: 3.0.3
-
 info:
   title: CIVORA API
-  description: |
-    CIVORA API - open digital infrastructure for public-interest service delivery.
-
-    Version: 0.3.0-workflow-engine
-
-    ## Configurable Workflow-Driven Service Delivery
-
-    CIVORA now supports fully configurable workflow definitions: create
-    custom states and transitions, activate a definition, bind a case to it
-    via `workflow_id`, and drive the case through the workflow lifecycle.
-    Any state can be marked terminal; terminal states block further
-    transitions and set the case `closed_at` timestamp.
-
-    Full end-to-end workflow for public service delivery:
-    Request → Person registered → Case created (initial state) →
-    Eligibility assessed → Evidence collected → Decision made →
-    Assistance provided → Terminal state reached
-
-    State machine is defined by the workflow definition, not hardcoded.
-  version: "0.3.0"
+  description: "CIVORA API - open digital infrastructure for public-interest service\
+    \ delivery.\n\nVersion: 0.3.0-workflow-engine\n\n## Configurable Workflow-Driven\
+    \ Service Delivery\n\nCIVORA now supports fully configurable workflow definitions:\
+    \ create\ncustom states and transitions, activate a definition, bind a case to\
+    \ it\nvia `workflow_id`, and drive the case through the workflow lifecycle.\n\
+    Any state can be marked terminal; terminal states block further\ntransitions and\
+    \ set the case `closed_at` timestamp.\n\nFull end-to-end workflow for public service\
+    \ delivery:\nRequest \xE2\u2020\u2019 Person registered \xE2\u2020\u2019 Case\
+    \ created (initial state) \xE2\u2020\u2019\nEligibility assessed \xE2\u2020\u2019\
+    \ Evidence collected \xE2\u2020\u2019 Decision made \xE2\u2020\u2019\nAssistance\
+    \ provided \xE2\u2020\u2019 Terminal state reached\n\nState machine is defined\
+    \ by the workflow definition, not hardcoded.\n"
+  version: 0.3.0
   contact:
     name: CIVORA
     url: https://github.com/alrazihi/civora
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
-
 servers:
-  - url: http://localhost:8080
-    description: Local development server. Override with CIVORA_API_URL in production.
-
+- url: http://localhost:8080
+  description: Local development server. Override with CIVORA_API_URL in production.
 security: []
-
 tags:
-  - name: Organizations
-    description: Organization (tenant) management
-  - name: Authentication
-    description: User registration and authentication
-  - name: Users
-    description: User management within an organization
-  - name: People
-    description: Person (client/individual) records
-  - name: Cases
-    description: Case lifecycle management with state transitions
-  - name: Eligibilities
-    description: Eligibility assessment for service requests
-  - name: Evidence
-    description: Evidence items submitted for service requests
-  - name: Assessments
-    description: Needs assessment and recommendations
-  - name: Decisions
-    description: Human decisions on service requests
-  - name: Assistance
-    description: Assistance actions and services provided
-  - name: FollowUps
-    description: Follow-up scheduling and completion
-  - name: Audit
-    description: Immutable audit event log
-  - name: Workflows
-    description: Configurable workflow definitions, instances, and transitions
-  - name: Forms
-    description: Configurable forms for data collection
-  - name: System
-    description: Health and readiness checks
-
+- name: Organizations
+  description: Organization (tenant) management
+- name: Authentication
+  description: User registration and authentication
+- name: Users
+  description: User management within an organization
+- name: People
+  description: Person (client/individual) records
+- name: Cases
+  description: Case lifecycle management with state transitions
+- name: Eligibilities
+  description: Eligibility assessment for service requests
+- name: Evidence
+  description: Evidence items submitted for service requests
+- name: Assessments
+  description: Needs assessment and recommendations
+- name: Decisions
+  description: Human decisions on service requests
+- name: Assistance
+  description: Assistance actions and services provided
+- name: FollowUps
+  description: Follow-up scheduling and completion
+- name: Audit
+  description: Immutable audit event log
+- name: Workflows
+  description: Configurable workflow definitions, instances, and transitions
+- name: Forms
+  description: Configurable forms for data collection
+- name: System
+  description: Health and readiness checks
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: |
-        JWT bearer token. The token must include `organization_id` claim.
-        The API validates that the token's organization matches the `{orgId}`
+      description: 'JWT bearer token. The token must include `organization_id` claim.
+
+        The API validates that the token''s organization matches the `{orgId}`
+
         path parameter on all tenant-scoped endpoints.
 
+        '
   headers:
     X-Request-ID:
       schema:
         type: string
         format: uuid
         pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-      description: Correlation ID for the request. Generated if not provided by the client.
-
+      description: Correlation ID for the request. Generated if not provided by the
+        client.
   schemas:
     Error:
       type: object
@@ -101,11 +91,14 @@ components:
               example: INVALID_INPUT
             message:
               type: string
-              example: "title is required"
-
+              example: title is required
     Organization:
       type: object
-      required: [id, name, slug, created_at]
+      required:
+      - id
+      - name
+      - slug
+      - created_at
       properties:
         id:
           type: string
@@ -125,10 +118,11 @@ components:
           type: string
           format: date-time
           nullable: true
-
     CreateOrganizationRequest:
       type: object
-      required: [name, slug]
+      required:
+      - name
+      - slug
       properties:
         name:
           type: string
@@ -138,12 +132,13 @@ components:
           maxLength: 2000
         slug:
           type: string
-          pattern: "^[a-z0-9-]+$"
+          pattern: ^[a-z0-9-]+$
           maxLength: 64
-
     LoginRequest:
       type: object
-      required: [email, password]
+      required:
+      - email
+      - password
       properties:
         email:
           type: string
@@ -151,10 +146,12 @@ components:
         password:
           type: string
           format: password
-
     RegisterRequest:
       type: object
-      required: [email, name, password]
+      required:
+      - email
+      - name
+      - password
       properties:
         email:
           type: string
@@ -165,16 +162,15 @@ components:
         password:
           type: string
           minLength: 12
-          pattern: "^(?=.*[a-zA-Z])(?=.*[0-9]).+$"
-          description: "At least 12 characters with at least one letter and one number"
-
+          pattern: ^(?=.*[a-zA-Z])(?=.*[0-9]).+$
+          description: At least 12 characters with at least one letter and one number
     LoginResponse:
       type: object
       properties:
         token:
           type: string
           description: JWT bearer token
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         user:
           type: object
           properties:
@@ -191,7 +187,6 @@ components:
               format: email
             name:
               type: string
-
     User:
       type: object
       properties:
@@ -216,10 +211,19 @@ components:
         created_at:
           type: string
           format: date-time
-
     Case:
       type: object
-      required: [id, organization_id, case_number, title, status, service_type, priority, created_by, created_at, updated_at]
+      required:
+      - id
+      - organization_id
+      - case_number
+      - title
+      - status
+      - service_type
+      - priority
+      - created_by
+      - created_at
+      - updated_at
       properties:
         id:
           type: string
@@ -231,7 +235,7 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         case_number:
           type: string
-          example: "CAS-20260906-00001234"
+          example: CAS-20260906-00001234
         person_id:
           type: string
           format: uuid
@@ -247,10 +251,22 @@ components:
           description: Case status synchronized from the configured workflow
         service_type:
           type: string
-          enum: [GENERAL, EMERGENCY, FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT]
+          enum:
+          - GENERAL
+          - EMERGENCY
+          - FINANCIAL
+          - FOOD
+          - SHELTER
+          - MEDICAL
+          - EDUCATION
+          - TRANSPORT
         priority:
           type: string
-          enum: [LOW, NORMAL, HIGH, URGENT]
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
         created_by:
           type: string
           format: uuid
@@ -274,15 +290,29 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: Linked workflow instance ID for generic workflow-driven state transitions
+          description: Linked workflow instance ID for generic workflow-driven state
+            transitions
         workflow_state:
           type: string
           nullable: true
-          description: Authoritative lifecycle state from the linked workflow instance. Mirrors status but is the single source of truth for lifecycle transitions.
-
+          description: Authoritative lifecycle state from the linked workflow instance.
+            Mirrors status but is the single source of truth for lifecycle transitions.
     CaseStatistics:
       type: object
-      required: [total, open, closed, rejected, urgent, awaiting_review, awaiting_decision, in_progress, follow_up, by_status, by_service_type, by_priority, recent_cases]
+      required:
+      - total
+      - open
+      - closed
+      - rejected
+      - urgent
+      - awaiting_review
+      - awaiting_decision
+      - in_progress
+      - follow_up
+      - by_status
+      - by_service_type
+      - by_priority
+      - recent_cases
       properties:
         total:
           type: integer
@@ -342,10 +372,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Case'
-
     CreateCaseRequest:
       type: object
-      required: [title, service_type, priority]
+      required:
+      - title
+      - service_type
+      - priority
       properties:
         title:
           type: string
@@ -355,10 +387,22 @@ components:
           maxLength: 5000
         service_type:
           type: string
-          enum: [GENERAL, EMERGENCY, FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT]
+          enum:
+          - GENERAL
+          - EMERGENCY
+          - FINANCIAL
+          - FOOD
+          - SHELTER
+          - MEDICAL
+          - EDUCATION
+          - TRANSPORT
         priority:
           type: string
-          enum: [LOW, NORMAL, HIGH, URGENT]
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
         person_id:
           type: string
           format: uuid
@@ -368,27 +412,34 @@ components:
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
           nullable: true
-          description: Optional workflow definition ID to use instead of the default service-type mapping. Must be an ACTIVE workflow belonging to the organization. If omitted, the workflow is determined by the service_type via WorkflowKeyForServiceType.
-
+          description: Optional workflow definition ID to use instead of the default
+            service-type mapping. Must be an ACTIVE workflow belonging to the organization.
+            If omitted, the workflow is determined by the service_type via WorkflowKeyForServiceType.
     ChangeCaseStatusRequest:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
         status:
           type: string
           description: Workflow state key to transition to
     AssignCaseRequest:
       type: object
-      required: [user_id]
+      required:
+      - user_id
       properties:
         user_id:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-
     TimelineEvent:
       type: object
-      required: [id, action, resource, outcome, timestamp]
+      required:
+      - id
+      - action
+      - resource
+      - outcome
+      - timestamp
       properties:
         id:
           type: string
@@ -400,17 +451,26 @@ components:
           type: string
         outcome:
           type: string
-          enum: [success, failure]
+          enum:
+          - success
+          - failure
         timestamp:
           type: string
           format: date-time
         metadata:
           type: object
           additionalProperties: true
-
     Person:
       type: object
-      required: [id, organization_id, first_name, last_name, preferred_language, status, created_at, updated_at]
+      required:
+      - id
+      - organization_id
+      - first_name
+      - last_name
+      - preferred_language
+      - status
+      - created_at
+      - updated_at
       properties:
         id:
           type: string
@@ -448,17 +508,21 @@ components:
           type: string
         status:
           type: string
-          enum: [ACTIVE, INACTIVE]
+          enum:
+          - ACTIVE
+          - INACTIVE
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-
     CreatePersonRequest:
       type: object
-      required: [first_name, last_name, preferred_language]
+      required:
+      - first_name
+      - last_name
+      - preferred_language
       properties:
         external_reference:
           type: string
@@ -472,7 +536,7 @@ components:
         date_of_birth:
           type: string
           format: date
-          description: "ISO 8601 date (YYYY-MM-DD), nullable"
+          description: ISO 8601 date (YYYY-MM-DD), nullable
           nullable: true
         email:
           type: string
@@ -492,18 +556,28 @@ components:
         preferred_language:
           type: string
           maxLength: 10
-
     UpdatePersonStatusRequest:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
         status:
           type: string
-          enum: [ACTIVE, INACTIVE]
-
+          enum:
+          - ACTIVE
+          - INACTIVE
     Eligibility:
       type: object
-      required: [id, organization_id, service_request_id, criteria, result, explanation, assessed_by, assessed_at, created_at]
+      required:
+      - id
+      - organization_id
+      - service_request_id
+      - criteria
+      - result
+      - explanation
+      - assessed_by
+      - assessed_at
+      - created_at
       properties:
         id:
           type: string
@@ -523,7 +597,10 @@ components:
           description: JSONB object containing eligibility criteria
         result:
           type: string
-          enum: [ELIGIBLE, NOT_ELIGIBLE, REQUIRES_MORE_INFORMATION]
+          enum:
+          - ELIGIBLE
+          - NOT_ELIGIBLE
+          - REQUIRES_MORE_INFORMATION
         explanation:
           type: string
         assessed_by:
@@ -536,10 +613,12 @@ components:
         created_at:
           type: string
           format: date-time
-
     CreateEligibilityRequest:
       type: object
-      required: [service_request_id, criteria, explanation]
+      required:
+      - service_request_id
+      - criteria
+      - explanation
       properties:
         service_request_id:
           type: string
@@ -550,18 +629,27 @@ components:
           additionalProperties: true
         explanation:
           type: string
-
     UpdateEligibilityResultRequest:
       type: object
-      required: [result]
+      required:
+      - result
       properties:
         result:
           type: string
-          enum: [ELIGIBLE, NOT_ELIGIBLE, REQUIRES_MORE_INFORMATION]
-
+          enum:
+          - ELIGIBLE
+          - NOT_ELIGIBLE
+          - REQUIRES_MORE_INFORMATION
     Evidence:
       type: object
-      required: [id, organization_id, service_request_id, type, description, uploaded_by, created_at]
+      required:
+      - id
+      - organization_id
+      - service_request_id
+      - type
+      - description
+      - uploaded_by
+      - created_at
       properties:
         id:
           type: string
@@ -577,7 +665,13 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
-          enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
+          enum:
+          - IDENTITY_DOCUMENT
+          - PROOF_OF_RESIDENCE
+          - REFERRAL
+          - SUPPORTING_DOCUMENT
+          - PHOTOGRAPH
+          - STAFF_NOTE
         description:
           type: string
         uploaded_by:
@@ -587,10 +681,13 @@ components:
         created_at:
           type: string
           format: date-time
-
     CreateEvidenceRequest:
       type: object
-      required: [service_request_id, type, description, storage_reference]
+      required:
+      - service_request_id
+      - type
+      - description
+      - storage_reference
       properties:
         service_request_id:
           type: string
@@ -598,15 +695,30 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
-          enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
+          enum:
+          - IDENTITY_DOCUMENT
+          - PROOF_OF_RESIDENCE
+          - REFERRAL
+          - SUPPORTING_DOCUMENT
+          - PHOTOGRAPH
+          - STAFF_NOTE
         description:
           type: string
         storage_reference:
           type: string
-          description: Validated object storage URI; accepted schemes are s3, gs, azureblob, and civora.
+          description: Validated object storage URI; accepted schemes are s3, gs,
+            azureblob, and civora.
     Assessment:
       type: object
-      required: [id, organization_id, service_request_id, findings, recommendation, assessor, assessed_at, created_at]
+      required:
+      - id
+      - organization_id
+      - service_request_id
+      - findings
+      - recommendation
+      - assessor
+      - assessed_at
+      - created_at
       properties:
         id:
           type: string
@@ -637,10 +749,12 @@ components:
         created_at:
           type: string
           format: date-time
-
     CreateAssessmentRequest:
       type: object
-      required: [service_request_id, findings, recommendation]
+      required:
+      - service_request_id
+      - findings
+      - recommendation
       properties:
         service_request_id:
           type: string
@@ -653,10 +767,17 @@ components:
           nullable: true
         recommendation:
           type: string
-
     Decision:
       type: object
-      required: [id, organization_id, service_request_id, decision, reason, decision_maker, decided_at, created_at]
+      required:
+      - id
+      - organization_id
+      - service_request_id
+      - decision
+      - reason
+      - decision_maker
+      - decided_at
+      - created_at
       properties:
         id:
           type: string
@@ -672,7 +793,10 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         decision:
           type: string
-          enum: [APPROVED, REJECTED, NEEDS_MORE_INFORMATION]
+          enum:
+          - APPROVED
+          - REJECTED
+          - NEEDS_MORE_INFORMATION
         reason:
           type: string
         decision_maker:
@@ -685,10 +809,12 @@ components:
         created_at:
           type: string
           format: date-time
-
     CreateDecisionRequest:
       type: object
-      required: [service_request_id, decision, reason]
+      required:
+      - service_request_id
+      - decision
+      - reason
       properties:
         service_request_id:
           type: string
@@ -696,13 +822,24 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         decision:
           type: string
-          enum: [APPROVED, REJECTED, NEEDS_MORE_INFORMATION]
+          enum:
+          - APPROVED
+          - REJECTED
+          - NEEDS_MORE_INFORMATION
         reason:
           type: string
-
     Assistance:
       type: object
-      required: [id, organization_id, service_request_id, type, description, status, responsible_staff, created_at, updated_at]
+      required:
+      - id
+      - organization_id
+      - service_request_id
+      - type
+      - description
+      - status
+      - responsible_staff
+      - created_at
+      - updated_at
       properties:
         id:
           type: string
@@ -718,12 +855,23 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
-          enum: [FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT, OTHER]
+          enum:
+          - FINANCIAL
+          - FOOD
+          - SHELTER
+          - MEDICAL
+          - EDUCATION
+          - TRANSPORT
+          - OTHER
         description:
           type: string
         status:
           type: string
-          enum: [PLANNED, IN_PROGRESS, COMPLETED, CANCELLED]
+          enum:
+          - PLANNED
+          - IN_PROGRESS
+          - COMPLETED
+          - CANCELLED
         responsible_staff:
           type: string
           format: uuid
@@ -742,10 +890,13 @@ components:
         updated_at:
           type: string
           format: date-time
-
     CreateAssistanceRequest:
       type: object
-      required: [service_request_id, type, description, responsible_staff]
+      required:
+      - service_request_id
+      - type
+      - description
+      - responsible_staff
       properties:
         service_request_id:
           type: string
@@ -753,25 +904,43 @@ components:
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
         type:
           type: string
-          enum: [FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT, OTHER]
+          enum:
+          - FINANCIAL
+          - FOOD
+          - SHELTER
+          - MEDICAL
+          - EDUCATION
+          - TRANSPORT
+          - OTHER
         description:
           type: string
         responsible_staff:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-
     UpdateAssistanceStatusRequest:
       type: object
-      required: [action]
+      required:
+      - action
       properties:
         action:
           type: string
-          enum: [start, complete, cancel]
-
+          enum:
+          - start
+          - complete
+          - cancel
     FollowUp:
       type: object
-      required: [id, organization_id, service_request_id, scheduled_date, outcome, notes, performed_by, created_at, updated_at]
+      required:
+      - id
+      - organization_id
+      - service_request_id
+      - scheduled_date
+      - outcome
+      - notes
+      - performed_by
+      - created_at
+      - updated_at
       properties:
         id:
           type: string
@@ -806,10 +975,13 @@ components:
         updated_at:
           type: string
           format: date-time
-
     CreateFollowUpRequest:
       type: object
-      required: [service_request_id, scheduled_date, outcome, notes]
+      required:
+      - service_request_id
+      - scheduled_date
+      - outcome
+      - notes
       properties:
         service_request_id:
           type: string
@@ -818,21 +990,20 @@ components:
         scheduled_date:
           type: string
           format: date
-          description: "ISO 8601 date (YYYY-MM-DD)"
+          description: ISO 8601 date (YYYY-MM-DD)
         outcome:
           type: string
         notes:
           type: string
-
     CompleteFollowUpRequest:
       type: object
-      required: [completed_date]
+      required:
+      - completed_date
       properties:
         completed_date:
           type: string
           format: date
-          description: "ISO 8601 date (YYYY-MM-DD)"
-
+          description: ISO 8601 date (YYYY-MM-DD)
     AuditEvent:
       type: object
       properties:
@@ -858,7 +1029,9 @@ components:
           nullable: true
         outcome:
           type: string
-          enum: [success, failure]
+          enum:
+          - success
+          - failure
         request_id:
           type: string
           nullable: true
@@ -870,21 +1043,18 @@ components:
         previous_hash:
           type: string
           nullable: true
-
     HealthResponse:
       type: object
       properties:
         status:
           type: string
           example: ok
-
     ReadinessResponse:
       type: object
       properties:
         status:
           type: string
           example: ready
-
     WorkflowDefinition:
       type: object
       properties:
@@ -905,7 +1075,10 @@ components:
           type: integer
         status:
           type: string
-          enum: [DRAFT, ACTIVE, ARCHIVED]
+          enum:
+          - DRAFT
+          - ACTIVE
+          - ARCHIVED
         initial_state:
           type: string
         states:
@@ -973,7 +1146,6 @@ components:
         updated_at:
           type: string
           format: date-time
-
     WorkflowInstance:
       type: object
       properties:
@@ -1006,7 +1178,6 @@ components:
         metadata:
           type: object
           nullable: true
-
     WorkflowTransition:
       type: object
       properties:
@@ -1039,7 +1210,6 @@ components:
         created_at:
           type: string
           format: date-time
-
     WorkflowTransitionHistory:
       type: object
       properties:
@@ -1071,10 +1241,15 @@ components:
         metadata:
           type: object
           nullable: true
-
     CreateWorkflowDefinitionRequest:
       type: object
-      required: [key, name, version, initial_state, states, transitions]
+      required:
+      - key
+      - name
+      - version
+      - initial_state
+      - states
+      - transitions
       properties:
         key:
           type: string
@@ -1101,7 +1276,402 @@ components:
         metadata:
           type: object
           nullable: true
-
+    Form:
+      type: object
+      required:
+      - id
+      - organization_id
+      - key
+      - name
+      - status
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        organization_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - ARCHIVED
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    CreateFormRequest:
+      type: object
+      required:
+      - key
+      - name
+      properties:
+        key:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          maxLength: 64
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+    UpdateFormRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+    FormVersion:
+      type: object
+      required:
+      - id
+      - form_id
+      - version_number
+      - status
+      - fields
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        version_number:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+        created_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+    FormField:
+      type: object
+      required:
+      - id
+      - key
+      - label
+      - type
+      - required
+      - order
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        key:
+          type: string
+          pattern: ^[a-z0-9_]+$
+          maxLength: 64
+        label:
+          type: string
+          maxLength: 200
+        type:
+          type: string
+          enum:
+          - text
+          - textarea
+          - number
+          - select
+          - multiselect
+          - date
+          - boolean
+          - file
+        required:
+          type: boolean
+        order:
+          type: integer
+          minimum: 0
+        options:
+          type: array
+          items:
+            type: string
+          nullable: true
+        validation:
+          type: object
+          nullable: true
+        placeholder:
+          type: string
+          nullable: true
+        help_text:
+          type: string
+          nullable: true
+    CreateFormFieldRequest:
+      type: object
+      required:
+      - key
+      - label
+      - type
+      - required
+      - order
+      properties:
+        key:
+          type: string
+          pattern: ^[a-z0-9_]+$
+          maxLength: 64
+        label:
+          type: string
+          maxLength: 200
+        type:
+          type: string
+          enum:
+          - text
+          - textarea
+          - number
+          - select
+          - multiselect
+          - date
+          - boolean
+          - file
+        required:
+          type: boolean
+        order:
+          type: integer
+          minimum: 0
+        options:
+          type: array
+          items:
+            type: string
+          nullable: true
+        validation:
+          type: object
+          nullable: true
+        placeholder:
+          type: string
+          nullable: true
+        help_text:
+          type: string
+          nullable: true
+    UpdateFormFieldRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 200
+        type:
+          type: string
+          enum:
+          - text
+          - textarea
+          - number
+          - select
+          - multiselect
+          - date
+          - boolean
+          - file
+        required:
+          type: boolean
+        order:
+          type: integer
+          minimum: 0
+        options:
+          type: array
+          items:
+            type: string
+          nullable: true
+        validation:
+          type: object
+          nullable: true
+        placeholder:
+          type: string
+          nullable: true
+        help_text:
+          type: string
+          nullable: true
+    CaseFormAvailability:
+      type: object
+      required:
+      - form_id
+      - form_key
+      - form_name
+      - form_version
+      - status
+      - assignment_id
+      properties:
+        form_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_key:
+          type: string
+        form_name:
+          type: string
+        form_version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - AVAILABLE
+          - ASSIGNED
+          - SUBMITTED
+          - NOT_APPLICABLE
+        assignment_id:
+          type: string
+          format: uuid
+          nullable: true
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        submission_id:
+          type: string
+          format: uuid
+          nullable: true
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    FormSubmission:
+      type: object
+      required:
+      - id
+      - case_id
+      - form_id
+      - form_version_id
+      - data
+      - status
+      - submitted_by
+      - submitted_at
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        case_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_version_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_key:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - APPROVED
+          - REJECTED
+        submitted_by:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        submitted_at:
+          type: string
+          format: date-time
+        reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        review_notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    SubmitFormRequest:
+      type: object
+      required:
+      - form_key
+      - data
+      properties:
+        form_key:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+    WorkflowRequirements:
+      type: object
+      required:
+      - case_id
+      - current_state
+      - required_forms
+      - required_evidence
+      - required_assessments
+      - required_decisions
+      - required_assistance
+      - can_transition
+      properties:
+        case_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        current_state:
+          type: string
+        required_forms:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseFormAvailability'
+        required_evidence:
+          type: array
+          items:
+            type: string
+        required_assessments:
+          type: array
+          items:
+            type: string
+        required_decisions:
+          type: array
+          items:
+            type: string
+        required_assistance:
+          type: array
+          items:
+            type: string
+        can_transition:
+          type: boolean
+        available_transitions:
+          type: array
+          items:
+            type: string
   responses:
     BadRequest:
       description: Bad request
@@ -1127,383 +1697,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-
-    Form:
-      type: object
-      required: [id, organization_id, key, name, status, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        organization_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        key:
-          type: string
-          maxLength: 100
-        name:
-          type: string
-          maxLength: 200
-        description:
-          type: string
-          maxLength: 2000
-        status:
-          type: string
-          enum: [DRAFT, ACTIVE, ARCHIVED]
-        created_by:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-
-    CreateFormRequest:
-      type: object
-      required: [key, name]
-      properties:
-        key:
-          type: string
-          maxLength: 100
-        name:
-          type: string
-          maxLength: 200
-        description:
-          type: string
-          maxLength: 2000
-
-    UpdateFormRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          maxLength: 200
-        description:
-          type: string
-          maxLength: 2000
-
-    FormVersion:
-      type: object
-      required: [id, form_id, version, status, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        organization_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        version:
-          type: integer
-          minimum: 1
-        status:
-          type: string
-          enum: [DRAFT, PUBLISHED, ARCHIVED]
-        created_by:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        created_at:
-          type: string
-          format: date-time
-        published_at:
-          type: string
-          format: date-time
-          nullable: true
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-
-    FormField:
-      type: object
-      required: [id, form_id, key, label, type, required, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_version_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        organization_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        key:
-          type: string
-          maxLength: 100
-        label:
-          type: string
-          maxLength: 200
-        type:
-          type: string
-          enum: [TEXT, TEXTAREA, NUMBER, DECIMAL, DATE, DATETIME, BOOLEAN, SELECT, MULTISELECT, RADIO, CHECKBOX, EMAIL, PHONE]
-        required:
-          type: boolean
-        description:
-          type: string
-          maxLength: 2000
-        placeholder:
-          type: string
-          maxLength: 500
-        default_value:
-          type: string
-          nullable: true
-        validation:
-          type: object
-          additionalProperties: true
-        options:
-          type: array
-          items:
-            type: object
-            properties:
-              label:
-                type: string
-              value:
-                type: string
-        order:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-
-    CreateFormFieldRequest:
-      type: object
-      required: [version_id, key, label, type]
-      properties:
-        version_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        key:
-          type: string
-          maxLength: 100
-        label:
-          type: string
-          maxLength: 200
-        type:
-          type: string
-          enum: [TEXT, TEXTAREA, NUMBER, DECIMAL, DATE, DATETIME, BOOLEAN, SELECT, MULTISELECT, RADIO, CHECKBOX, EMAIL, PHONE]
-        required:
-          type: boolean
-          default: false
-        description:
-          type: string
-          maxLength: 2000
-        placeholder:
-          type: string
-          maxLength: 500
-        default_value:
-          type: string
-          nullable: true
-        validation:
-          type: object
-          additionalProperties: true
-        options:
-          type: array
-          items:
-            type: object
-            properties:
-              label:
-                type: string
-              value:
-                type: string
-        order:
-          type: integer
-
-    UpdateFormFieldRequest:
-      type: object
-      properties:
-        label:
-          type: string
-          maxLength: 200
-        required:
-          type: boolean
-        description:
-          type: string
-          maxLength: 2000
-        placeholder:
-          type: string
-          maxLength: 500
-        default_value:
-          type: string
-          nullable: true
-        validation:
-          type: object
-          additionalProperties: true
-        options:
-          type: array
-          items:
-            type: object
-            properties:
-              label:
-                type: string
-              value:
-                type: string
-
-    FormSubmission:
-      type: object
-      required: [id, case_id, form_id, form_version_id, status, data, submitted_by, submitted_at, updated_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        case_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_version_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        status:
-          type: string
-          enum: [submitted, rejected, corrected, approved]
-        data:
-          type: object
-          additionalProperties: true
-        submitted_by:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        submitted_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
-    SubmitFormRequest:
-      type: object
-      required: [form_version_id, data]
-      properties:
-        form_version_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        data:
-          type: object
-          additionalProperties: true
-
-    FormFieldAvailability:
-      type: object
-      required: [key, label, type, required]
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        type:
-          type: string
-          enum: [TEXT, TEXTAREA, NUMBER, DECIMAL, DATE, DATETIME, BOOLEAN, SELECT, MULTISELECT, RADIO, CHECKBOX, EMAIL, PHONE]
-        required:
-          type: boolean
-        placeholder:
-          type: string
-        options:
-          type: array
-          items:
-            type: object
-            properties:
-              label:
-                type: string
-              value:
-                type: string
-        validation:
-          type: object
-          additionalProperties: true
-
-    CaseFormAvailability:
-      type: object
-      required: [assignment_id, form_id, form_version_id, form_key, form_name, version, required, active, fields]
-      properties:
-        assignment_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_version_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        form_key:
-          type: string
-        form_name:
-          type: string
-        form_description:
-          type: string
-        version:
-          type: integer
-        required:
-          type: boolean
-        display_order:
-          type: integer
-        active:
-          type: boolean
-        fields:
-          type: array
-          items:
-            $ref: '#/components/schemas/FormFieldAvailability'
-
-    WorkflowRequirements:
-      type: object
-      required: [case_id, current_state, total_required, submitted_count, missing_required, submitted_forms, can_proceed]
-      properties:
-        case_id:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        current_state:
-          type: string
-        total_required:
-          type: integer
-        submitted_count:
-          type: integer
-        missing_required:
-          type: array
-          items:
-            $ref: '#/components/schemas/CaseFormAvailability'
-        submitted_forms:
-          type: array
-          items:
-            $ref: '#/components/schemas/FormSubmission'
-        can_proceed:
-          type: boolean
-
-    paths:
+paths:
   /health:
     get:
       operationId: getHealth
-      tags: [System]
+      tags:
+      - System
       summary: Health check
       description: Returns OK if the server is running.
       responses:
@@ -1527,13 +1726,14 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /ready:
     get:
       operationId: listready
-      tags: [System]
+      tags:
+      - System
       summary: Readiness check
-      description: Returns OK if the server is ready to serve requests (database connected, etc.).
+      description: Returns OK if the server is ready to serve requests (database connected,
+        etc.).
       responses:
         '200':
           description: Server is ready
@@ -1549,11 +1749,11 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations:
     post:
       operationId: createOrganizations
-      tags: [Organizations]
+      tags:
+      - Organizations
       summary: Create a new organization
       description: Creates a new organization (tenant). No authentication required.
       requestBody:
@@ -1577,23 +1777,23 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}:
     get:
       operationId: getOrg
-      tags: [Organizations]
+      tags:
+      - Organizations
       summary: Get organization details
       description: Retrieves organization configuration. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Organization details
@@ -1605,21 +1805,22 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/auth/register:
     post:
       operationId: createOrgauthregister
-      tags: [Authentication]
+      tags:
+      - Authentication
       summary: Register a new user
-      description: Creates a new user within the specified organization. No prior authentication required.
+      description: Creates a new user within the specified organization. No prior
+        authentication required.
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1641,21 +1842,21 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/auth/login:
     post:
       operationId: createOrgauthlogin
-      tags: [Authentication]
+      tags:
+      - Authentication
       summary: Authenticate user and get token
       description: Authenticates a user and returns a JWT bearer token.
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1673,36 +1874,36 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/users:
     get:
       operationId: getOrgusers
-      tags: [Users]
+      tags:
+      - Users
       summary: List users
       description: Lists all users in the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of users
@@ -1714,30 +1915,30 @@ components:
                   $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/users/{userId}:
     get:
       operationId: getOrgusersUser
-      tags: [Users]
+      tags:
+      - Users
       summary: Get user
       description: Retrieves a specific user. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: User details
@@ -1749,32 +1950,35 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases:
     post:
       operationId: createOrgcases
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Create a case
-      description: Creates a new case (service request) within the organization. Requires authentication.
+      description: Creates a new case (service request) within the organization. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: Idempotency-Key
-          in: header
-          description: |
-            Idempotency key for safe retries. Guarantees at-most-once execution
-            for the same key within the same organization.
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: Idempotency-Key
+        in: header
+        description: 'Idempotency key for safe retries. Guarantees at-most-once execution
+
+          for the same key within the same organization.
+
+          '
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1783,7 +1987,7 @@ components:
               $ref: '#/components/schemas/CreateCaseRequest'
       responses:
         '201':
-          description: "Case created (status: CREATED)"
+          description: 'Case created (status: CREATED)'
           content:
             application/json:
               schema:
@@ -1792,40 +1996,40 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
     get:
       operationId: getOrgcases
-      tags: [Cases]
+      tags:
+      - Cases
       summary: List cases
       description: Lists cases in the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
-        - name: status
-          in: query
-          schema:
-            type: string
-            description: Filter cases by status
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+      - name: status
+        in: query
+        schema:
+          type: string
+          description: Filter cases by status
       responses:
         '200':
           description: List of cases with pagination
@@ -1840,23 +2044,24 @@ components:
                   $ref: '#/components/schemas/Case'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/cases/dashboard/statistics:
     get:
       operationId: getCaseDashboardStatistics
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Get tenant-scoped case statistics
-      description: Returns aggregate case counts for the authenticated organization. Requires an admin or staff role.
+      description: Returns aggregate case counts for the authenticated organization.
+        Requires an admin or staff role.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Aggregate case statistics
@@ -1868,30 +2073,30 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-
   /organizations/{orgId}/cases/{caseId}:
     get:
       operationId: getOrgcasesCase
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Get a case
       description: Retrieves a specific case. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Case details
@@ -1905,30 +2110,31 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/forms:
     get:
       operationId: getCaseForms
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Get available forms for a case
-      description: Retrieves forms assigned to the case's current workflow state. Requires authentication.
+      description: Retrieves forms assigned to the case's current workflow state.
+        Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: List of available forms
@@ -1942,30 +2148,30 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/form-submissions:
     post:
       operationId: submitForm
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Submit a form for a case
       description: Submits form data for a case. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -1993,26 +2199,27 @@ components:
                 $ref: '#/components/schemas/Error'
     get:
       operationId: listFormSubmissions
-      tags: [Cases]
+      tags:
+      - Cases
       summary: List form submissions for a case
       description: Lists all form submissions for a case. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: List of form submissions
@@ -2026,37 +2233,37 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/form-submissions/{submissionId}:
     get:
       operationId: getFormSubmission
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Get a form submission
       description: Retrieves a specific form submission. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: submissionId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: submissionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Form submission details
@@ -2068,30 +2275,31 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/workflow/requirements:
     get:
       operationId: getWorkflowRequirements
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Get workflow requirements for a case
-      description: Retrieves the workflow requirements including missing forms. Requires authentication.
+      description: Retrieves the workflow requirements including missing forms. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Workflow requirements
@@ -2103,30 +2311,30 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/timeline:
     get:
       operationId: getOrgcasesCaseTimeline
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Get case timeline
       description: Returns a chronological timeline of audit events for a case.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Chronological list of audit events for the case
@@ -2140,34 +2348,38 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/transitions:
     post:
       operationId: createOrgcasesCasetransitions
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Change case status
-      description: |
-        Transitions a case to a new status via the linked workflow definition.
+      description: 'Transitions a case to a new status via the linked workflow definition.
+
         The target status must correspond to a valid `to_state` on an active
-        transition from the case's current workflow state. Invalid or
+
+        transition from the case''s current workflow state. Invalid or
+
         unauthorized transitions are rejected. Requires authentication.
+
+        '
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2193,30 +2405,30 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/cases/{caseId}/assign:
     post:
       operationId: createOrgcasesCaseassign
-      tags: [Cases]
+      tags:
+      - Cases
       summary: Assign case to a user
       description: Assigns a case to a user. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2236,35 +2448,35 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/workflows:
     get:
       operationId: listOrgWorkflows
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: List workflow definitions
       description: Lists workflow definitions for the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: Paginated list of workflow definitions
@@ -2281,21 +2493,21 @@ components:
                     type: object
         '401':
           $ref: '#/components/responses/Unauthorized'
-
     post:
       operationId: createOrgWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Create workflow definition
       description: Creates a new draft workflow definition. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
@@ -2313,38 +2525,40 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/workflows/selectable:
     get:
       operationId: listSelectableWorkflows
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: List active workflow definitions for case creation
-      description: Lists ACTIVE workflow definitions that can be used for case creation. Requires authentication.
+      description: Lists ACTIVE workflow definitions that can be used for case creation.
+        Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
-          description: Paginated list of active workflow definitions usable for case creation
+          description: Paginated list of active workflow definitions usable for case
+            creation
           content:
             application/json:
               schema:
@@ -2358,28 +2572,29 @@ components:
                     type: object
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/workflows/{workflowId}:
     get:
       operationId: getOrgWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Get workflow definition
-      description: Retrieves a workflow definition with states and transitions. Requires authentication.
+      description: Retrieves a workflow definition with states and transitions. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: workflowId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Workflow definition
@@ -2393,24 +2608,25 @@ components:
           $ref: '#/components/responses/NotFound'
     put:
       operationId: updateOrgWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Update workflow definition
       description: Updates a draft workflow definition. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: workflowId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
@@ -2438,24 +2654,25 @@ components:
                 $ref: '#/components/schemas/Error'
     delete:
       operationId: deleteOrgWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Delete workflow definition
       description: Deletes a draft workflow definition. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: workflowId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Workflow definition deleted
@@ -2479,28 +2696,29 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/workflows/{workflowId}/activate:
     post:
       operationId: activateOrgWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Activate workflow definition
-      description: Activates a draft workflow definition so it can be instantiated. Requires authentication.
+      description: Activates a draft workflow definition so it can be instantiated.
+        Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: workflowId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Workflow definition activated
@@ -2516,28 +2734,28 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/workflows/{workflowId}/archive:
     post:
       operationId: archiveOrgWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Archive workflow definition
       description: Archives an active workflow definition. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: workflowId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Workflow definition archived
@@ -2553,28 +2771,29 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/workflow:
     get:
       operationId: getCaseWorkflow
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Get case workflow instance
-      description: Retrieves the workflow instance and definition for a case. Requires authentication.
+      description: Retrieves the workflow instance and definition for a case. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Workflow instance and definition
@@ -2591,28 +2810,29 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/workflow/transitions:
     get:
       operationId: getCaseWorkflowTransitions
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: List valid workflow transitions
-      description: Lists valid transitions from the current workflow state. Requires authentication.
+      description: Lists valid transitions from the current workflow state. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: List of valid transitions
@@ -2626,33 +2846,33 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/cases/{caseId}/workflow/transitions/{transitionKey}:
     post:
       operationId: executeCaseWorkflowTransition
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Execute workflow transition
       description: Executes a workflow transition by key. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: transitionKey
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: transitionKey
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         required: false
         content:
@@ -2690,28 +2910,29 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/cases/{caseId}/workflow/history:
     get:
       operationId: getCaseWorkflowHistory
-      tags: [Workflows]
+      tags:
+      - Workflows
       summary: Get workflow transition history
-      description: Retrieves the transition history for a case workflow instance. Requires authentication.
+      description: Retrieves the transition history for a case workflow instance.
+        Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: caseId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: List of workflow transition history events
@@ -2725,36 +2946,36 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/audit:
     get:
       operationId: getOrgaudit
-      tags: [Audit]
+      tags:
+      - Audit
       summary: List audit events
       description: Lists audit events for the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of audit events
@@ -2766,23 +2987,23 @@ components:
                   $ref: '#/components/schemas/AuditEvent'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/people:
     post:
       operationId: createOrgpeople
-      tags: [People]
+      tags:
+      - People
       summary: Create a person
       description: Creates a new person record. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2800,35 +3021,35 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
     get:
       operationId: getOrgpeople
-      tags: [People]
+      tags:
+      - People
       summary: List people
       description: Lists person records in the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of people with pagination
@@ -2840,28 +3061,28 @@ components:
                   $ref: '#/components/schemas/Person'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/people/external/{externalRef}:
     get:
       operationId: getOrgpeopleexternalExternalRef
-      tags: [People]
+      tags:
+      - People
       summary: Find person by external reference
       description: Finds a person by their external reference ID. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: externalRef
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: externalRef
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: Person details
@@ -2875,30 +3096,30 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/people/{personId}:
     get:
       operationId: getOrganizationPeoplePersonId
-      tags: [People]
+      tags:
+      - People
       summary: Get a person
       description: Retrieves a specific person record. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: personId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Person details
@@ -2910,29 +3131,29 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
     patch:
       operationId: updateOrganizationPeoplePersonId
-      tags: [People]
+      tags:
+      - People
       summary: Update person status
       description: Updates a person's status. Requires admin or staff role.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: personId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2958,23 +3179,24 @@ components:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/eligibilities:
     post:
       operationId: createOrgeligibilities
-      tags: [Eligibilities]
+      tags:
+      - Eligibilities
       summary: Create an eligibility assessment
-      description: Creates a new eligibility assessment for a service request. Requires authentication.
+      description: Creates a new eligibility assessment for a service request. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -2992,35 +3214,35 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
     get:
       operationId: getOrgeligibilities
-      tags: [Eligibilities]
+      tags:
+      - Eligibilities
       summary: List eligibilities
       description: Lists eligibility assessments in the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of eligibilities with pagination
@@ -3032,30 +3254,30 @@ components:
                   $ref: '#/components/schemas/Eligibility'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/eligibilities/{eligibilityId}:
     get:
       operationId: getEligibilityById
-      tags: [Eligibilities]
+      tags:
+      - Eligibilities
       summary: Get an eligibility assessment
       description: Retrieves a specific eligibility assessment. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: eligibilityId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: eligibilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Eligibility details
@@ -3067,30 +3289,31 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/eligibilities/{eligibilityId}/result:
     patch:
       operationId: updateEligibilityResult
-      tags: [Eligibilities]
+      tags:
+      - Eligibilities
       summary: Update eligibility result
-      description: Updates the result of an eligibility assessment. Requires admin or staff role.
+      description: Updates the result of an eligibility assessment. Requires admin
+        or staff role.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: eligibilityId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: eligibilityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3116,30 +3339,31 @@ components:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/eligibilities/by-service-request/{serviceRequestId}:
     get:
       operationId: getEligibilityByServiceRequestId
-      tags: [Eligibilities]
+      tags:
+      - Eligibilities
       summary: Get eligibility by service request
-      description: Retrieves the eligibility assessment for a specific service request. Requires authentication.
+      description: Retrieves the eligibility assessment for a specific service request.
+        Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: serviceRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Eligibility details
@@ -3151,23 +3375,23 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/evidence:
     post:
       operationId: createOrgevidence
-      tags: [Evidence]
+      tags:
+      - Evidence
       summary: Add evidence
       description: Adds an evidence item for a service request. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3185,30 +3409,30 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/evidence/{evidenceId}:
     get:
       operationId: getEvidenceById
-      tags: [Evidence]
+      tags:
+      - Evidence
       summary: Get evidence
       description: Retrieves a specific evidence item. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: evidenceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Evidence details
@@ -3220,43 +3444,43 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/evidence/by-service-request/{serviceRequestId}:
     get:
       operationId: listEvidenceByServiceRequestId
-      tags: [Evidence]
+      tags:
+      - Evidence
       summary: List evidence by service request
       description: Lists evidence items for a specific service request. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: serviceRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of evidence items with pagination
@@ -3268,23 +3492,23 @@ components:
                   $ref: '#/components/schemas/Evidence'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/assessments:
     post:
       operationId: createOrgassessments
-      tags: [Assessments]
+      tags:
+      - Assessments
       summary: Create an assessment
       description: Creates a needs assessment for a service request. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3302,30 +3526,30 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/assessments/{assessmentId}:
     get:
       operationId: getAssessmentById
-      tags: [Assessments]
+      tags:
+      - Assessments
       summary: Get an assessment
       description: Retrieves a specific assessment. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: assessmentId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: assessmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Assessment details
@@ -3337,31 +3561,31 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
-
   /organizations/{orgId}/assessments/by-service-request/{serviceRequestId}:
     get:
       operationId: getAssessmentByServiceRequestId
-      tags: [Assessments]
+      tags:
+      - Assessments
       summary: Get assessment by service request
-      description: Retrieves the assessment for a specific service request. Requires authentication.
+      description: Retrieves the assessment for a specific service request. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: serviceRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Assessment details
@@ -3373,23 +3597,23 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/decisions:
     post:
       operationId: createOrgdecisions
-      tags: [Decisions]
+      tags:
+      - Decisions
       summary: Make a decision
       description: Creates a human decision for a service request. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3407,30 +3631,30 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/decisions/{decisionId}:
     get:
       operationId: getDecisionById
-      tags: [Decisions]
+      tags:
+      - Decisions
       summary: Get a decision
       description: Retrieves a specific decision. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: decisionId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: decisionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Decision details
@@ -3442,31 +3666,31 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
-
   /organizations/{orgId}/decisions/by-service-request/{serviceRequestId}:
     get:
       operationId: getDecisionByServiceRequestId
-      tags: [Decisions]
+      tags:
+      - Decisions
       summary: Get decision by service request
-      description: Retrieves the decision for a specific service request. Requires authentication.
+      description: Retrieves the decision for a specific service request. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: serviceRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Decision details
@@ -3478,23 +3702,24 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/assistance:
     post:
       operationId: createOrgassistance
-      tags: [Assistance]
+      tags:
+      - Assistance
       summary: Create an assistance action
-      description: Creates a new assistance action for a service request. Requires authentication.
+      description: Creates a new assistance action for a service request. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3512,30 +3737,30 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/assistance/{assistanceId}:
     get:
       operationId: getAssistanceById
-      tags: [Assistance]
+      tags:
+      - Assistance
       summary: Get assistance
       description: Retrieves a specific assistance action. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: assistanceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: assistanceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Assistance details
@@ -3547,30 +3772,31 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/assistance/{assistanceId}/status:
     patch:
       operationId: updateAssistanceStatus
-      tags: [Assistance]
+      tags:
+      - Assistance
       summary: Update assistance status
-      description: Updates the status of an assistance action (start, complete, cancel). Requires admin or staff role.
+      description: Updates the status of an assistance action (start, complete, cancel).
+        Requires admin or staff role.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: assistanceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: assistanceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3596,43 +3822,44 @@ components:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/assistance/by-service-request/{serviceRequestId}:
     get:
       operationId: listAssistanceByServiceRequestId
-      tags: [Assistance]
+      tags:
+      - Assistance
       summary: List assistance by service request
-      description: Lists assistance actions for a specific service request. Requires authentication.
+      description: Lists assistance actions for a specific service request. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: serviceRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of assistance actions with pagination
@@ -3644,23 +3871,23 @@ components:
                   $ref: '#/components/schemas/Assistance'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/follow-ups:
     post:
       operationId: createOrgfollowups
-      tags: [FollowUps]
+      tags:
+      - FollowUps
       summary: Create a follow-up
       description: Creates a new follow-up item for a service request. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3678,30 +3905,30 @@ components:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/follow-ups/{followUpId}:
     get:
       operationId: getFollowUpById
-      tags: [FollowUps]
+      tags:
+      - FollowUps
       summary: Get a follow-up
       description: Retrieves a specific follow-up item. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: followUpId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: followUpId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Follow-up details
@@ -3713,30 +3940,30 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/follow-ups/{followUpId}/complete:
     patch:
       operationId: completeFollowUp
-      tags: [FollowUps]
+      tags:
+      - FollowUps
       summary: Complete a follow-up
       description: Marks a follow-up as completed. Requires admin or staff role.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: followUpId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: followUpId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3759,45 +3986,47 @@ components:
           content:
             application/json:
               schema:
-                 $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/follow-ups/by-service-request/{serviceRequestId}:
     get:
       operationId: listFollowUpsByServiceRequestId
-      tags: [FollowUps]
+      tags:
+      - FollowUps
       summary: List follow-ups by service request
-      description: Lists follow-up items for a specific service request. Requires authentication.
+      description: Lists follow-up items for a specific service request. Requires
+        authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: serviceRequestId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: serviceRequestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: List of follow-up items with pagination
@@ -3809,23 +4038,23 @@ components:
                   $ref: '#/components/schemas/FollowUp'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/forms:
     post:
       operationId: createForm
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Create a form
       description: Creates a new form definition in the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3851,32 +4080,33 @@ components:
                 $ref: '#/components/schemas/Error'
     get:
       operationId: listForms
-      tags: [Forms]
+      tags:
+      - Forms
       summary: List forms
       description: Lists forms in the organization. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 20
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
       responses:
         '200':
           description: Paginated list of forms
@@ -3893,30 +4123,30 @@ components:
                     type: object
         '401':
           $ref: '#/components/responses/Unauthorized'
-
   /organizations/{orgId}/forms/{formId}:
     get:
       operationId: getForm
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Get a form
       description: Retrieves a form by ID. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Form details
@@ -3930,26 +4160,27 @@ components:
           $ref: '#/components/responses/NotFound'
     put:
       operationId: updateForm
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Update a form
       description: Updates a draft form definition. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -3975,30 +4206,30 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/forms/{formId}/versions:
     post:
       operationId: createFormVersion
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Create a form version
       description: Creates a new draft version for a form. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '201':
           description: Version created
@@ -4012,37 +4243,37 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/forms/{formId}/versions/{versionId}/publish:
     post:
       operationId: publishFormVersion
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Publish a form version
       description: Publishes a draft version, activating the form. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: versionId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: versionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Version published
@@ -4062,30 +4293,30 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/forms/{formId}/archive:
     post:
       operationId: archiveForm
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Archive a form
       description: Archives an active form. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Form archived
@@ -4103,30 +4334,30 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /organizations/{orgId}/forms/{formId}/active-version:
     get:
       operationId: getActiveVersion
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Get active version
       description: Retrieves the currently published version of a form. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Active form version
@@ -4138,30 +4369,30 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/forms/{formId}/fields:
     post:
       operationId: addFormField
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Add a field
       description: Adds a field to a draft form version. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -4181,37 +4412,37 @@ components:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-
   /organizations/{orgId}/forms/{formId}/fields/{fieldId}:
     put:
       operationId: updateFormField
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Update a field
       description: Updates a field in a draft form version. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: fieldId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: fieldId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       requestBody:
         required: true
         content:
@@ -4239,33 +4470,34 @@ components:
                 $ref: '#/components/schemas/Error'
     delete:
       operationId: deleteFormField
-      tags: [Forms]
+      tags:
+      - Forms
       summary: Remove a field
       description: Removes a field from a draft form version. Requires authentication.
       security:
-        - BearerAuth: []
+      - BearerAuth: []
       parameters:
-        - name: orgId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: formId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-        - name: fieldId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: fieldId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: Field removed
@@ -4283,4 +4515,3 @@ components:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-

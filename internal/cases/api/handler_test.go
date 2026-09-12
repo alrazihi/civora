@@ -21,18 +21,21 @@ import (
 )
 
 type mockCaseService struct {
-	createCaseFn      func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
-	changeStatusFn    func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
-	assignCaseFn      func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
-	getCaseFn         func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
-	getCaseTimeline   func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
-	listCasesFn       func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
-	getStatisticsFn   func(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error)
-	getCaseFormsFn    func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.CaseFormAvailability, error)
-	submitFormFn      func(ctx context.Context, orgID, caseID, submittedBy, formVersionID uuid.UUID, data map[string]interface{}) (*application.SubmissionResponse, error)
-	getSubmissionFn   func(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error)
-	listSubmissionsFn func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
-	getWorkflowReqsFn func(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
+	createCaseFn             func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
+	changeStatusFn           func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
+	assignCaseFn             func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
+	getCaseFn                func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
+	getCaseTimeline          func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
+	listCasesFn              func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
+	getStatisticsFn          func(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error)
+	getCaseFormsFn           func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.CaseFormAvailability, error)
+	submitFormFn             func(ctx context.Context, orgID, caseID, submittedBy, formVersionID uuid.UUID, data map[string]interface{}) (*application.SubmissionResponse, error)
+	submitFormByKeyFn        func(ctx context.Context, orgID, caseID, submittedBy uuid.UUID, formKey string, data map[string]interface{}) (*application.SubmissionResponse, error)
+	getSubmissionFn          func(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error)
+	getFormSubmissionByKeyFn func(ctx context.Context, orgID, caseID uuid.UUID, formKey string) (*application.SubmissionResponse, error)
+	listSubmissionsFn        func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
+	getCaseFormSubmissionsFn func(ctx context.Context, orgID, caseID uuid.UUID) (map[string]*application.SubmissionResponse, error)
+	getWorkflowReqsFn        func(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
 }
 
 func (m *mockCaseService) CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
@@ -98,6 +101,13 @@ func (m *mockCaseService) SubmitForm(ctx context.Context, orgID, caseID, submitt
 	return nil, nil
 }
 
+func (m *mockCaseService) SubmitFormByKey(ctx context.Context, orgID, caseID, submittedBy uuid.UUID, formKey string, data map[string]interface{}) (*application.SubmissionResponse, error) {
+	if m.submitFormByKeyFn != nil {
+		return m.submitFormByKeyFn(ctx, orgID, caseID, submittedBy, formKey, data)
+	}
+	return nil, nil
+}
+
 func (m *mockCaseService) GetSubmission(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error) {
 	if m.getSubmissionFn != nil {
 		return m.getSubmissionFn(ctx, orgID, caseID, submissionID)
@@ -105,9 +115,23 @@ func (m *mockCaseService) GetSubmission(ctx context.Context, orgID, caseID, subm
 	return nil, nil
 }
 
+func (m *mockCaseService) GetFormSubmissionByKey(ctx context.Context, orgID, caseID uuid.UUID, formKey string) (*application.SubmissionResponse, error) {
+	if m.getFormSubmissionByKeyFn != nil {
+		return m.getFormSubmissionByKeyFn(ctx, orgID, caseID, formKey)
+	}
+	return nil, nil
+}
+
 func (m *mockCaseService) ListSubmissions(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error) {
 	if m.listSubmissionsFn != nil {
 		return m.listSubmissionsFn(ctx, orgID, caseID)
+	}
+	return nil, nil
+}
+
+func (m *mockCaseService) GetCaseFormSubmissions(ctx context.Context, orgID, caseID uuid.UUID) (map[string]*application.SubmissionResponse, error) {
+	if m.getCaseFormSubmissionsFn != nil {
+		return m.getCaseFormSubmissionsFn(ctx, orgID, caseID)
 	}
 	return nil, nil
 }
@@ -141,8 +165,11 @@ func setupCaseRouter(svc CaseService) http.Handler {
 			r.Get("/{caseId}/forms", h.GetCaseForms)
 			r.Get("/{caseId}/form-submissions", h.ListSubmissions)
 			r.Get("/{caseId}/workflow/requirements", h.GetWorkflowRequirements)
+			r.Get("/{caseId}/workflow/form-submissions", h.GetCaseFormSubmissions)
 		})
 		r.Post("/{caseId}/form-submissions", h.SubmitForm)
+		r.Post("/{caseId}/form/submission", h.SubmitFormByKey)
+		r.Get("/{caseId}/form/{formKey}/submission", h.GetFormSubmissionByKey)
 		r.Get("/{caseId}/form-submissions/{submissionId}", h.GetSubmission)
 	})
 	return r
