@@ -14,6 +14,13 @@ create a case bound to it, and operate through actual workflow states/transition
 - Cached transitions reused; `loadCaseSections(id, transitions)` race fixed.
 - Security: `escapeHTML` XSS fix; duplicate `workflow-state-name` id fixed.
 - Dashboard uses computed terminal-state set (no hardcoded `openStatuses`).
+- Bug fix: `renderWorkflowSelector(defs, preselectId)` now declares the
+  parameter it already referenced (previously threw
+  "preselectId is not defined", breaking the new-case selector).
+- Added a Playwright E2E harness under `web/e2e/` covering the workflow
+  selector, case creation with workflow verification, the custom-workflow
+  creation guard, and dashboard stats/case listing. Runs fully offline
+  (static server + API mocking).
 
 ## API contract gaps (backend required)
 These block the fully-dynamic journey for service-type AND custom workflows.
