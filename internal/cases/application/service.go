@@ -445,7 +445,7 @@ func (s *CaseService) SyncCaseStatus(ctx context.Context, tenantID, caseID uuid.
 // denormalized case status in sync with the authoritative workflow state.
 // Because the observer runs inside the same transaction, a failure here
 // rolls back the entire transition atomically.
-func (s *CaseService) OnTransition(ctx context.Context, tx *sql.Tx, instance *workflowdomain.WorkflowInstance, transition *workflowdomain.WorkflowTransition) error {
+func (s *CaseService) OnTransition(ctx context.Context, tx *sql.Tx, instance *workflowdomain.WorkflowInstance, transition *workflowdomain.WorkflowTransition, targetTerminal bool) error {
 	if instance == nil {
 		return nil
 	}
@@ -456,8 +456,12 @@ func (s *CaseService) OnTransition(ctx context.Context, tx *sql.Tx, instance *wo
 	if err := c.SyncStatusFromWorkflow(transition.ToState); err != nil {
 		return err
 	}
+	if targetTerminal {
+		now := time.Now().UTC()
+		c.ClosedAt = &now
+	}
 	c.WorkflowState = transition.ToState
-	if err := s.repo.UpdateWorkflowStateTx(ctx, tx, instance.TenantID, instance.CaseID, transition.ToState, c.Version); err != nil {
+	if err := s.repo.UpdateWorkflowStateTx(ctx, tx, instance.TenantID, instance.CaseID, transition.ToState, c.Version, targetTerminal); err != nil {
 		return err
 	}
 	c.Version++

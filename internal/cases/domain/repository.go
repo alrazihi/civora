@@ -19,7 +19,7 @@ type CaseRepository interface {
 	Statistics(ctx context.Context, orgID uuid.UUID) (*CaseStatistics, error)
 	UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status CaseStatus, version int) error
 	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, status CaseStatus, version int) error
-	UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int) error
+	UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int, isTerminal bool) error
 	Assign(ctx context.Context, orgID, id, userID uuid.UUID) error
 	AssignTx(ctx context.Context, tx *sql.Tx, orgID, id, userID uuid.UUID) error
 	UpdateWorkflowInstanceID(ctx context.Context, orgID, caseID, instanceID uuid.UUID) error

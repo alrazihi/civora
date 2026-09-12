@@ -301,14 +301,20 @@ func (r *PostgresCaseRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx,
 
 // UpdateWorkflowStateTx updates the authoritative workflow state column
 // alongside the denormalized status column, keeping the two fields in sync
-// within the transition transaction.
-func (r *PostgresCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int) error {
-	query := `
+// within the transition transaction. When isTerminal is true, the case
+// closed_at timestamp is set to now() regardless of the state key name,
+// allowing custom workflow definitions to mark any state as terminal.
+func (r *PostgresCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int, isTerminal bool) error {
+	closedAt := "NULL"
+	if isTerminal {
+		closedAt = "now()"
+	}
+	query := fmt.Sprintf(`
 		UPDATE cases
-		SET workflow_state = $1, status = $1, version = version + 1, updated_at = now(),
-		    closed_at = CASE WHEN $1 IN ('CLOSED', 'REJECTED') THEN now() ELSE closed_at END
+	 SET workflow_state = $1, status = $1, version = version + 1, updated_at = now(),
+		    closed_at = %s
 		WHERE organization_id = $2 AND id = $3 AND version = $4
-	`
+	`, closedAt)
 	result, err := tx.ExecContext(ctx, query, workflowState, orgID, id, version)
 	if err != nil {
 		return fmt.Errorf("failed to update workflow state: %w", err)

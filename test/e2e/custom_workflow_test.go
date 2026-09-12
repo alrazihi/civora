@@ -25,12 +25,12 @@ func TestCustomWorkflowEndToEnd(t *testing.T) {
 			map[string]interface{}{"key": "SNEW", "name": "New Support Ticket", "terminal": false, "display_order": 0},
 			map[string]interface{}{"key": "SIN_PROGRESS", "name": "In Progress", "terminal": false, "display_order": 1},
 			map[string]interface{}{"key": "RESOLVED", "name": "Resolved", "terminal": false, "display_order": 2},
-			map[string]interface{}{"key": "CLOSED", "name": "Closed", "terminal": true, "display_order": 3},
+			map[string]interface{}{"key": "SUPPORT_CLOSED", "name": "Closed", "terminal": true, "display_order": 3},
 		},
 		[]interface{}{
 			map[string]interface{}{"key": "start", "name": "Start", "from_state": "SNEW", "to_state": "SIN_PROGRESS", "active": true},
 			map[string]interface{}{"key": "resolve", "name": "Resolve", "from_state": "SIN_PROGRESS", "to_state": "RESOLVED", "active": true},
-			map[string]interface{}{"key": "close", "name": "Close", "from_state": "RESOLVED", "to_state": "CLOSED", "active": true},
+			map[string]interface{}{"key": "close", "name": "Close", "from_state": "RESOLVED", "to_state": "SUPPORT_CLOSED", "active": true},
 		},
 		"SNEW",
 	)
@@ -48,7 +48,7 @@ func TestCustomWorkflowEndToEnd(t *testing.T) {
 	verifyWorkflowState(t, ts, orgID, token, caseID, "RESOLVED", customSupportDefID)
 
 	transitionWorkflow(t, ts, orgID, token, caseID, "close")
-	verifyWorkflowState(t, ts, orgID, token, caseID, "CLOSED", customSupportDefID)
+	verifyWorkflowState(t, ts, orgID, token, caseID, "SUPPORT_CLOSED", customSupportDefID)
 
 	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID+"/workflow/transitions/start", token, nil)
 	require.Equal(t, http.StatusConflict, resp.Code, "terminal state should block further transitions")
@@ -62,14 +62,14 @@ func TestCustomWorkflowEndToEnd(t *testing.T) {
 	assert.Equal(t, "RESOLVED", histories[1].ToState)
 	assert.Equal(t, "resolve", histories[1].TransitionKey)
 	assert.Equal(t, "RESOLVED", histories[2].FromState)
-	assert.Equal(t, "CLOSED", histories[2].ToState)
+	assert.Equal(t, "SUPPORT_CLOSED", histories[2].ToState)
 	assert.Equal(t, "close", histories[2].TransitionKey)
 
 	cases := getCaseDetail(t, ts, orgID, token, caseID)
-	assert.Equal(t, "CLOSED", cases.Status)
+	assert.Equal(t, "SUPPORT_CLOSED", cases.Status)
 	require.NotNil(t, cases.WorkflowState)
-	assert.Equal(t, "CLOSED", *cases.WorkflowState)
-	assert.NotNil(t, cases.ClosedAt, "case should have closed_at set")
+	assert.Equal(t, "SUPPORT_CLOSED", *cases.WorkflowState)
+	assert.NotNil(t, cases.ClosedAt, "case should have closed_at set for custom terminal state")
 
 	auditEvents := listAuditEvents(t, ts, orgID, token)
 	var wfTransitions int
@@ -97,14 +97,14 @@ func TestSecondCustomWorkflowEndToEnd(t *testing.T) {
 			map[string]interface{}{"key": "EDU_REVIEW", "name": "Under Review", "terminal": false, "display_order": 1},
 			map[string]interface{}{"key": "EDU_APPROVED", "name": "Approved", "terminal": false, "display_order": 2},
 			map[string]interface{}{"key": "EDU_REJECTED", "name": "Rejected", "terminal": false, "display_order": 3},
-			map[string]interface{}{"key": "CLOSED", "name": "Closed", "terminal": true, "display_order": 4},
+			map[string]interface{}{"key": "EDU_CLOSED", "name": "Closed", "terminal": true, "display_order": 4},
 		},
 		[]interface{}{
 			map[string]interface{}{"key": "review", "name": "Review", "from_state": "EDU_NEW", "to_state": "EDU_REVIEW", "active": true},
 			map[string]interface{}{"key": "approve", "name": "Approve", "from_state": "EDU_REVIEW", "to_state": "EDU_APPROVED", "active": true},
 			map[string]interface{}{"key": "reject", "name": "Reject", "from_state": "EDU_REVIEW", "to_state": "EDU_REJECTED", "active": true},
-			map[string]interface{}{"key": "close_edu", "name": "Close", "from_state": "EDU_APPROVED", "to_state": "CLOSED", "active": true},
-			map[string]interface{}{"key": "close_rejected", "name": "Close Rejected", "from_state": "EDU_REJECTED", "to_state": "CLOSED", "active": true},
+			map[string]interface{}{"key": "close_edu", "name": "Close", "from_state": "EDU_APPROVED", "to_state": "EDU_CLOSED", "active": true},
+			map[string]interface{}{"key": "close_rejected", "name": "Close Rejected", "from_state": "EDU_REJECTED", "to_state": "EDU_CLOSED", "active": true},
 		},
 		"EDU_NEW",
 	)
@@ -122,7 +122,7 @@ func TestSecondCustomWorkflowEndToEnd(t *testing.T) {
 	verifyWorkflowState(t, ts, orgID, token, eduCaseID, "EDU_APPROVED", educationDefID)
 
 	transitionWorkflow(t, ts, orgID, token, eduCaseID, "close_edu")
-	verifyWorkflowState(t, ts, orgID, token, eduCaseID, "CLOSED", educationDefID)
+	verifyWorkflowState(t, ts, orgID, token, eduCaseID, "EDU_CLOSED", educationDefID)
 
 	resp := ts.makeRequest(t, "POST", "/api/v1/organizations/"+orgID.String()+"/cases/"+eduCaseID+"/workflow/transitions/review", token, nil)
 	require.Equal(t, http.StatusConflict, resp.Code, "terminal state should block further transitions")
@@ -134,10 +134,10 @@ func TestSecondCustomWorkflowEndToEnd(t *testing.T) {
 	assert.Equal(t, "close_edu", eduHistories[2].TransitionKey)
 
 	eduCases := getCaseDetail(t, ts, orgID, token, eduCaseID)
-	assert.Equal(t, "CLOSED", eduCases.Status)
+	assert.Equal(t, "EDU_CLOSED", eduCases.Status)
 	require.NotNil(t, eduCases.WorkflowState)
-	assert.Equal(t, "CLOSED", *eduCases.WorkflowState)
-	assert.NotNil(t, eduCases.ClosedAt, "case should have closed_at set")
+	assert.Equal(t, "EDU_CLOSED", *eduCases.WorkflowState)
+	assert.NotNil(t, eduCases.ClosedAt, "case should have closed_at set for custom terminal state")
 }
 
 func TestCustomWorkflowCaseViaCaseStatusEndpoint(t *testing.T) {

@@ -192,7 +192,7 @@ func (m *mockCaseRepository) UpdateWorkflowInstanceIDTx(ctx context.Context, tx 
 	return nil
 }
 
-func (m *mockCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int) error {
+func (m *mockCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, workflowState string, version int, isTerminal bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c, ok := m.cases[id]
@@ -201,6 +201,10 @@ func (m *mockCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *sql.
 	}
 	c.WorkflowState = workflowState
 	c.UpdatedAt = time.Now().UTC()
+	if isTerminal {
+		now := time.Now().UTC()
+		c.ClosedAt = &now
+	}
 	return nil
 }
 
@@ -285,7 +289,7 @@ func (m *mockWorkflowService) executeTransition(params workflowapp.ExecuteTransi
 		}
 		transition := &workflowdomain.WorkflowTransition{Key: tr.Key, ToState: tr.ToState}
 		if m.observer != nil {
-			if err := m.observer.OnTransition(context.Background(), nil, instance, transition); err != nil {
+			if err := m.observer.OnTransition(context.Background(), nil, instance, transition, false); err != nil {
 				return nil, err
 			}
 		}
@@ -702,11 +706,11 @@ func TestOnTransition_SyncsCaseStatus(t *testing.T) {
 	}
 
 	// OnTransition should be a no-op when no case is linked to the instance.
-	assert.NoError(t, svc.OnTransition(context.Background(), nil, nil, transition))
+	assert.NoError(t, svc.OnTransition(context.Background(), nil, nil, transition, false))
 
 	// When the case is linked, the observer must sync the denormalized status
 	// to the target workflow state within the transaction.
-	assert.NoError(t, svc.OnTransition(context.Background(), nil, instance, transition))
+	assert.NoError(t, svc.OnTransition(context.Background(), nil, instance, transition, false))
 
 	updated, err := svc.GetCase(context.Background(), orgID, c.ID)
 	require.NoError(t, err)
@@ -743,7 +747,7 @@ func TestOnTransition_CustomStateIsAccepted(t *testing.T) {
 		ToState:   "GRANT_PROCESSING",
 	}
 
-	err = svc.OnTransition(context.Background(), nil, instance, transition)
+	err = svc.OnTransition(context.Background(), nil, instance, transition, false)
 	assert.NoError(t, err)
 
 	updated, err := svc.GetCase(context.Background(), orgID, c.ID)
@@ -782,7 +786,7 @@ func TestOnTransition_TenantIsolation(t *testing.T) {
 		ToState:   "OPEN",
 	}
 
-	err = svc.OnTransition(context.Background(), nil, instance, transition)
+	err = svc.OnTransition(context.Background(), nil, instance, transition, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found",
 		"observer should fail when the case cannot be found in the instance's tenant")

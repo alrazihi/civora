@@ -22,7 +22,7 @@ type sqlExecer interface {
 // TransitionObserver is an optional generic extension point for applications
 // that need to react to a transition before it commits.
 type TransitionObserver interface {
-	OnTransition(ctx context.Context, tx *sql.Tx, instance *domain.WorkflowInstance, transition *domain.WorkflowTransition) error
+	OnTransition(ctx context.Context, tx *sql.Tx, instance *domain.WorkflowInstance, transition *domain.WorkflowTransition, targetTerminal bool) error
 }
 
 type TransitionObserverRegistrar interface {
@@ -827,7 +827,7 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 			}
 		}
 		if s.observer != nil {
-			if err := s.observer.OnTransition(ctx, tx, instance, transition); err != nil {
+			if err := s.observer.OnTransition(ctx, tx, instance, transition, targetState.Terminal); err != nil {
 				return nil, fmt.Errorf("workflow transition observer failed: %w", err)
 			}
 		}
@@ -850,7 +850,7 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 				}
 			}
 			if s.observer != nil {
-				if err := s.observer.OnTransition(ctx, tx, instance, transition); err != nil {
+				if err := s.observer.OnTransition(ctx, tx, instance, transition, targetState.Terminal); err != nil {
 					return fmt.Errorf("workflow transition observer failed: %w", err)
 				}
 			}
