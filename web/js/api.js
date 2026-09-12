@@ -198,6 +198,47 @@ async function getFormSubmissions(caseId, formKey) {
 }
 
 /**
+ * Fetch submission status for all forms required at the current workflow state.
+ * Returns a map of formKey -> submission object (or null if no submission).
+ * Handles 404 gracefully (no submissions yet).
+ * @param {string} caseId
+ * @param {string} workflowState
+ * @returns {Promise<object>}
+ */
+async function getCaseFormSubmissions(caseId, workflowState) {
+  try {
+    const res = await api('GET',
+      `/organizations/${orgId}/cases/${caseId}/workflow/form-submissions` +
+      (workflowState ? `?state=${encodeURIComponent(workflowState)}` : ''));
+    return res.data || {};
+  } catch (err) {
+    if (err.message && err.message.includes('404')) {
+      return {};
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fetch details of a specific form submission.
+ * @param {string} caseId
+ * @param {string} formKey
+ * @returns {Promise<object|null>}
+ */
+async function getCaseFormSubmission(caseId, formKey) {
+  try {
+    const encodedKey = encodeURIComponent(formKey);
+    const res = await api('GET', `/organizations/${orgId}/cases/${caseId}/form/${encodedKey}/submission`);
+    return res.data || null;
+  } catch (err) {
+    if (err.message && err.message.includes('404')) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
  * Assign a form to a workflow state.
  * @param {string} formId
  * @param {object} assignment - { workflow_id, state_key, required, display_order }
@@ -219,8 +260,8 @@ async function removeFormAssignment(formId, assignmentId) {
 
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
 } else {
   // Browser global
-  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
+  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
 }

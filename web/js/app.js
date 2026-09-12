@@ -463,7 +463,6 @@ const app = {
         }
       }
     } catch (err) {
-      console.error(err);
       if (errorEl) {
         errorEl.textContent = `Failed to load dashboard: ${escapeHTML(err.message)}`;
         errorEl.classList.remove('hidden');
@@ -579,9 +578,9 @@ const app = {
         : [];
       await this.loadCaseSections(id, this._cachedTransitions);
       this.renderSectionActions();
-      this.renderActions();
-      await this.loadTimeline(id);
       await this.loadRequiredForms(id);
+      await this.loadTimeline(id);
+      this.renderActions();
 
       // Show content, hide loading
       if (loadingEl) loadingEl.classList.add('hidden');
@@ -634,8 +633,6 @@ const app = {
     } catch (err) {
       this.currentWorkflow = null;
       document.getElementById('workflow-meta')?.classList.add('hidden');
-      const stateBadge = document.getElementById('workflow-instance-state');
-      if (stateBadge) stateBadge.style.display = 'none';
     }
   },
 
@@ -739,7 +736,7 @@ const app = {
           availableTransitions = res.data || [];
           this._cachedTransitions = availableTransitions;
         } catch (err) {
-          console.warn('Could not fetch workflow transitions:', err);
+          this._cachedTransitions = [];
         }
       }
     }
@@ -1012,7 +1009,21 @@ async loadSection(name, path) {
       }
 
       for (const t of transitions) {
-        html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
+        const missingForms = this.getMissingRequiredForms(t);
+        if (missingForms.length > 0) {
+          // Transition has workflow guardrails — explain what's missing
+          const formList = missingForms.map(f => `<code>${escapeHTML(f)}</code>`).join(', ');
+          html += `
+            <button type="button" class="btn secondary" disabled style="opacity:0.6;cursor:not-allowed">
+              <span class="icon">🔒</span> ${escapeHTML(t.name || t.key)}
+            </button>
+            <div style="margin-top:4px;padding:8px 12px;background:var(--info-light);border-radius:var(--radius-sm);font-size:0.8rem">
+              Cannot continue to ${escapeHTML(t.name || t.key)}.
+              <div style="margin-top:4px">Required information missing: ${formList}</div>
+            </div>`;
+        } else {
+          html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
+        }
       }
       html += '</div>';
 
@@ -1032,6 +1043,16 @@ async loadSection(name, path) {
     } else {
       this.loadWorkflowTransitions(this.currentCase.id).then(renderFrom);
     }
+  },
+
+  getMissingRequiredForms(transition) {
+    if (!transition.requires_forms || !Array.isArray(transition.requires_forms)) {
+      return [];
+    }
+    return transition.requires_forms.filter(formKey => {
+      const sub = this.formSubmissions[formKey];
+      return !sub || (sub.status !== 'SUBMITTED' && sub.status !== 'submitted');
+    });
   },
 
   async loadTimeline(id) {
@@ -1952,8 +1973,10 @@ async loadSection(name, path) {
   //   GET /organizations/{orgId}/cases/{caseId}/workflow/forms
   // returning: { data: [FormDefinition, ...] }
 
-  currentFormDef: null,
-  currentFormState: null,
+   currentFormDef: null,
+   currentFormState: null,
+   formSubmissions: {},
+   currentSubmittingFormKey: null,
 
    async getRequiredForms(caseId, workflowState) {
      try {
@@ -1966,71 +1989,262 @@ async loadSection(name, path) {
         return [];
       }
       if (err.message && err.message.includes('403')) {
-        console.warn('Not authorized to view forms for this case');
         return [];
       }
-      console.error('Error loading required forms:', err);
       return [];
     }
   },
 
-  async loadRequiredForms(caseId) {
-    const formCard = document.getElementById('card-dynamic-form');
-    const formTitle = document.getElementById('dynamic-form-title');
-    const container = document.getElementById('form-container');
+   async loadRequiredForms(caseId) {
+     const formWorkspace = document.getElementById('card-required-info');
+     const formCard = document.getElementById('card-dynamic-form');
+     const formTitle = document.getElementById('dynamic-form-title');
+     const container = document.getElementById('form-container');
+     const listContainer = document.getElementById('form-requirements-list-container');
+      const listLoading = document.getElementById('case-form-list-loading');
+      const listError = document.getElementById('case-form-list-error');
+     const requirementsDiv = document.getElementById('form-workflow-requirements');
+     const requirementsList = document.getElementById('form-requirements-list');
+     const infoBadge = document.getElementById('required-info-badge');
 
-    if (!formCard || !container) return;
+     if (!formWorkspace || !formCard || !container) return;
 
-    const currentState = this.currentWorkflow?.instance?.current_state;
-    const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow, this._terminalStates);
+     const currentState = this.currentWorkflow?.instance?.current_state;
+     const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow, this._terminalStates);
 
-    if (isTerminal) {
-      formCard.style.display = 'none';
-      return;
-    }
-
-    try {
-      FormRenderer.showFormLoading(container, 'Loading required forms…');
-      formCard.style.display = 'block';
-      formCard.classList.remove('terminal-state');
-
-      const forms = await this.getRequiredForms(caseId, currentState);
-
-      if (!forms.length) {
-        formCard.style.display = 'none';
+      if (isTerminal) {
+        formWorkspace.classList.add('hidden');
         return;
       }
 
-      const formDef = forms[0];
-      this.currentFormDef = formDef;
+      formWorkspace.classList.remove('hidden');
 
-      formTitle.textContent = formDef.name || 'Required Form';
-      formCard.style.display = 'block';
+     // Reset state
+     this.currentFormDef = null;
+     this.currentFormState = null;
+     this.formSubmissions = {};
+     this.currentSubmittingFormKey = null;
 
-      if (FormRenderer && typeof FormRenderer.renderForm === 'function') {
-        this.currentFormState = FormRenderer.renderForm(
-          formDef,
-          container,
-          {
-            onSubmit: (e, values, formState, formDef) => { this.handleFormSubmit(e, values, formState, formDef); },
-            onCancel: () => { this.hideFormModal(); },
-          }
-        );
-      }
-    } catch (err) {
-      console.error('Failed to load forms:', err);
-      if (container) {
-        FormRenderer.showFormEmpty(container, 'Unable to load the required form at this time.');
-      }
-    }
-  },
+     // Show loading state
+     if (listLoading) listLoading.classList.remove('hidden');
+     if (listError) listError.classList.add('hidden');
+     if (listContainer) listContainer.innerHTML = '';
+
+     try {
+       const forms = await this.getRequiredForms(caseId, currentState);
+
+       // Hide loading
+       if (listLoading) listLoading.classList.add('hidden');
+
+        if (!forms.length) {
+          // No forms required at this state
+          formWorkspace.classList.add('hidden');
+          return;
+        }
+
+       // Fetch submission status for each form
+       try {
+         this.formSubmissions = await FormAPI.getCaseFormSubmissions(caseId, currentState) || {};
+       } catch (e) {
+         this.formSubmissions = {};
+       }
+
+       // Render the form list with status badges
+       if (listContainer) {
+         listContainer.innerHTML = forms.map(f => this.renderFormListItem(f)).join('');
+       }
+
+       // Update info badge
+       if (infoBadge) {
+         const requiredCount = forms.filter(f => f.required !== false).length;
+         infoBadge.textContent = `${requiredCount} form${requiredCount !== 1 ? 's' : ''} required at ${currentState || 'current state'}`;
+       }
+
+       // Render workflow requirements if any transitions need forms
+       this.renderWorkflowRequirements();
+
+       // Render the first form by default
+       const firstForm = forms[0];
+       if (firstForm) {
+         await this.openFormForCase(firstForm);
+       }
+     } catch (err) {
+       if (listLoading) listLoading.classList.add('hidden');
+       if (listError) {
+         listError.textContent = 'Unable to load required forms. The form service may not be available yet.';
+         listError.classList.remove('hidden');
+       }
+       // Still show the workspace with graceful error state
+       formWorkspace.style.display = 'block';
+       if (container) {
+         FormRenderer.showFormEmpty(container, 'Unable to load the required form at this time.');
+       }
+     }
+   },
+
+   renderFormListItem(formDef) {
+     const key = formDef.key || formDef.id;
+     const name = formDef.name || key;
+     const submission = this.formSubmissions[key];
+     const status = this.getFormSubmissionStatus(formDef, submission);
+     const required = formDef.required !== false;
+     const statusText = this.formStatusLabel(status);
+     const statusBadge = this.formStatusBadge(status);
+
+     return `
+       <li style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;cursor:pointer;transition:background 0.2s"
+           onclick="app.openFormForCaseById('${escapeHTML(formDef.id || '')}')"
+           data-form-id="${escapeHTML(formDef.id || '')}">
+         <div style="display:flex;justify-content:space-between;align-items:center">
+           <div>
+             <strong>${escapeHTML(name)}</strong>
+             ${required ? '<span class="badge" style="font-size:0.7rem;background:var(--danger-light);color:var(--danger)">Required</span>' : '<span class="badge" style="font-size:0.7rem">Optional</span>'}
+           </div>
+           <span class="badge ${statusBadge}" style="font-size:0.75rem">${escapeHTML(statusText)}</span>
+         </div>
+       </li>
+     `;
+   },
+
+   getFormSubmissionStatus(formDef, submission) {
+     if (!submission) {
+       return 'not_started';
+     }
+     const status = submission.status || 'UNKNOWN';
+     switch (status) {
+       case 'SUBMITTED':
+       case 'submitted':
+         return 'submitted';
+       case 'IN_PROGRESS':
+       case 'in_progress':
+         return 'in_progress';
+       case 'NEEDS_CORRECTION':
+       case 'needs_correction':
+       case 'REJECTED':
+       case 'rejected':
+         return 'needs_correction';
+       case 'UNAVAILABLE':
+       case 'unavailable':
+         return 'unavailable';
+       default:
+         return 'in_progress';
+     }
+   },
+
+   formStatusLabel(status) {
+     const labels = {
+       'not_started': 'Not Started',
+       'in_progress': 'In Progress',
+       'submitted': 'Submitted',
+       'needs_correction': 'Needs Correction',
+       'unavailable': 'Unavailable',
+     };
+     return labels[status] || 'Unknown';
+   },
+
+   formStatusBadge(status) {
+     const classes = {
+       'not_started': 'wf-status-draft',
+       'in_progress': 'wf-status-active',
+       'submitted': 'wf-status-active',
+       'needs_correction': 'wf-status-draft',
+       'unavailable': '',
+     };
+     return classes[status] || '';
+   },
+
+   async openFormForCase(formDef) {
+     const formCard = document.getElementById('card-dynamic-form');
+     const formTitle = document.getElementById('dynamic-form-title');
+     const container = document.getElementById('form-container');
+     const statusEl = document.getElementById('form-submission-status');
+
+     if (!formCard || !container) return;
+
+     this.currentFormDef = formDef;
+     this.currentFormSubmissionId = null;
+     formTitle.textContent = formDef.name || 'Required Form';
+
+     // Update submission status display
+     const key = formDef.key || formDef.id;
+     const submission = this.formSubmissions[key];
+     const status = this.getFormSubmissionStatus(formDef, submission);
+     const statusText = this.formStatusLabel(status);
+     if (statusEl) {
+       statusEl.textContent = `Status: ${statusText}`;
+       statusEl.style.color = status === 'submitted' ? 'var(--success, #16a34a)' : status === 'needs_correction' ? 'var(--danger)' : 'var(--text-secondary)';
+     }
+
+     // If already submitted, pre-load submission data for correction/repeat
+     if (submission && submission.id) {
+       this.currentFormSubmissionId = submission.id;
+     }
+
+      formCard.classList.remove('hidden');
+      FormRenderer.showFormLoading(container, 'Loading form…');
+
+     if (FormRenderer && typeof FormRenderer.renderForm === 'function') {
+       this.currentFormState = FormRenderer.renderForm(
+         formDef,
+         container,
+         {
+           onSubmit: (e, values, formState, formDef) => { this.handleFormSubmit(e, values, formState, formDef); },
+           onCancel: () => { this.hideFormModal(); },
+         }
+       );
+     }
+   },
+
+   async openFormForCaseById(formId) {
+     const forms = await this.getRequiredForms(this.currentCase.id, this.currentWorkflow?.instance?.current_state);
+     const formDef = forms.find(f => (f.id || f.key) === formId) || forms[0];
+     if (formDef) {
+       await this.openFormForCase(formDef);
+     }
+   },
+
+   renderWorkflowRequirements() {
+     const requirementsDiv = document.getElementById('form-workflow-requirements');
+     const requirementsList = document.getElementById('form-requirements-list');
+     if (!requirementsDiv || !requirementsList) return;
+
+     const transitions = this._cachedTransitions || [];
+     let requiredForms = [];
+
+     transitions.forEach(t => {
+       if (t.requires_forms && Array.isArray(t.requires_forms) && t.requires_forms.length) {
+         requiredForms = t.requires_forms;
+       }
+     });
+
+     if (requiredForms.length === 0) {
+       requirementsDiv.classList.add('hidden');
+       return;
+     }
+
+     const completed = requiredForms.every(fk => {
+       const sub = this.formSubmissions[fk];
+       return sub && (sub.status === 'SUBMITTED' || sub.status === 'submitted');
+     });
+
+     if (completed) {
+       requirementsDiv.classList.add('hidden');
+       return;
+     }
+
+     requirementsDiv.classList.remove('hidden');
+     requirementsList.innerHTML = requiredForms.map(fk => {
+       const sub = this.formSubmissions[fk];
+       const status = this.getFormSubmissionStatus(null, sub);
+       return `<li>${escapeHTML(fk)} — ${escapeHTML(this.formStatusLabel(status))}</li>`;
+     }).join('');
+   },
 
   async handleFormSubmit(e, values, formState, formDef) {
     const formCard = document.getElementById('card-dynamic-form');
     const container = document.getElementById('form-container');
     if (!formCard || !container) return;
 
-    const messageEl = container.querySelector('.form-message');
     const showMessage = (type, text) => {
       let msgEl = container.querySelector('.form-message');
       if (!msgEl) {
@@ -2040,55 +2254,81 @@ async loadSection(name, path) {
       }
       msgEl.textContent = text;
       msgEl.className = 'form-message ' + type;
+      msgEl.classList.remove('hidden');
     };
 
+    // Prevent duplicate submissions
+    if (this.currentSubmittingFormKey === formDef.key) {
+      showMessage('info', 'Submission in progress. Please wait.');
+      return;
+    }
+
+    // Clear previous messages
+    const messageEl = container.querySelector('.form-message');
     if (messageEl) {
       messageEl.classList.add('hidden');
       messageEl.textContent = '';
     }
 
-    // Disable submit button
+    // Disable submit button while request is pending
     const submitBtn = container.querySelector('button[type="submit"]');
     if (submitBtn) {
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span class="loading-spinner" style="width:16px;height:16px"></span> Submitting…';
     }
 
+    this.currentSubmittingFormKey = formDef.key;
+
     try {
-      const res = await submitForm(this.currentCase.id, values, {
+       const res = await FormAPI.submitForm(this.currentCase.id, values, {
         formKey: formDef.key,
         submissionId: this.currentFormSubmissionId,
       });
 
       showMessage('success', 'Form submitted successfully.');
       this.currentFormSubmissionId = res?.id || this.currentFormSubmissionId;
-      this.currentFormState = null;
 
-      // Clear form state after successful submission
-      formCard.style.display = 'none';
+      // Update submission cache
+      const formKey = formDef.key;
+      this.formSubmissions[formKey] = res || this.formSubmissions[formKey] || {};
 
-      // Reload case to reflect any workflow changes
-      await this.loadCase(this.currentCase.id);
-      this.renderSectionActions();
+      // Reload required forms to get fresh submission status
+      await this.loadRequiredForms(this.currentCase.id);
       this.renderActions();
 
       showToast('Form submitted successfully', 'success');
     } catch (err) {
       if (err.status === 403) {
-        showMessage('error', 'You are not authorized to submit this form.');
+        showMessage('error', 'You are not authorized to submit this form. Contact your administrator if you believe this is an error.');
+      } else if (err.status === 409) {
+        // Conflict — version mismatch or concurrent modification
+        const errData = err.data || {};
+        if (errData.error?.code === 'FORM_VERSION_MISMATCH') {
+          showMessage('error', 'The form has been updated since you started. Please refresh and resubmit your responses.');
+          await this.openFormForCase(formDef);
+        } else if (errData.error?.code === 'CONCURRENT_MODIFICATION') {
+          showMessage('error', 'The form was modified by another user. Please review the changes and resubmit.');
+          await this.openFormForCase(formDef);
+        } else {
+          showMessage('error', 'Unable to submit: the form no longer matches the expected version. Please reload and try again.');
+          await this.openFormForCase(formDef);
+        }
       } else if (err.status === 400) {
-        // Server-side validation errors
+        // Validation errors
         const errData = err.data || {};
         const fieldErrors = errData?.error?.field_errors || errData?.field_errors;
         if (fieldErrors) {
           formState.setServerErrors(fieldErrors);
-        } else {
-          showMessage('error', errData?.error?.message || err.message || 'Please correct the errors above.');
         }
+        const msg = errData?.error?.message || err.message || 'Please correct the errors above and try again.';
+        showMessage('error', msg);
+      } else if (err.message && (err.message.includes('timeout') || err.message.includes('NetworkError') || err.message.includes('fetch'))) {
+        showMessage('error', 'Network error: unable to reach the server. Your responses are saved locally. Please check your connection and try again.');
       } else {
-        showMessage('error', err.message);
+        showMessage('error', `Unable to submit form: ${err.message || 'Please try again.'}`);
       }
     } finally {
+      this.currentSubmittingFormKey = null;
       if (submitBtn) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<span class="icon">💾</span> Submit';

@@ -224,6 +224,37 @@
           </div>
         </div>
 
+         <div class="card" id="card-required-info">
+           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+             <h2 style="margin:0">Required Information</h2>
+             <span id="required-info-badge" class="badge" style="background:var(--info-light);color:var(--info);font-size:0.75rem"></span>
+           </div>
+           <div id="form-workflow-requirements" class="hidden" style="margin-bottom:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm)">
+             <strong style="display:block;font-size:0.85rem;margin-bottom:4px">Workflow Requirements</strong>
+             <ul id="form-requirements-list" style="margin:0;padding-left:20px;font-size:0.85rem">
+             </ul>
+           </div>
+            <div id="form-list" style="margin-bottom:16px">
+              <div id="case-form-list-loading" class="hidden" style="text-align:center;padding:20px"><div class="loading-spinner" aria-hidden="true"></div> Loading required forms…</div>
+              <div id="case-form-list-error" class="hidden" style="color:var(--danger);padding:12px;background:var(--danger-light);border-radius:var(--radius-sm)" role="alert"></div>
+              <ul id="form-requirements-list-container" style="list-style:none;padding:0;margin:0">
+             </ul>
+           </div>
+            <div id="card-dynamic-form" class="hidden">
+              <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+                <h2 id="dynamic-form-title" style="margin:0">Form</h2>
+                <span id="form-submission-status" class="text-muted" style="font-size:0.8rem"></span>
+              </div>
+              <div id="form-submission-progress" class="hidden" style="margin-bottom:12px">
+                <div class="workflow-progress-bar" style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                  <div id="form-submission-bar" class="workflow-progress-fill" style="width:0%;height:100%;background:var(--success,#16a34a);transition:width 0.3s"></div>
+                </div>
+                <small class="text-muted" id="form-submission-label">Not started</small>
+              </div>
+              <div id="form-container"></div>
+            </div>
+         </div>
+
          <div class="sections-grid">
            <div class="card" id="card-eligibility">
              <h2>Eligibility</h2>
@@ -249,15 +280,11 @@
              <h2>Follow-up</h2>
              <div id="sec-followup"></div>
            </div>
-         </div>
+          </div>
 
-         <div class="card" id="card-dynamic-form" style="display:none">
-           <h2 id="dynamic-form-title">Form</h2>
-           <div id="form-container"></div>
-         </div>
-       </div>
-     </div>
-   </div>
+        </div>
+      </div>
+    </div>
       </div>
     </div>
   </div>
