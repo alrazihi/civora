@@ -23,6 +23,8 @@ type WorkflowDefinitionRepository interface {
 	FindByKey(ctx context.Context, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)
 	FindByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)
 	ListByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*WorkflowDefinition, int, error)
+	ListActiveByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*WorkflowDefinition, int, error)
+	GetActiveByID(ctx context.Context, tenantID, id uuid.UUID) (*WorkflowDefinition, error)
 	UpdateStatus(ctx context.Context, tenantID, id uuid.UUID, status WorkflowDefinitionStatus, version int) error
 	UpdateStatusTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID, status WorkflowDefinitionStatus, version int) error
 }

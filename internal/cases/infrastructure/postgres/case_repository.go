@@ -55,15 +55,15 @@ func (r *PostgresCaseRepository) saveCase(ctx context.Context, e sqlExecer, c *d
 		INSERT INTO cases (
 			id, organization_id, case_number, title, description,
 			status, service_type, priority, person_id, created_by, assigned_to,
-			created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 	const maxRetries = 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		_, err := e.ExecContext(ctx, query,
 			c.ID, c.OrganizationID, c.CaseNumber, c.Title, c.Description,
 			c.Status, c.ServiceType, c.Priority, c.PersonID, c.CreatedByID, c.AssignedToID,
-			c.CreatedAt, c.UpdatedAt, c.ClosedAt, c.Version, c.WorkflowInstanceID, c.WorkflowState,
+			c.CreatedAt, c.UpdatedAt, c.ClosedAt, c.Version, c.WorkflowInstanceID, c.WorkflowState, c.WorkflowKey, c.WorkflowID,
 		)
 		if err == nil {
 			return nil
@@ -85,7 +85,7 @@ func (r *PostgresCaseRepository) FindByIDTx(ctx context.Context, tx *sql.Tx, org
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
+			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id
 		FROM cases
 		WHERE organization_id = $1 AND id = $2
 	`
@@ -108,7 +108,7 @@ func (r *PostgresCaseRepository) FindByOrganizationWithFilter(ctx context.Contex
 	query := `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
+			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id
 		FROM cases
 		WHERE organization_id = $1
 	`
@@ -245,7 +245,7 @@ func (r *PostgresCaseRepository) Statistics(ctx context.Context, orgID uuid.UUID
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, organization_id, case_number, title, description,
 			   status, service_type, priority, person_id, created_by, assigned_to,
-			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
+			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id
 		FROM cases
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
@@ -406,27 +406,41 @@ func (r *PostgresCaseRepository) scanCase(row interface {
 }) (*domain.Case, error) {
 	var c domain.Case
 	var workflowState sql.NullString
+	var workflowKey sql.NullString
+	var workflowIDBytes []byte
 	if err := row.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
 		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
-		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState, &workflowKey, &workflowIDBytes,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}
 	c.WorkflowState = workflowState.String
+	c.WorkflowKey = workflowKey.String
+	if workflowIDBytes != nil {
+		id := uuid.UUID(workflowIDBytes)
+		c.WorkflowID = &id
+	}
 	return &c, nil
 }
 
 func (r *PostgresCaseRepository) scanCaseFromRows(rows *sql.Rows) (*domain.Case, error) {
 	var c domain.Case
 	var workflowState sql.NullString
+	var workflowKey sql.NullString
+	var workflowIDBytes []byte
 	if err := rows.Scan(
 		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description,
 		&c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID,
-		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState,
+		&c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState, &workflowKey, &workflowIDBytes,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan case: %w", err)
 	}
 	c.WorkflowState = workflowState.String
+	c.WorkflowKey = workflowKey.String
+	if workflowIDBytes != nil {
+		id := uuid.UUID(workflowIDBytes)
+		c.WorkflowID = &id
+	}
 	return &c, nil
 }

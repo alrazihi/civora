@@ -33,8 +33,12 @@ type WorkflowService interface {
 	ArchiveWorkflowDefinition(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	GetWorkflowDefinition(ctx context.Context, tenantID, id uuid.UUID) (*domain.WorkflowDefinition, error)
 	ListWorkflowDefinitions(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error)
+	ListActiveForSelection(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error)
 	FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error)
 	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error)
+	CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*domain.WorkflowInstance, error)
+	CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*domain.WorkflowInstance, error)
+	CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*domain.WorkflowInstance, error)
 	ExecuteTransition(ctx context.Context, params application.ExecuteTransitionParams) (*domain.WorkflowInstance, error)
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params application.ExecuteTransitionParams) (*domain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error)
@@ -49,6 +53,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Get("/", h.ListWorkflowDefinitions)
+			r.Get("/selectable", h.ListActiveWorkflowDefinitions)
 			r.Get("/{workflowId}", h.GetWorkflowDefinition)
 		})
 
@@ -149,6 +154,50 @@ func (h *Handler) GetWorkflowDefinition(w http.ResponseWriter, r *http.Request) 
 	}
 
 	shared.WriteSuccess(w, http.StatusOK, serializeWorkflowDefinition(def), nil)
+}
+
+func (h *Handler) ListActiveWorkflowDefinitions(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 200 {
+		perPage = 200
+	}
+	offset := (page - 1) * perPage
+
+	definitions, total, err := h.svc.ListActiveForSelection(r.Context(), orgID, perPage, offset)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+
+	result := make([]map[string]interface{}, len(definitions))
+	for i, def := range definitions {
+		result[i] = map[string]interface{}{
+			"id":              def.ID,
+			"organization_id": def.TenantID,
+			"key":             def.Key,
+			"name":            def.Name,
+			"description":     def.Description,
+			"version":         def.Version,
+			"status":          def.Status,
+			"initial_state":   def.InitialState,
+			"created_at":      def.CreatedAt,
+			"updated_at":      def.UpdatedAt,
+		}
+	}
+	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
 }
 
 func (h *Handler) ListWorkflowDefinitions(w http.ResponseWriter, r *http.Request) {
@@ -577,6 +626,8 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow instance not found")
 	case errors.Is(err, domain.ErrWorkflowDefinitionNotFound{}):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow definition not found")
+	case errors.Is(err, domain.ErrWorkflowDefinitionNotActive{}):
+		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "workflow definition is not active")
 	case errors.Is(err, domain.ErrTenantViolation{}):
 		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "tenant violation")
 	case errors.Is(err, domain.TerminalStateError{}):
