@@ -36,6 +36,9 @@ import (
 	followupapi "github.com/alrazihi/civora/internal/followup/api"
 	followupapp "github.com/alrazihi/civora/internal/followup/application"
 	followuppostgres "github.com/alrazihi/civora/internal/followup/infrastructure/postgres"
+	formapi "github.com/alrazihi/civora/internal/forms/api"
+	formapp "github.com/alrazihi/civora/internal/forms/application"
+	formpostgres "github.com/alrazihi/civora/internal/forms/infrastructure/postgres"
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
@@ -93,6 +96,9 @@ func main() {
 	decisionRepo := decisionspostgres.NewPostgresDecisionRepository(db.DB)
 	assistanceRepo := assistancepostgres.NewPostgresAssistanceRepository(db.DB)
 	followUpRepo := followuppostgres.NewPostgresFollowUpRepository(db.DB)
+	formRepo := formpostgres.NewPostgresFormRepository(db.DB)
+	formVersionRepo := formpostgres.NewPostgresFormVersionRepository(db.DB)
+	formFieldRepo := formpostgres.NewPostgresFormFieldRepository(db.DB)
 
 	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
 	workflowStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db.DB)
@@ -170,6 +176,9 @@ func main() {
 	followUpService := followupapp.NewFollowUpService(followUpRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	followUpHandler := followupapi.NewHandler(followUpService)
 
+	formService := formapp.NewFormService(formRepo, formVersionRepo, formFieldRepo, auditService)
+	formHandler := formapi.NewHandler(formService)
+
 	auditHandler := auditapi.NewHandler(auditService)
 
 	workflowHandler := workflowapi.NewHandler(workflowService)
@@ -185,6 +194,7 @@ func main() {
 	decisionHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	assistanceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	formHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
