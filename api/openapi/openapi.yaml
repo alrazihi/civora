@@ -5,22 +5,23 @@ info:
   description: |
     CIVORA API - open digital infrastructure for public-interest service delivery.
 
-    Version: 0.2.0-service-delivery
+    Version: 0.3.0-workflow-engine
 
-    ## Public-Interest Service Delivery Lifecycle
+    ## Configurable Workflow-Driven Service Delivery
+
+    CIVORA now supports fully configurable workflow definitions: create
+    custom states and transitions, activate a definition, bind a case to it
+    via `workflow_id`, and drive the case through the workflow lifecycle.
+    Any state can be marked terminal; terminal states block further
+    transitions and set the case `closed_at` timestamp.
 
     Full end-to-end workflow for public service delivery:
-    Request → Person registered → Case created (NEW) → OPEN →
-    Eligibility assessed → Evidence collected → IN_REVIEW →
-    Assessment completed → DECISION_PENDING → Decision made →
-    APPROVED/REJECTED → IN_PROGRESS → Assistance provided →
-    FOLLOW_UP → CLOSED
+    Request → Person registered → Case created (initial state) →
+    Eligibility assessed → Evidence collected → Decision made →
+    Assistance provided → Terminal state reached
 
-    State machine:
-    NEW → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING →
-    APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
-    REJECTED → CLOSED
-  version: "0.2.0"
+    State machine is defined by the workflow definition, not hardcoded.
+  version: "0.3.0"
   contact:
     name: CIVORA
     url: https://github.com/alrazihi/civora

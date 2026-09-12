@@ -260,13 +260,26 @@ This threat model is reviewed:
 - When a new integration or external dependency is added.
 - After any security incident.
 
-Last reviewed: 2026-09-07.
-Next review due: Before milestone 0.3.
+Last reviewed: 2026-09-12.
+Next review due: Before milestone 0.4.
 
-## 6. v0.2 additions
+## 6. v0.3 additions
 
-The following threats apply specifically to the service delivery lifecycle
-modules added in v0.2 (eligibility, assistance, follow-up):
+The following threats apply specifically to the workflow engine modules
+added in v0.3 (workflow definitions, instances, transitions, history):
+
+### T-15: Workflow definition injection
+
+**Description**: Malicious workflow definitions with crafted state/transitions
+could cause infinite loops or unexpected state transitions.
+
+**Affected assets**: Workflow definitions, workflow instances.
+
+**Mitigation strategies**:
+- Workflow definitions are tenant-scoped; cross-tenant access is blocked.
+- Transition execution validates the instance belongs to the requesting tenant.
+- Terminal states block further transitions; no loops possible.
+- All transitions are recorded in `workflow_transition_history` for audit.
 
 ### T-14: JSONB injection in eligibility criteria
 
@@ -280,7 +293,7 @@ fields could exploit the JSON unmarshal path or cause panics.
 - Case number collision retry logic prevents DB-level injection.
 **Severity**: Medium
 
-### T-15: UPSERT race conditions in assistance/follow-up
+### T-16: UPSERT race conditions in assistance/follow-up
 
 **Description**: Concurrent UPSERT operations on assistance or follow-up
 records could lead to lost updates or inconsistent state.

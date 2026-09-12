@@ -1,6 +1,6 @@
 # CIVORA Audit Integrity Model
 
-> **Status**: Implemented in v0.2
+> **Status**: Implemented in v0.3
 > This document describes the audit subsystem as it actually exists in the
 > current codebase. It does not describe planned functionality.
 

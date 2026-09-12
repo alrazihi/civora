@@ -33,7 +33,7 @@ features.
 **Goal**: Implement the core public-interest service delivery lifecycle:
 eligibility assessment, assistance provisioning, and follow-up management.
 
-**Status**: In progress (partial implementation complete).
+**Status**: Complete.
 
 **Implemented**:
 - Eligibility module: eligibility checks with JSONB criteria storage
@@ -42,12 +42,13 @@ eligibility assessment, assistance provisioning, and follow-up management.
 - UPSERT repositories for all three modules
 - Extended OpenAPI specification with new schemas and endpoints
 - Configurable rate limiter for E2E test compatibility
-
-**Remaining**:
-- Workflow Definition model (state machines, transitions)
-- Workflow Instance execution
-- Basic rule evaluation
-- Webhook/event notifications for workflow events
+- Workflow Definition model (state machines, transitions) — configurable
+  via API, tenant-scoped, with draft→active→archived lifecycle
+- Workflow Instance execution — creates instance on case creation,
+  executes transitions, records history, syncs case status
+- Case binding to workflow via `workflow_id` (explicit selection)
+- Generic terminal-state handling — any state can be terminal;
+  `closed_at` set for any terminal state, not just "CLOSED"/"REJECTED"
 
 **Dependencies**: 0.1
 

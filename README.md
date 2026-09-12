@@ -22,8 +22,8 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.2** — Service delivery lifecycle (eligibility,
-assistance, follow-up modules).
+Current focus: **Milestone 0.3** — Workflow engine + generic case lifecycle
+  (configurable workflow definitions, case binding, transitions, audit).
 
 ## Quick Start
 
