@@ -181,7 +181,26 @@ const app = {
       showToast('Signed in successfully', 'success');
       router.navigate('dashboard');
     } catch (err) {
-      showToast(err.message, 'error');
+      const toast = document.getElementById('login-toast');
+      if (toast) { toast.textContent = err.message; toast.className = 'toast error'; }
+    }
+  },
+
+  switchAuthTab(tab) {
+    const loginPanel = document.getElementById('auth-login-panel');
+    const registerPanel = document.getElementById('auth-register-panel');
+    const loginTab = document.querySelector('.tab[data-tab="login"]');
+    const registerTab = document.querySelector('.tab[data-tab="register"]');
+    if (tab === 'login') {
+      loginPanel.classList.add('active');
+      registerPanel.classList.remove('active');
+      loginTab.classList.add('active');
+      registerTab.classList.remove('active');
+    } else {
+      registerPanel.classList.add('active');
+      loginPanel.classList.remove('active');
+      registerTab.classList.add('active');
+      loginTab.classList.remove('active');
     }
   },
 
@@ -194,10 +213,13 @@ const app = {
     try {
       await api('POST', `/organizations/${org}/auth/register`, { email, name, password });
       document.getElementById('register-form').reset();
-      document.getElementById('register-success').classList.remove('hidden');
+      const toast = document.getElementById('register-toast');
+      if (toast) { toast.textContent = 'Registered! You can now sign in.'; toast.className = 'toast success'; }
       showToast('Registered successfully! You can now sign in.', 'success');
+      this.switchAuthTab('login');
     } catch (err) {
-      showToast(err.message, 'error');
+      const toast = document.getElementById('register-toast');
+      if (toast) { toast.textContent = err.message; toast.className = 'toast error'; }
     }
   },
 

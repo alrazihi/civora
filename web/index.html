@@ -4,38 +4,118 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CIVORA - Service Delivery</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+              400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+              800: '#3730a3', 900: '#312e81',
+            }
+          },
+          fontFamily: {
+            sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          backdropBlur: {
+            xs: '2px',
+          }
+        }
+      }
+    }
+  </script>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
   <div id="view-login" class="hidden">
-    <div class="auth-form">
-      <div class="card">
-        <h1 style="text-align:center;margin-bottom:4px;font-size:2rem">CIVORA</h1>
-        <p style="text-align:center;color:var(--text-muted);margin-bottom:24px;font-size:1rem">Public Service Delivery Platform</p>
-        <form id="login-form" onsubmit="app.login(event)">
-          <label for="login-org">Organization Slug</label>
-          <input id="login-org" required placeholder="e.g. emergency-response">
-          <label for="login-email">Email</label>
-          <input id="login-email" type="email" required placeholder="staff@org.org">
-          <label for="login-password">Password</label>
-          <input id="login-password" type="password" required>
-          <button type="submit" class="btn" style="width:100%;justify-content:center"><span class="icon" aria-hidden="true">🔑</span> Sign In</button>
-        </form>
-        <hr style="margin:20px 0;border-color:var(--border)">
-        <p style="font-size:0.85rem;color:var(--text-muted);text-align:center;margin-bottom:16px">No account? Register below.</p>
-        <form id="register-form" onsubmit="app.register(event)">
-          <label for="reg-org">Organization Slug</label>
-          <input id="reg-org" required placeholder="e.g. emergency-response">
-          <label for="reg-name">Full Name</label>
-          <input id="reg-name" required placeholder="Jane Doe">
-          <label for="reg-email">Email</label>
-          <input id="reg-email" type="email" required placeholder="jane@org.org">
-          <label for="reg-password">Password (min 12 chars, 1 letter, 1 number)</label>
-          <input id="reg-password" type="password" required minlength="12">
-          <button type="submit" class="btn secondary" style="width:100%;justify-content:center"><span class="icon" aria-hidden="true">📝</span> Create Account</button>
-        </form>
-        <p id="register-success" class="hidden" style="color:var(--success);text-align:center;margin-top:12px;font-weight:500">Registered! You can now sign in.</p>
+    <div class="auth-page">
+      <div class="auth-card">
+        <div class="brand">
+          <div class="logo">⚡</div>
+          <h1>CIVORA</h1>
+          <p class="subtitle">Public Service Delivery Platform</p>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="login" onclick="app.switchAuthTab('login')">Sign In</button>
+          <button class="tab" data-tab="register" onclick="app.switchAuthTab('register')">Create Account</button>
+        </div>
+
+        <div class="tab-panel active" id="auth-login-panel">
+          <form id="login-form" onsubmit="app.login(event)">
+            <div class="form-group">
+              <label for="login-org">Organization Slug</label>
+              <div class="input-wrap">
+                <span class="field-icon">🏢</span>
+                <input id="login-org" required placeholder="e.g. emergency-response">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="login-email">Email</label>
+              <div class="input-wrap">
+                <span class="field-icon">✉️</span>
+                <input id="login-email" type="email" required placeholder="staff@org.org">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="login-password">Password</label>
+              <div class="input-wrap">
+                <span class="field-icon">🔑</span>
+                <input id="login-password" type="password" required placeholder="••••••••">
+              </div>
+            </div>
+            <div class="form-footer">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--text-muted)">
+                <input type="checkbox" id="login-remember" style="accent-color:var(--primary)">
+                Remember me
+              </label>
+              <a href="#" onclick="app.switchAuthTab('register')">Create account</a>
+            </div>
+            <button type="submit" class="btn btn-auth">Sign In</button>
+          </form>
+          <div id="login-toast" class="toast"></div>
+        </div>
+
+        <div class="tab-panel" id="auth-register-panel">
+          <form id="register-form" onsubmit="app.register(event)">
+            <div class="form-group">
+              <label for="reg-org">Organization Slug</label>
+              <div class="input-wrap">
+                <span class="field-icon">🏢</span>
+                <input id="reg-org" required placeholder="e.g. emergency-response">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-name">Full Name</label>
+              <div class="input-wrap">
+                <span class="field-icon">👤</span>
+                <input id="reg-name" required placeholder="Jane Doe">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-email">Email</label>
+              <div class="input-wrap">
+                <span class="field-icon">✉️</span>
+                <input id="reg-email" type="email" required placeholder="jane@org.org">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Password</label>
+              <div class="input-wrap">
+                <span class="field-icon">🔒</span>
+                <input id="reg-password" type="password" required minlength="12" placeholder="Min 12 chars, 1 letter + 1 number">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-auth secondary">Create Account</button>
+          </form>
+          <div id="register-toast" class="toast"></div>
+          <div class="footer-links">
+            Already have an account? <a href="#" onclick="app.switchAuthTab('login')">Sign in</a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
