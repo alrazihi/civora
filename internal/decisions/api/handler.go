@@ -38,9 +38,9 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Post("/", h.MakeDecision)
 			r.Get("/", h.ListDecisions)
+			r.Get("/{decisionId}", h.GetDecision)
+			r.Get("/by-service-request/{serviceRequestId}", h.GetByServiceRequest)
 		})
-		r.Get("/{decisionId}", h.GetDecision)
-		r.Get("/by-service-request/{serviceRequestId}", h.GetByServiceRequest)
 	})
 }
 
@@ -79,6 +79,7 @@ func (h *Handler) MakeDecision(w http.ResponseWriter, r *http.Request) {
 		Decision:         req.Decision,
 		Reason:           req.Reason,
 		ActorID:          actorID,
+		ActorRole:        middleware.GetUserRole(r),
 	})
 	if err != nil {
 		writeDecisionError(w, err)

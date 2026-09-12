@@ -30,11 +30,12 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	r := chi.NewRouter()
 
 	rl := middleware.NewRateLimiter(cfg.Server.RateLimit, cfg.Server.RateLimitBurst)
+	rl.SetTrustedProxies(cfg.Server.TrustedProxies)
 	idemStore := middleware.NewIdempotencyStore(24 * time.Hour)
 
 	r.Use(middleware.SecureHeaders)
 	r.Use(middleware.RequestID)
-	r.Use(middleware.Logging)
+	r.Use(middleware.Logging(cfg.Server.TrustedProxies))
 	r.Use(middleware.Recover)
 	r.Use(middleware.CORSHandler(cfg))
 	r.Use(middleware.RateLimit(rl))

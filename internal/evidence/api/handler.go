@@ -37,9 +37,9 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Post("/", h.AddEvidence)
 			r.Get("/", h.ListEvidence)
+			r.Get("/by-service-request/{serviceRequestId}", h.ListEvidence)
+			r.Get("/{evidenceId}", h.GetEvidence)
 		})
-		r.Get("/by-service-request/{serviceRequestId}", h.ListEvidence)
-		r.Get("/{evidenceId}", h.GetEvidence)
 	})
 }
 

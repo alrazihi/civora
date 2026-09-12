@@ -224,7 +224,7 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 
 		if s.auditor != nil {
 			defIDStr := def.ID.String()
-			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: tenantID,
 				ActorID:        &actorID,
 				Action:         "workflow.definition_activated",
@@ -236,7 +236,9 @@ func (s *WorkflowService) ActivateWorkflowDefinition(ctx context.Context, tenant
 					"key":     def.Key,
 					"version": def.Version,
 				},
-			})
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
 		}
 
 		return nil
@@ -278,7 +280,7 @@ func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantI
 
 		if s.auditor != nil {
 			defIDStr := def.ID.String()
-			_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: tenantID,
 				ActorID:        &actorID,
 				Action:         "workflow.definition_archived",
@@ -290,7 +292,9 @@ func (s *WorkflowService) ArchiveWorkflowDefinition(ctx context.Context, tenantI
 					"key":     def.Key,
 					"version": def.Version,
 				},
-			})
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
 		}
 
 		return nil
@@ -655,7 +659,7 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 		return nil, domain.ErrTransitionNotFound{FromState: instance.CurrentState, ToState: ""}
 	}
 
-	if len(transition.AllowedRoles) > 0 && params.ActorRole != "" {
+	if len(transition.AllowedRoles) > 0 {
 		allowed := false
 		for _, role := range transition.AllowedRoles {
 			if role == params.ActorRole {

@@ -130,14 +130,40 @@ func TestIdempotencyKey_ReturnsCachedResponse(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodPost, "/test", nil)
 	r.Header.Set("Idempotency-Key", "test-key")
+	r.Header.Set("Authorization", "token-a")
 
 	rec := httptest.NewRecorder()
 
-	store.Set(hashKey(http.MethodPost, "/test", "test-key"), cachedRec)
+	store.Set(hashKey(http.MethodPost, "/test", "test-key", "token-a"), cachedRec)
 	handler.ServeHTTP(rec, r)
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 	body := rec.Body.String()
 	assert.Contains(t, body, `"success":true,"data":123`)
+}
+
+func TestIdempotencyKey_IsScopedToAuthorization(t *testing.T) {
+	store := NewIdempotencyStore(1 * time.Hour)
+	defer store.Stop()
+
+	called := false
+	handler := IdempotencyKey(store)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+	}))
+
+	r := httptest.NewRequest(http.MethodPost, "/test", nil)
+	r.Header.Set("Idempotency-Key", "test-key")
+	r.Header.Set("Authorization", "token-b")
+	rec := httptest.NewRecorder()
+	store.Set(hashKey(http.MethodPost, "/test", "test-key", "token-a"), &IdempotencyRecord{
+		StatusCode: http.StatusOK,
+		Body:       []byte(`{"success":true}`),
+	})
+
+	handler.ServeHTTP(rec, r)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusCreated, rec.Code)
 }

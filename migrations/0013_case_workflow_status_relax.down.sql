@@ -1,0 +1,5 @@
+ALTER TABLE cases DROP CONSTRAINT IF EXISTS chk_case_status_nonempty;
+ALTER TABLE cases
+    ADD CONSTRAINT valid_case_status CHECK (
+        status IN ('NEW', 'OPEN', 'IN_REVIEW', 'ASSESSMENT', 'DECISION_PENDING', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'FOLLOW_UP', 'CLOSED')
+    );

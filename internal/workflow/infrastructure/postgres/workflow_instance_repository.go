@@ -148,7 +148,7 @@ func (r *PostgresWorkflowInstanceRepository) updateState(ctx context.Context, e 
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("concurrent modification detected")
+		return domain.ErrConcurrentModification{}
 	}
 	return nil
 }
@@ -178,7 +178,7 @@ func (r *PostgresWorkflowInstanceRepository) complete(ctx context.Context, e int
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("concurrent modification detected")
+		return domain.ErrConcurrentModification{}
 	}
 	return nil
 }

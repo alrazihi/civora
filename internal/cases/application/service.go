@@ -228,7 +228,7 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 		c.Status = updatedCase.Status
 		c.WorkflowState = updatedCase.WorkflowState
 		c.Version = updatedCase.Version
-		if updatedCase.Status == domain.CaseStatusClosed {
+		if domain.IsClosed(updatedCase.Status) {
 			now := time.Now().UTC()
 			c.ClosedAt = &now
 		}
@@ -349,6 +349,14 @@ func (s *CaseService) ListCases(ctx context.Context, orgID uuid.UUID, limit, off
 	}
 
 	return cases, total, nil
+}
+
+func (s *CaseService) GetStatistics(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error) {
+	stats, err := s.repo.Statistics(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate case statistics: %w", err)
+	}
+	return stats, nil
 }
 
 type TimelineEvent struct {

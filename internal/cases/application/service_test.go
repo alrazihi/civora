@@ -114,6 +114,38 @@ func (m *mockCaseRepository) CountByOrganization(ctx context.Context, orgID uuid
 	return count, nil
 }
 
+func (m *mockCaseRepository) Statistics(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	stats := &domain.CaseStatistics{
+		ByStatus:      make(map[string]int),
+		ByServiceType: make(map[string]int),
+		ByPriority:    make(map[string]int),
+	}
+	for _, c := range m.cases {
+		if c.OrganizationID != orgID {
+			continue
+		}
+		stats.Total++
+		if c.Status != domain.CaseStatusClosed && c.Status != domain.CaseStatusRejected {
+			stats.Open++
+		}
+		if c.Status == domain.CaseStatusClosed {
+			stats.Closed++
+		}
+		if c.Status == domain.CaseStatusRejected {
+			stats.Rejected++
+		}
+		if c.Priority == domain.PriorityUrgent {
+			stats.Urgent++
+		}
+		stats.ByStatus[string(c.Status)]++
+		stats.ByServiceType[string(c.ServiceType)]++
+		stats.ByPriority[string(c.Priority)]++
+	}
+	return stats, nil
+}
+
 func (m *mockCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
 	return m.UpdateStatusTx(ctx, nil, orgID, id, status, version)
 }
@@ -740,4 +772,28 @@ func TestOnTransition_TenantIsolation(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found",
 		"observer should fail when the case cannot be found in the instance's tenant")
+}
+
+func TestGetStatistics_IsTenantScoped(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	org1 := uuid.New()
+	org2 := uuid.New()
+	c1, _ := domain.NewCase(org1, uuid.New(), "One", "Desc", domain.ServiceTypeEmergency, domain.PriorityUrgent, nil)
+	c1.Status = domain.CaseStatusClosed
+	repo.cases[c1.ID] = c1
+	c2, _ := domain.NewCase(org2, uuid.New(), "Two", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c2.Status = domain.CaseStatusRejected
+	repo.cases[c2.ID] = c2
+
+	stats, err := svc.GetStatistics(context.Background(), org1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats.Total)
+	assert.Equal(t, 0, stats.Open)
+	assert.Equal(t, 1, stats.Closed)
+	assert.Equal(t, 0, stats.Rejected)
+	assert.Equal(t, 1, stats.Urgent)
+	assert.Equal(t, 1, stats.ByStatus[string(domain.CaseStatusClosed)])
+	assert.Equal(t, 1, stats.ByServiceType[string(domain.ServiceTypeEmergency)])
 }

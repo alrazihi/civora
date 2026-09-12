@@ -50,6 +50,9 @@ func TestIsClosed(t *testing.T) {
 	t.Run("closed case", func(t *testing.T) {
 		assert.True(t, IsClosed(CaseStatusClosed))
 	})
+	t.Run("rejected case", func(t *testing.T) {
+		assert.True(t, IsClosed(CaseStatusRejected))
+	})
 	t.Run("open case", func(t *testing.T) {
 		assert.False(t, IsClosed(CaseStatusOpen))
 	})

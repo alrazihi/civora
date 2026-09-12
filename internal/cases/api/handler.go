@@ -27,6 +27,7 @@ func NewHandler(svc CaseService) *Handler {
 type CaseService interface {
 	CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
 	ListCases(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
+	GetStatistics(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error)
 	GetCase(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
 	GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
 	ChangeStatus(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
@@ -39,10 +40,14 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Use(middleware.RequireSameTenant)
 		r.Post("/", h.CreateCase)
 		r.Get("/", h.ListCases)
-		r.Get("/{caseId}", h.GetCase)
-		r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/dashboard/statistics", h.GetStatistics)
+		})
+		r.Get("/{caseId}", h.GetCase)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)
 			r.Post("/{caseId}/assign", h.AssignCase)
 		})
@@ -145,7 +150,7 @@ func (h *Handler) GetCaseTimeline(w http.ResponseWriter, r *http.Request) {
 
 	timeline, err := h.svc.GetCaseTimeline(r.Context(), orgID, caseID)
 	if err != nil {
-		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, err.Error())
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to load case timeline")
 		return
 	}
 
@@ -216,6 +221,22 @@ func (h *Handler) ListCases(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
+}
+
+func (h *Handler) GetStatistics(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	stats, err := h.svc.GetStatistics(r.Context(), orgID)
+	if err != nil {
+		writeCaseError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, stats, nil)
 }
 
 func (h *Handler) ChangeCaseStatus(w http.ResponseWriter, r *http.Request) {
@@ -376,6 +397,12 @@ func writeCaseError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "case not found")
 	case errors.Is(err, application.ErrCaseInvalidInput), errors.Is(err, domain.ErrCaseInvalidInput):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
+	case errors.Is(err, workflowdomain.ErrConcurrentModification{}):
+		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "workflow state changed concurrently; retry the transition")
+	case errors.Is(err, workflowdomain.ErrUnauthorizedTransition{}):
+		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "transition not permitted")
+	case errors.Is(err, workflowdomain.TerminalStateError{}), errors.Is(err, workflowdomain.ErrTransitionNotFound{}):
+		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "transition not permitted")
 	case errors.Is(err, application.ErrCaseTransition), errors.Is(err, domain.ErrInvalidStateTransition):
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "invalid state transition")
 	case errors.Is(err, workflowdomain.ErrWorkflowInstanceNotFound{}):

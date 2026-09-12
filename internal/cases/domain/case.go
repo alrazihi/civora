@@ -3,7 +3,9 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -22,6 +24,17 @@ const (
 	CaseStatusFollowUp        CaseStatus = "FOLLOW_UP"
 	CaseStatusClosed          CaseStatus = "CLOSED"
 )
+
+type CaseStatistics struct {
+	Total         int            `json:"total"`
+	Open          int            `json:"open"`
+	Closed        int            `json:"closed"`
+	Rejected      int            `json:"rejected"`
+	Urgent        int            `json:"urgent"`
+	ByStatus      map[string]int `json:"by_status"`
+	ByServiceType map[string]int `json:"by_service_type"`
+	ByPriority    map[string]int `json:"by_priority"`
+}
 
 type ServiceType string
 
@@ -159,7 +172,7 @@ func (c *Case) SyncStatusFromWorkflow(state string) error {
 	}
 	c.Status = CaseStatus(state)
 	c.UpdatedAt = time.Now().UTC()
-	if CaseStatus(state) == CaseStatusClosed {
+	if IsClosed(CaseStatus(state)) {
 		closedAt := time.Now().UTC()
 		c.ClosedAt = &closedAt
 	}
@@ -167,11 +180,11 @@ func (c *Case) SyncStatusFromWorkflow(state string) error {
 }
 
 func IsClosed(status CaseStatus) bool {
-	return status == CaseStatusClosed
+	return status == CaseStatusClosed || status == CaseStatusRejected
 }
 
 func IsValidStatus(status string) bool {
-	return status != ""
+	return status != "" && len(status) <= 100 && !strings.ContainsFunc(status, unicode.IsControl)
 }
 
 func GenerateCaseNumber(t time.Time) string {

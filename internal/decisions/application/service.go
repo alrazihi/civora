@@ -65,6 +65,7 @@ type MakeDecisionParams struct {
 	Decision         decisionsdomain.DecisionType
 	Reason           string
 	ActorID          uuid.UUID
+	ActorRole        string
 }
 
 func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionParams) (*decisionsdomain.Decision, error) {
@@ -135,7 +136,7 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 			InstanceID:    instance.ID,
 			TransitionKey: targetTransition.Key,
 			ActorID:       params.ActorID,
-			ActorRole:     "",
+			ActorRole:     params.ActorRole,
 			Reason:        params.Reason,
 		})
 		if err != nil {

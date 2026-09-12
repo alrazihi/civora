@@ -240,7 +240,7 @@ func TestRequestID_GeneratesID(t *testing.T) {
 }
 
 func TestRequestID_UsesClientID(t *testing.T) {
-	clientID := "client-provided-id"
+	clientID := "4011769a-764b-4f9f-9dfe-4d25b8e5fc9a"
 	handler := RequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := GetRequestID(r)
 		assert.Equal(t, clientID, id)

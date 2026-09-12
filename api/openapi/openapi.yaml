@@ -241,7 +241,7 @@ components:
           nullable: true
         status:
           type: string
-          enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
+          description: Case status synchronized from the configured workflow
         service_type:
           type: string
           enum: [GENERAL, EMERGENCY, FINANCIAL, FOOD, SHELTER, MEDICAL, EDUCATION, TRANSPORT]
@@ -276,7 +276,49 @@ components:
           type: string
           nullable: true
           description: Authoritative lifecycle state from the linked workflow instance. Mirrors status but is the single source of truth for lifecycle transitions.
-          enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
+
+    CaseStatistics:
+      type: object
+      required: [total, open, closed, rejected, urgent, by_status, by_service_type, by_priority]
+      properties:
+        total:
+          type: integer
+          format: int32
+          minimum: 0
+        open:
+          type: integer
+          format: int32
+          minimum: 0
+        closed:
+          type: integer
+          format: int32
+          minimum: 0
+        rejected:
+          type: integer
+          format: int32
+          minimum: 0
+        urgent:
+          type: integer
+          format: int32
+          minimum: 0
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+            minimum: 0
+        by_service_type:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+            minimum: 0
+        by_priority:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+            minimum: 0
 
     CreateCaseRequest:
       type: object
@@ -305,8 +347,7 @@ components:
       properties:
         status:
           type: string
-          enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
-
+          description: Workflow state key to transition to
     AssignCaseRequest:
       type: object
       required: [user_id]
@@ -520,7 +561,7 @@ components:
 
     CreateEvidenceRequest:
       type: object
-      required: [service_request_id, type, description]
+      required: [service_request_id, type, description, storage_reference]
       properties:
         service_request_id:
           type: string
@@ -531,7 +572,9 @@ components:
           enum: [IDENTITY_DOCUMENT, PROOF_OF_RESIDENCE, REFERRAL, SUPPORTING_DOCUMENT, PHOTOGRAPH, STAFF_NOTE]
         description:
           type: string
-
+        storage_reference:
+          type: string
+          description: Validated object storage URI; accepted schemes are s3, gs, azureblob, and civora.
     Assessment:
       type: object
       required: [id, organization_id, service_request_id, findings, recommendation, assessor, assessed_at, created_at]
@@ -1376,8 +1419,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [NEW, OPEN, IN_REVIEW, ASSESSMENT, DECISION_PENDING, APPROVED, REJECTED, IN_PROGRESS, FOLLOW_UP, CLOSED]
-          description: Filter cases by status
+            description: Filter cases by status
       responses:
         '200':
           description: List of cases with pagination
@@ -1392,6 +1434,34 @@ paths:
                   $ref: '#/components/schemas/Case'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{orgId}/cases/dashboard/statistics:
+    get:
+      operationId: getCaseDashboardStatistics
+      tags: [Cases]
+      summary: Get tenant-scoped case statistics
+      description: Returns aggregate case counts for the authenticated organization. Requires an admin or staff role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Aggregate case statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseStatistics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /organizations/{orgId}/cases/{caseId}:
     get:

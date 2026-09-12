@@ -100,7 +100,7 @@ func IdempotencyKey(store *IdempotencyStore) func(http.Handler) http.Handler {
 				return
 			}
 
-			cacheKey := hashKey(r.Method, r.URL.Path, key)
+			cacheKey := hashKey(r.Method, r.URL.Path, key, r.Header.Get("Authorization"))
 			if rec, ok := store.Get(cacheKey); ok {
 				for k, vs := range rec.Headers {
 					for _, v := range vs {
@@ -125,9 +125,9 @@ func IdempotencyKey(store *IdempotencyStore) func(http.Handler) http.Handler {
 	}
 }
 
-func hashKey(method, path, key string) string {
+func hashKey(method, path, key, principal string) string {
 	h := sha256.New()
-	h.Write([]byte(method + ":" + path + ":" + key))
+	h.Write([]byte(method + ":" + path + ":" + key + ":" + principal))
 	return hex.EncodeToString(h.Sum(nil))
 }
 

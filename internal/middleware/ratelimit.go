@@ -15,13 +15,14 @@ type visitor struct {
 }
 
 type RateLimiter struct {
-	visitors map[string]*visitor
-	mu       sync.RWMutex
-	limit    int
-	burst    int
-	ttl      time.Duration
-	stopCh   chan struct{}
-	stopOnce sync.Once
+	visitors       map[string]*visitor
+	mu             sync.RWMutex
+	limit          int
+	burst          int
+	ttl            time.Duration
+	trustedProxies []string
+	stopCh         chan struct{}
+	stopOnce       sync.Once
 }
 
 func NewRateLimiter(requestsPerSecond, burst int) *RateLimiter {
@@ -34,6 +35,12 @@ func NewRateLimiter(requestsPerSecond, burst int) *RateLimiter {
 	}
 	go rl.runCleanup()
 	return rl
+}
+
+func (rl *RateLimiter) SetTrustedProxies(trustedProxies []string) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.trustedProxies = append([]string(nil), trustedProxies...)
 }
 
 func (rl *RateLimiter) Stop() {
@@ -81,7 +88,7 @@ func (rl *RateLimiter) cleanup() {
 func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := realIP(r)
+			ip := realIP(r, rl.trustedProxies)
 			v := rl.getVisitor(ip)
 
 			rl.mu.Lock()

@@ -44,4 +44,19 @@ func TestNewEvidence(t *testing.T) {
 		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, "Note", strings.Repeat("x", 501))
 		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
 	})
+
+	t.Run("storage reference rejects local paths", func(t *testing.T) {
+		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, "Note", "../../etc/passwd")
+		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
+	})
+
+	t.Run("storage reference rejects encoded traversal", func(t *testing.T) {
+		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, "Note", "s3://bucket/%2e%2e/secret")
+		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
+	})
+
+	t.Run("storage reference rejects unsupported schemes", func(t *testing.T) {
+		_, err := NewEvidence(uuid.New(), uuid.New(), uuid.New(), EvidenceTypeStaffNote, "Note", "file:///etc/passwd")
+		assert.ErrorIs(t, err, ErrEvidenceInvalidInput)
+	})
 }

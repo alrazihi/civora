@@ -147,6 +147,7 @@ type (
 	ErrTenantViolation            struct{}
 	TerminalStateError            struct{ State string }
 	ErrWorkflowInstanceExists     struct{ CaseID uuid.UUID }
+	ErrConcurrentModification     struct{}
 	ErrTransitionNotFound         struct{ FromState, ToState string }
 	ErrUnauthorizedTransition     struct {
 		TransitionKey string
@@ -196,6 +197,15 @@ func (e ErrWorkflowInstanceExists) Error() string {
 
 func (e ErrWorkflowInstanceExists) Is(target error) bool {
 	_, ok := target.(ErrWorkflowInstanceExists)
+	return ok
+}
+
+func (ErrConcurrentModification) Error() string {
+	return "workflow instance was modified concurrently"
+}
+
+func (ErrConcurrentModification) Is(target error) bool {
+	_, ok := target.(ErrConcurrentModification)
 	return ok
 }
 

@@ -58,6 +58,10 @@ func (r *PostgresAuditRepository) RecordEventTx(ctx context.Context, tx *sql.Tx,
 }
 
 func (r *PostgresAuditRepository) writeEvent(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, event *domain.AuditEvent) error {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, orgID.String()); err != nil {
+		return fmt.Errorf("failed to lock audit chain: %w", err)
+	}
+
 	var lastHash *string
 	err := tx.QueryRowContext(ctx, `
 		SELECT hash FROM audit.audit_events
@@ -302,15 +306,133 @@ func (r *PostgresAuditRepository) AllOrganizationIDs(ctx context.Context) ([]uui
 }
 
 func (r *PostgresAuditRepository) PurgeOld(ctx context.Context, olderThan time.Time) (int, error) {
-	result, err := r.db.ExecContext(ctx, `
-		DELETE FROM audit.audit_events WHERE timestamp < $1
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin audit purge transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT DISTINCT organization_id
+		FROM audit.audit_events
+		WHERE timestamp < $1
+		ORDER BY organization_id
 	`, olderThan)
 	if err != nil {
-		return 0, fmt.Errorf("failed to purge old audit events: %w", err)
+		return 0, fmt.Errorf("failed to list audit organizations for purge: %w", err)
 	}
-	n, err := result.RowsAffected()
+	var orgIDs []uuid.UUID
+	for rows.Next() {
+		var orgID uuid.UUID
+		if err := rows.Scan(&orgID); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("failed to scan audit organization: %w", err)
+		}
+		orgIDs = append(orgIDs, orgID)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, fmt.Errorf("failed to iterate audit organizations: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close audit organization query: %w", err)
+	}
+
+	var total int64
+	for _, orgID := range orgIDs {
+		if _, err := tx.ExecContext(ctx, `
+			SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+		`, orgID.String()); err != nil {
+			return 0, fmt.Errorf("failed to lock audit chain: %w", err)
+		}
+
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM audit.audit_events
+			WHERE organization_id = $1 AND timestamp < $2
+		`, orgID, olderThan)
+		if err != nil {
+			return 0, fmt.Errorf("failed to purge old audit events: %w", err)
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		total += n
+
+		if err := r.rebuildAuditChain(ctx, tx, orgID); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit audit purge transaction: %w", err)
+	}
+	committed = true
+	return int(total), nil
+}
+
+func (r *PostgresAuditRepository) rebuildAuditChain(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, organization_id, actor_id, action, resource, resource_id,
+		       outcome, request_id, metadata, timestamp, previous_hash, hash
+		FROM audit.audit_events
+		WHERE organization_id = $1
+		ORDER BY timestamp ASC, id ASC
+		FOR UPDATE
+	`, orgID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("failed to read audit chain: %w", err)
 	}
-	return int(n), nil
+	defer func() { _ = rows.Close() }()
+
+	var previousHash *string
+	for rows.Next() {
+		var event domain.AuditEvent
+		var metadataJSON []byte
+		if err := rows.Scan(
+			&event.ID,
+			&event.OrganizationID,
+			&event.ActorID,
+			&event.Action,
+			&event.Resource,
+			&event.ResourceID,
+			&event.Outcome,
+			&event.RequestID,
+			&metadataJSON,
+			&event.Timestamp,
+			&event.PreviousHash,
+			&event.Hash,
+		); err != nil {
+			return fmt.Errorf("failed to scan audit chain: %w", err)
+		}
+		if len(metadataJSON) > 0 {
+			if err := json.Unmarshal(metadataJSON, &event.Metadata); err != nil {
+				return fmt.Errorf("failed to unmarshal audit metadata: %w", err)
+			}
+		}
+
+		event.PreviousHash = previousHash
+		hash, err := event.ComputeHash()
+		if err != nil {
+			return fmt.Errorf("failed to recompute audit hash: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE audit.audit_events
+			SET previous_hash = $1, hash = $2
+			WHERE id = $3
+		`, event.PreviousHash, hash, event.ID); err != nil {
+			return fmt.Errorf("failed to update audit chain: %w", err)
+		}
+		hashValue := hash
+		previousHash = &hashValue
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate audit chain: %w", err)
+	}
+	return nil
 }

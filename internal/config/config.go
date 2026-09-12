@@ -23,6 +23,7 @@ type ServerConfig struct {
 	WriteTimeout   time.Duration
 	IdleTimeout    time.Duration
 	CORSOrigins    []string
+	TrustedProxies []string
 	RateLimit      int
 	RateLimitBurst int
 }
@@ -61,6 +62,7 @@ func Load() (*Config, error) {
 			WriteTimeout:   getEnvDuration("CIVORA_SERVER_WRITE_TIMEOUT", 30*time.Second),
 			IdleTimeout:    getEnvDuration("CIVORA_SERVER_IDLE_TIMEOUT", 120*time.Second),
 			CORSOrigins:    getEnvCSV("CIVORA_SERVER_CORS_ORIGINS", "http://localhost:3000"),
+			TrustedProxies: getEnvList("CIVORA_SERVER_TRUSTED_PROXIES"),
 			RateLimit:      getEnvInt("CIVORA_SERVER_RATE_LIMIT", 1000),
 			RateLimitBurst: getEnvInt("CIVORA_SERVER_RATE_LIMIT_BURST", 200),
 		},
@@ -129,6 +131,21 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+func getEnvList(key string) []string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	result := parts[:0]
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func getEnvCSV(key, fallback string) []string {

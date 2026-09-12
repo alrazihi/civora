@@ -174,6 +174,80 @@ func (r *PostgresCaseRepository) CountByOrganization(ctx context.Context, orgID 
 	return total, nil
 }
 
+func (r *PostgresCaseRepository) Statistics(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error) {
+	stats := &domain.CaseStatistics{
+		ByStatus:      make(map[string]int),
+		ByServiceType: make(map[string]int),
+		ByPriority:    make(map[string]int),
+	}
+
+	var total, open, closed, rejected, urgent int64
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status NOT IN ('CLOSED', 'REJECTED')),
+			COUNT(*) FILTER (WHERE status = 'CLOSED'),
+			COUNT(*) FILTER (WHERE status = 'REJECTED'),
+			COUNT(*) FILTER (WHERE priority = 'URGENT')
+		FROM cases
+		WHERE organization_id = $1
+	`, orgID).Scan(&total, &open, &closed, &rejected, &urgent); err != nil {
+		return nil, fmt.Errorf("failed to calculate case totals: %w", err)
+	}
+	stats.Total = int(total)
+	stats.Open = int(open)
+	stats.Closed = int(closed)
+	stats.Rejected = int(rejected)
+	stats.Urgent = int(urgent)
+
+	if err := r.scanCounts(ctx, `
+		SELECT status, COUNT(*)
+		FROM cases
+		WHERE organization_id = $1
+		GROUP BY status
+	`, orgID, stats.ByStatus); err != nil {
+		return nil, err
+	}
+	if err := r.scanCounts(ctx, `
+		SELECT service_type, COUNT(*)
+		FROM cases
+		WHERE organization_id = $1
+		GROUP BY service_type
+	`, orgID, stats.ByServiceType); err != nil {
+		return nil, err
+	}
+	if err := r.scanCounts(ctx, `
+		SELECT priority, COUNT(*)
+		FROM cases
+		WHERE organization_id = $1
+		GROUP BY priority
+	`, orgID, stats.ByPriority); err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
+func (r *PostgresCaseRepository) scanCounts(ctx context.Context, query string, orgID uuid.UUID, target map[string]int) error {
+	rows, err := r.db.QueryContext(ctx, query, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to calculate case groups: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var key string
+		var count int64
+		if err := rows.Scan(&key, &count); err != nil {
+			return fmt.Errorf("failed to scan case group: %w", err)
+		}
+		target[key] = int(count)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate case groups: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresCaseRepository) UpdateStatus(ctx context.Context, orgID, id uuid.UUID, status domain.CaseStatus, version int) error {
 	return r.updateStatus(ctx, r.db, orgID, id, status, version)
 }
@@ -189,7 +263,7 @@ func (r *PostgresCaseRepository) UpdateWorkflowStateTx(ctx context.Context, tx *
 	query := `
 		UPDATE cases
 		SET workflow_state = $1, status = $1, version = version + 1, updated_at = now(),
-		    closed_at = CASE WHEN $1 = 'CLOSED' THEN now() ELSE closed_at END
+		    closed_at = CASE WHEN $1 IN ('CLOSED', 'REJECTED') THEN now() ELSE closed_at END
 		WHERE organization_id = $2 AND id = $3 AND version = $4
 	`
 	result, err := tx.ExecContext(ctx, query, workflowState, orgID, id, version)
@@ -211,7 +285,7 @@ func (r *PostgresCaseRepository) updateStatus(ctx context.Context, e sqlExecer, 
 		UPDATE cases
 		SET status = $1, version = version + 1, updated_at = now(),
 		    workflow_state = $5,
-		    closed_at = CASE WHEN $1 = 'CLOSED' THEN now() ELSE closed_at END
+		    closed_at = CASE WHEN $1 IN ('CLOSED', 'REJECTED') THEN now() ELSE closed_at END
 		WHERE organization_id = $2 AND id = $3 AND version = $4
 	`
 	result, err := e.ExecContext(ctx, query, status, orgID, id, version, string(status))

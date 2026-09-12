@@ -27,6 +27,7 @@ type mockCaseService struct {
 	getCaseFn       func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
 	getCaseTimeline func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
 	listCasesFn     func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
+	getStatisticsFn func(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error)
 }
 
 func (m *mockCaseService) CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
@@ -71,6 +72,13 @@ func (m *mockCaseService) AssignCase(ctx context.Context, params application.Ass
 	return nil, nil
 }
 
+func (m *mockCaseService) GetStatistics(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error) {
+	if m.getStatisticsFn != nil {
+		return m.getStatisticsFn(ctx, orgID)
+	}
+	return nil, nil
+}
+
 func setupCaseRouter(svc CaseService) http.Handler {
 	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, "test-issuer")
 	h := NewHandler(svc)
@@ -80,10 +88,14 @@ func setupCaseRouter(svc CaseService) http.Handler {
 		r.Use(middleware.RequireSameTenant)
 		r.Post("/", h.CreateCase)
 		r.Get("/", h.ListCases)
-		r.Get("/{caseId}", h.GetCase)
-		r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/dashboard/statistics", h.GetStatistics)
+		})
+		r.Get("/{caseId}", h.GetCase)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)
 			r.Post("/{caseId}/assign", h.AssignCase)
 		})

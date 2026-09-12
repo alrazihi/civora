@@ -46,8 +46,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/workflows", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
-		r.Get("/", h.ListWorkflowDefinitions)
-		r.Get("/{workflowId}", h.GetWorkflowDefinition)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/", h.ListWorkflowDefinitions)
+			r.Get("/{workflowId}", h.GetWorkflowDefinition)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin"))
@@ -62,10 +65,13 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/cases/{caseId}/workflow", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
-		r.Get("/", h.GetCaseWorkflow)
-		r.Get("/transitions", h.GetValidTransitions)
-		r.Post("/transitions/{transitionKey}", h.ExecuteTransition)
-		r.Get("/history", h.GetWorkflowHistory)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/", h.GetCaseWorkflow)
+			r.Get("/transitions", h.GetValidTransitions)
+			r.Post("/transitions/{transitionKey}", h.ExecuteTransition)
+			r.Get("/history", h.GetWorkflowHistory)
+		})
 	})
 }
 
@@ -574,13 +580,15 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrTenantViolation{}):
 		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "tenant violation")
 	case errors.Is(err, domain.TerminalStateError{}):
-		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, err.Error())
+		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "transition not permitted")
 	case errors.Is(err, domain.ErrTransitionNotFound{}):
-		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, err.Error())
+		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "transition not permitted")
 	case errors.Is(err, domain.ErrUnauthorizedTransition{}):
-		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, err.Error())
+		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "transition not permitted")
+	case errors.Is(err, domain.ErrConcurrentModification{}):
+		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "workflow state changed concurrently; retry the transition")
 	case errors.Is(err, domain.ErrWorkflowInstanceExists{}):
-		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "workflow instance already exists")
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
