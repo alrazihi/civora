@@ -10,12 +10,14 @@ Each agent must read this document and `.kilo/GAPS-front-generic-workflow-cases.
 
 **Scope**: `web/e2e/` — Playwright tests only
 **Command**: `cd web/e2e && npm test`
-**Pre-read**: `web/e2e/tests/cases.spec.ts` (understand mocked routes and test structure)
+**Pre-read**: `web/e2e/tests/helpers.ts` (understand mocked routes and shared utilities), `web/e2e/tests/cases.spec.ts` (New case workflow selection tests)
 
 Test groups to execute:
-1. **New case workflow selection** (3 tests): workflow selector rendering, case creation navigation, custom workflow support
-2. **Dashboard** (2 tests): terminal-state status breakdown, recent cases listing
-3. **Dynamic Form Renderer** (6 tests): form rendering, invalid submission blocking, supported field types, 404 handling, terminal state hiding, server validation errors, successful submission
+1. **New case workflow selection** (3 tests): workflow selector rendering, case creation navigation, custom workflow support — run with `npx playwright test cases`
+2. **Dashboard** (2 tests): terminal-state status breakdown, recent cases listing — run with `npx playwright test dashboard`
+3. **Dynamic Form Renderer** (6 tests): form rendering, invalid submission blocking, supported field types, 404 handling, terminal state hiding, server validation errors, successful submission — run with `npx playwright test forms`
+
+Agents must target the specific category relevant to their changes rather than running the full scan. Only run the full suite (`npm test`) when explicitly asked or when changes may affect multiple areas.
 
 Do NOT run Go tests or backend tests. Only Playwright E2E.
 

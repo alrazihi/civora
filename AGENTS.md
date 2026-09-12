@@ -55,7 +55,40 @@ npm run test:ui
 
 The static server is started/stopped automatically by `globalSetup`/`globalTeardown`;
 `npm test` (alias) takes care of this. Tests live in `web/e2e/tests/` and are
-written in TypeScript (`cases.spec.ts`).
+written in TypeScript. The test suite is split into category-specific spec files:
+
+- `cases.spec.ts` — New case workflow selection
+- `dashboard.spec.ts` — Dashboard rendering
+- `forms.spec.ts` — Dynamic form renderer
+- `workspace.spec.ts` — Case workspace integration
+- `form-management.spec.ts` — Form management CRUD
+- `helpers.ts` — Shared fixtures and utility functions
+
+### Running tests by category
+
+Run only a specific category instead of the full suite (faster iteration):
+
+```bash
+cd web/e2e
+
+# Run a single category
+npx playwright test cases
+npx playwright test dashboard
+npx playwright test forms
+npx playwright test workspace
+npx playwright test form-management
+
+# Or combine multiple categories
+npx playwright test cases dashboard
+
+# Run the full suite (all categories)
+npm test
+```
+
+For local development and debugging, agents should target the specific category
+relevant to the changes rather than running the full scan. Only run the full
+suite (`npm test`) when explicitly asked or when changes may affect multiple
+areas.
 
 
 To start the database locally with Docker Compose:
