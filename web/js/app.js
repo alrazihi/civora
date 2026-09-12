@@ -298,7 +298,7 @@ const app = {
     return defs;
   },
 
-  renderWorkflowSelector(defs) {
+  renderWorkflowSelector(defs, preselectId) {
     const container = document.getElementById('workflow-selector');
     if (!container) return;
     const hidden = document.getElementById('selected-workflow-id');

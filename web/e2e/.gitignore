@@ -1,0 +1,12 @@
+# Playwright artifacts
+/test-results/
+/videos/
+/.cache/
+
+# Playwright browsers live under <home>/.cache/ms-playwright; not tracked.
+
+# Node modules
+/node_modules/
+
+# Generated pid file for the static server (globalSetup/globalTeardown).
+/server.pid

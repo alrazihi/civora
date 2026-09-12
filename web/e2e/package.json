@@ -1,0 +1,17 @@
+{
+  "name": "civora-e2e",
+  "version": "1.0.0",
+  "description": "Playwright end-to-end tests for the CIVORA web frontend",
+  "scripts": {
+    "serve": "node web/e2e/server.js",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "serve": "^14.2.0",
+    "typescript": "^5.5.0"
+  },
+  "type": "module"
+}
