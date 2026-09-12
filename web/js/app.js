@@ -168,6 +168,28 @@ const app = {
     if (token) router.navigate('dashboard');
     else router.navigate('login');
     router.start();
+
+    // Form search and filter handlers
+    const formSearch = document.getElementById('form-search');
+    if (formSearch) {
+      formSearch.addEventListener('input', (e) => {
+        this.formSearchTerm = e.target.value;
+        this.loadFormList(1);
+      });
+    }
+    const formStatusFilter = document.getElementById('form-status-filter');
+    if (formStatusFilter) {
+      formStatusFilter.addEventListener('change', (e) => {
+        this.formStatusFilter = e.target.value;
+        this.loadFormList(1);
+      });
+    }
+
+    // Field type change handler for validation fields
+    const fieldType = document.getElementById('field-type');
+    if (fieldType) {
+      fieldType.addEventListener('change', () => this.toggleValidationFields(fieldType.value));
+    }
   },
 
   async login(e) {
@@ -386,6 +408,10 @@ const app = {
   },
 
   async loadDashboard() {
+    // Show/hide Forms nav button based on admin role
+    const formsNav = document.getElementById('btn-forms-nav');
+    if (formsNav) formsNav.style.display = currentUserIsAdmin() ? 'inline-flex' : 'none';
+
     const tbody = document.getElementById('case-table-body');
     const statsEl = document.getElementById('dashboard-stats');
     const loadingEl = document.getElementById('dashboard-stats-loading');
@@ -1235,7 +1261,7 @@ async loadSection(name, path) {
   },
 
   switchView(viewId) {
-    const views = ['view-login', 'view-dashboard', 'view-case', 'view-new-case', 'view-workflows', 'view-workflow-detail', 'view-new-workflow'];
+    const views = ['view-login', 'view-dashboard', 'view-case', 'view-new-case', 'view-workflows', 'view-workflow-detail', 'view-new-workflow', 'view-forms', 'view-form-design', 'view-form-detail'];
     views.forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', id !== viewId);
@@ -2076,6 +2102,746 @@ async loadSection(name, path) {
     this.currentFormDef = null;
     this.currentFormState = null;
   },
+
+  // ── Form Management ──────────────────────────────────────────────────
+
+  formDraft: null,
+  formEditMode: false,
+  formCurrentId: null,
+  formListPage: 1,
+  formSearchTerm: '',
+  formStatusFilter: '',
+  formFieldEditIndex: -1,
+
+  async loadFormList(page) {
+    this.formListPage = page || 1;
+    const tbody = document.getElementById('form-table-body');
+    const loading = document.getElementById('form-list-loading');
+    const errorEl = document.getElementById('form-list-error');
+    const emptyEl = document.getElementById('form-empty');
+
+    if (loading) loading.classList.remove('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    try {
+      const res = await FormAPI.listForms({
+        page: this.formListPage,
+        per_page: 20,
+        search: this.formSearchTerm,
+        status: this.formStatusFilter,
+      });
+      const forms = res.data || [];
+      const totalPages = (res.meta && res.meta.total_pages) || 1;
+      const total = (res.meta && res.meta.total) || forms.length;
+
+      if (!forms.length) {
+        if (this.formSearchTerm || this.formStatusFilter) {
+          if (emptyEl) emptyEl.classList.remove('hidden');
+        } else {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty">No forms yet. Create one to get started.</td></tr>';
+        }
+      } else {
+        if (tbody) tbody.innerHTML = forms.map(f => this.renderFormRow(f)).join('');
+        if (emptyEl) emptyEl.classList.add('hidden');
+      }
+
+      const metaEl = document.getElementById('form-pagination');
+      if (metaEl) metaEl.textContent = `Page ${this.formListPage} of ${totalPages} (${total} form${total === 1 ? '' : 's'})`;
+    } catch (err) {
+      if (err.message && err.message.includes('404')) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty">No forms found. The API endpoint is not yet available.</td></tr>';
+      } else if (errorEl) {
+        errorEl.textContent = `Error loading forms: ${escapeHTML(err.message)}`;
+        errorEl.classList.remove('hidden');
+      }
+      const metaEl = document.getElementById('form-pagination');
+      if (metaEl) metaEl.textContent = '';
+    } finally {
+      if (loading) loading.classList.add('hidden');
+    }
+  },
+
+  renderFormRow(f) {
+    const status = f.status || 'DRAFT';
+    const statusClass = status.toLowerCase();
+    const statusBadge = `<span class="badge wf-status-${statusClass}" style="text-transform:none">${escapeHTML(status)}</span>`;
+    const fieldCount = (f.fields || []).length;
+    const canEdit = status === 'DRAFT';
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showFormDetail('${f.id}')"><span class="icon" aria-hidden="true">👁️</span> View</button>`;
+    if (canEdit) {
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="router.navigate('form-design', '${f.id}')"><span class="icon" aria-hidden="true">✏️</span> Edit</button>`;
+    }
+    return `<tr>
+      <td>${escapeHTML(f.name || f.key)}</td>
+      <td><code>${escapeHTML(f.key || '')}</code></td>
+      <td>${f.version || 1}</td>
+      <td>${statusBadge}</td>
+      <td>${fieldCount}</td>
+      <td>${f.updated_at ? new Date(f.updated_at).toLocaleDateString() : '—'}</td>
+      <td style="white-space:nowrap;font-size:0.8rem">${actionBtns}</td>
+    </tr>`;
+  },
+
+  async showFormCreateView() {
+    this.switchView('view-form-design');
+    this.formEditMode = false;
+    this.formCurrentId = null;
+    this.formDraft = {
+      id: null,
+      key: '',
+      name: '',
+      description: '',
+      version: 1,
+      status: 'DRAFT',
+      fields: [],
+    };
+    this.fieldEditIndex = -1;
+    this.renderFormDesign();
+  },
+
+  async showFormEditView(id) {
+    this.switchView('view-form-design');
+    this.formEditMode = true;
+    this.formCurrentId = id;
+    const loadingEl = document.getElementById('form-design-error');
+    try {
+      const res = await FormAPI.getForm(id);
+      this.formDraft = res;
+      this.fieldEditIndex = -1;
+      this.renderFormDesign();
+    } catch (err) {
+      if (loadingEl) {
+        loadingEl.textContent = `Error loading form: ${escapeHTML(err.message)}`;
+        loadingEl.classList.remove('hidden');
+      }
+    }
+  },
+
+  async showFormDesignView(id) {
+    if (!id) { router.navigate('forms'); return; }
+    if (this.formEditMode || this.formDraft) {
+      await this.showFormEditView(id);
+    } else {
+      await this.showFormCreateView();
+    }
+  },
+
+  async showFormDetail(id) {
+    this.switchView('view-form-detail');
+    this.formCurrentId = id;
+    const loadingEl = document.getElementById('form-detail-error');
+    if (loadingEl) loadingEl.classList.add('hidden');
+
+    // Permission-aware: only admins can assign forms to workflows
+    const assignBtn = document.getElementById('btn-assign-form');
+    if (assignBtn) assignBtn.style.display = currentUserIsAdmin() ? 'inline-flex' : 'none';
+
+    try {
+      const form = await FormAPI.getForm(id);
+      this.formDraft = form;
+
+      document.getElementById('form-detail-title').textContent = form.name || form.key;
+      document.getElementById('form-detail-key').textContent = `#${escapeHTML(form.key || '')}`;
+
+      const statusEl = document.getElementById('form-detail-status');
+      statusEl.textContent = form.status || 'DRAFT';
+      statusEl.className = `badge wf-status-${(form.status || 'DRAFT').toLowerCase()}`;
+
+      document.getElementById('form-detail-name').textContent = form.name || '';
+      document.getElementById('form-detail-key-val').textContent = form.key || '';
+      document.getElementById('form-detail-description').textContent = form.description || '';
+      document.getElementById('form-detail-version').textContent = form.version || 1;
+      document.getElementById('form-detail-status-val').textContent = form.status || 'DRAFT';
+
+      // Render fields table
+      const tbody = document.querySelector('#form-detail-fields-table tbody');
+      if (tbody) {
+        const fields = form.fields || [];
+        tbody.innerHTML = fields.map(f => `
+          <tr>
+            <td><code>${escapeHTML(f.key || '')}</code></td>
+            <td>${escapeHTML(f.label || '')}</td>
+            <td>${f.type || 'text'}</td>
+            <td>${f.required ? '✓' : '—'}</td>
+            <td>${this.fieldValidationSummary(f.validation)}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Load workflow assignments
+      const assignmentsContainer = document.getElementById('form-workflow-assignments');
+      if (assignmentsContainer) {
+        const assignments = form.assignments || [];
+        if (assignments.length) {
+          assignmentsContainer.innerHTML = assignments.map(a => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <strong>${escapeHTML(a.workflow_name || a.workflow_key || '')}</strong>
+                <span class="text-muted" style="font-size:0.85rem"> → State: ${escapeHTML(a.state_key)}</span>
+                ${a.required ? '<span class="badge" style="font-size:0.7rem">Required</span>' : ''}
+              </div>
+              <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${form.id}', '${a.workflow_id}')">Remove</button>
+            </div>
+          `).join('');
+        } else {
+          assignmentsContainer.innerHTML = '<p class="text-muted">No workflow assignments yet.</p>';
+        }
+      }
+    } catch (err) {
+      if (loadingEl) {
+        loadingEl.textContent = `Error loading form: ${escapeHTML(err.message)}`;
+        loadingEl.classList.remove('hidden');
+      }
+    }
+  },
+
+  fieldValidationSummary(v) {
+    if (!v) return '<span class="text-muted">None</span>';
+    const parts = [];
+    if (v.minimum !== undefined) parts.push(`min: ${v.minimum}`);
+    if (v.maximum !== undefined) parts.push(`max: ${v.maximum}`);
+    if (v.min_length !== undefined) parts.push(`minLen: ${v.min_length}`);
+    if (v.max_length !== undefined) parts.push(`maxLen: ${v.max_length}`);
+    if (v.pattern) parts.push('pattern');
+    return parts.length ? parts.join(', ') : '<span class="text-muted">None</span>';
+  },
+
+  renderFormDesign() {
+    const draft = this.formDraft;
+    if (!draft) return;
+
+    const titleEl = document.getElementById('form-design-title');
+    const statusEl = document.getElementById('form-design-status');
+    const keyEl = document.getElementById('form-design-key');
+
+    if (titleEl) titleEl.textContent = this.formEditMode ? `Edit: ${draft.name || draft.key}` : 'Create New Form';
+    if (statusEl) {
+      statusEl.textContent = draft.status || 'DRAFT';
+      statusEl.className = `badge wf-status-${(draft.status || 'DRAFT').toLowerCase()}`;
+    }
+    if (keyEl) keyEl.textContent = draft.key ? `#${escapeHTML(draft.key)}` : (this.formEditMode ? '' : 'Not yet set');
+
+    document.getElementById('form-name').value = draft.name || '';
+    document.getElementById('form-key').value = draft.key || '';
+    document.getElementById('form-description').value = draft.description || '';
+
+    this.renderFormFields();
+  },
+
+  renderFormFields() {
+    const fields = this.formDraft?.fields || [];
+    const container = document.getElementById('form-fields-list');
+    if (!container) return;
+
+    if (!fields.length) {
+      container.innerHTML = '<div class="empty" style="padding:20px;text-align:center">No fields yet. Add one to get started.</div>';
+      return;
+    }
+
+    container.innerHTML = fields.map((f, idx) => `
+      <div class="form-field-card" data-idx="${idx}" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <strong>${escapeHTML(f.label || f.key)}</strong>
+            <span class="text-muted" style="font-size:0.85rem"> (${f.type})</span>
+            ${f.required ? '<span class="badge" style="font-size:0.7rem;margin-left:8px">Required</span>' : ''}
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn secondary sm" style="font-size:0.8rem" onclick="app.editField(${idx})"><span class="icon" aria-hidden="true">✏️</span> Edit</button>
+            <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeField(${idx})"><span class="icon" aria-hidden="true">🗑️</span> Remove</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;font-size:0.85rem;color:var(--text-secondary)">
+          <span>Key: <code>${escapeHTML(f.key)}</code></span>
+          <span>Type: ${f.type}</span>
+          ${f.placeholder ? `<span>Placeholder: ${escapeHTML(f.placeholder)}</span>` : ''}
+          ${f.default_value !== undefined && f.default_value !== null ? `<span>Default: ${escapeHTML(String(f.default_value))}</span>` : ''}
+          ${(f.options || []).length ? `<span>Options: ${(f.options || []).length}</span>` : ''}
+        </div>
+        ${this.fieldValidationSummaryHTML(f.validation)}
+      </div>
+    `).join('');
+  },
+
+  fieldValidationSummaryHTML(v) {
+    const summary = this.fieldValidationSummary(v);
+    if (summary.includes('None')) return '';
+    return `<div style="margin-top:8px;padding:4px 8px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.8rem">${summary}</div>`;
+  },
+
+  addField() {
+    const field = {
+      key: '',
+      label: '',
+      type: 'text',
+      required: false,
+      description: '',
+      placeholder: '',
+      default_value: '',
+      options: [],
+      validation: {},
+      display_order: (this.formDraft?.fields || []).length,
+    };
+    this.formDraft.fields.push(field);
+    this.fieldEditIndex = this.formDraft.fields.length - 1;
+    this.renderFieldModal(this.formDraft.fields.length - 1);
+  },
+
+  editField(idx) {
+    this.fieldEditIndex = idx;
+    const field = this.formDraft.fields[idx];
+    this.renderFieldModal(idx, field);
+  },
+
+  removeField(idx) {
+    if (confirm('Remove this field? This cannot be undone if the form has been published.')) {
+      this.formDraft.fields.splice(idx, 1);
+      this.formDraft.fields.forEach((f, i) => { f.display_order = i; });
+      this.renderFormFields();
+    }
+  },
+
+  renderFieldModal(idx, field) {
+    const modal = document.getElementById('form-field-modal');
+    if (!modal) return;
+
+    const isEdit = idx >= 0 && field;
+    modal.classList.remove('hidden');
+    document.getElementById('form-field-modal-title').textContent = isEdit ? 'Edit Field' : 'Add Field';
+
+    if (field) {
+      document.getElementById('field-label').value = field.label || '';
+      document.getElementById('field-key').value = field.key || '';
+      document.getElementById('field-type').value = field.type || 'text';
+      document.getElementById('field-required').checked = !!field.required;
+      document.getElementById('field-description').value = field.description || '';
+      document.getElementById('field-placeholder').value = field.placeholder || '';
+      document.getElementById('field-default').value = field.default_value !== undefined && field.default_value !== null ? String(field.default_value) : '';
+      this.renderFieldOptions(field.options || []);
+      this.renderFieldValidation(field.validation || {});
+    } else {
+      document.getElementById('field-label').value = '';
+      document.getElementById('field-key').value = '';
+      document.getElementById('field-type').value = 'text';
+      document.getElementById('field-required').checked = false;
+      document.getElementById('field-description').value = '';
+      document.getElementById('field-placeholder').value = '';
+      document.getElementById('field-default').value = '';
+      this.renderFieldOptions([]);
+      this.renderFieldValidation({});
+    }
+
+    this.toggleValidationFields(field?.type || 'text');
+    this.updateValidationVisibility();
+  },
+
+  renderFieldOptions(options) {
+    const container = document.getElementById('field-options-list');
+    if (!container) return;
+    if (!options || !options.length) {
+      container.innerHTML = `
+        <div class="option-row" style="display:flex;gap:8px;align-items:center">
+          <input type="text" class="option-value" placeholder="Value" style="flex:1">
+          <input type="text" class="option-label" placeholder="Display Label" style="flex:2">
+          <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+        </div>
+      `;
+      return;
+    }
+    container.innerHTML = options.map(opt => `
+      <div class="option-row" style="display:flex;gap:8px;align-items:center">
+        <input type="text" class="option-value" placeholder="Value" value="${escapeHTML(opt.value || '')}" style="flex:1">
+        <input type="text" class="option-label" placeholder="Display Label" value="${escapeHTML(opt.label || '')}" style="flex:2">
+        <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+      </div>
+    `).join('');
+  },
+
+  addOpt() {
+    const container = document.getElementById('field-options-list');
+    if (!container) return;
+    const newRow = document.createElement('div');
+    newRow.className = 'option-row';
+    newRow.style.display = 'flex';
+    newRow.style.gap = '8px';
+    newRow.style.alignItems = 'center';
+    newRow.innerHTML = `
+      <input type="text" class="option-value" placeholder="Value" style="flex:1">
+      <input type="text" class="option-label" placeholder="Display Label" style="flex:2">
+      <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+    `;
+    container.appendChild(newRow);
+  },
+
+  removeOption(btn) {
+    const row = btn.closest('.option-row');
+    if (row) row.remove();
+  },
+
+  renderFieldValidation(v) {
+    v = v || {};
+    const setCheckbox = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+    const setInput = (cls, val) => { const el = document.querySelector(`[data-val="${cls}"]`); if (el) el.value = val !== undefined ? String(val) : ''; };
+    setCheckbox('val-required', v.required || false);
+    setCheckbox('val-minimum', v.minimum !== undefined);
+    setInput('minimum', v.minimum);
+    setCheckbox('val-maximum', v.maximum !== undefined);
+    setInput('maximum', v.maximum);
+    setCheckbox('val-min_length', v.min_length !== undefined);
+    setInput('min_length', v.min_length);
+    setCheckbox('val-max_length', v.max_length !== undefined);
+    setInput('max_length', v.max_length);
+    setCheckbox('val-pattern', !!v.pattern);
+    setInput('pattern', v.pattern);
+  },
+
+  toggleValidation(constraint, enabled) {
+    const input = document.querySelector(`[data-val="${constraint}"]`);
+    if (input) input.parentElement.style.display = enabled ? 'flex' : 'none';
+    else {
+      const checkbox = document.getElementById(`val-${constraint}`);
+      if (checkbox) checkbox.parentElement.style.display = enabled ? 'flex' : 'none';
+    }
+  },
+
+  toggleValidationFields(type) {
+    const minEl = document.getElementById('validation-min');
+    const maxEl = document.getElementById('validation-max');
+    const minLengthEl = document.getElementById('validation-min-length');
+    const maxLengthEl = document.getElementById('validation-max-length');
+    const patternEl = document.getElementById('validation-pattern');
+    const requiredEl = document.getElementById('validation-required');
+
+    const numberTypes = ['number', 'decimal'];
+    const stringTypes = ['text', 'textarea', 'email', 'phone', 'date', 'datetime', 'select', 'multiselect', 'radio', 'checkbox', 'boolean'];
+
+    if (minEl) minEl.style.display = numberTypes.includes(type) ? 'block' : 'none';
+    if (maxEl) maxEl.style.display = numberTypes.includes(type) ? 'block' : 'none';
+    if (minLengthEl) minLengthEl.style.display = stringTypes.includes(type) ? 'block' : 'none';
+    if (maxLengthEl) maxLengthEl.style.display = stringTypes.includes(type) ? 'block' : 'none';
+    if (patternEl) patternEl.style.display = ['number', 'decimal', 'email', 'phone'].includes(type) || ['date', 'datetime', 'boolean'].includes(type) ? 'none' : 'block';
+    if (requiredEl) requiredEl.style.display = 'block';
+  },
+
+  updateValidationVisibility() {
+    const type = document.getElementById('field-type')?.value || 'text';
+    this.toggleValidationFields(type);
+
+    const v = {};
+    const minCb = document.getElementById('val-minimum');
+    if (minCb && minCb.checked) { v.minimum = parseInt(document.querySelector('[data-val="minimum"]').value, 10) || 0; }
+    const maxCb = document.getElementById('val-maximum');
+    if (maxCb && maxCb.checked) { v.maximum = parseInt(document.querySelector('[data-val="maximum"]').value, 10) || 0; }
+  },
+
+  saveFieldModal() {
+    const label = document.getElementById('field-label').value.trim();
+    const key = document.getElementById('field-key').value.trim();
+    const type = document.getElementById('field-type').value;
+    const required = document.getElementById('field-required').checked;
+    const description = document.getElementById('field-description').value.trim();
+    const placeholder = document.getElementById('field-placeholder').value.trim();
+    const defaultValue = document.getElementById('field-default').value;
+
+    // Validation
+    const v = {};
+    const minCb = document.getElementById('val-minimum');
+    if (minCb && minCb.checked) v.minimum = parseFloat(document.querySelector('[data-val="minimum"]').value) || 0;
+    const maxCb = document.getElementById('val-maximum');
+    if (maxCb && maxCb.checked) v.maximum = parseFloat(document.querySelector('[data-val="maximum"]').value) || 0;
+    const minLenCb = document.getElementById('val-min_length');
+    if (minLenCb && minLenCb.checked) v.min_length = parseInt(document.querySelector('[data-val="min_length"]').value, 10) || 0;
+    const maxLenCb = document.getElementById('val-max_length');
+    if (maxLenCb && maxLenCb.checked) v.max_length = parseInt(document.querySelector('[data-val="max_length"]').value, 10) || 0;
+    const patternCb = document.getElementById('val-pattern');
+    if (patternCb && patternCb.checked) v.pattern = document.querySelector('[data-val="pattern"]').value;
+
+    // Options
+    const optionRows = document.querySelectorAll('.option-row');
+    const options = Array.from(optionRows).map(row => ({
+      value: row.querySelector('.option-value').value.trim(),
+      label: row.querySelector('.option-label').value.trim(),
+    })).filter(o => o.value || o.label);
+
+    // Validation
+    const errors = [];
+    if (!label) errors.push('Field label is required');
+    if (!key) errors.push('Field key is required');
+    if (!key.match(/^[a-z][a-z0-9_]*$/)) errors.push('Key must be lowercase letters, numbers, and underscores, starting with a letter');
+    if (['select', 'multiselect', 'radio', 'checkbox'].includes(type) && !options.length) {
+      errors.push(`Field type "${type}" requires at least one option`);
+    }
+    if (v.minimum !== undefined && v.maximum !== undefined && v.minimum > v.maximum) {
+      errors.push('Minimum cannot be greater than maximum');
+    }
+    if (v.min_length !== undefined && v.max_length !== undefined && v.min_length > v.max_length) {
+      errors.push('Minimum length cannot be greater than maximum length');
+    }
+
+    const duplicateKey = (this.formDraft.fields || []).findIndex((f, i) => f.key === key && i !== this.fieldEditIndex) !== -1;
+    if (duplicateKey) errors.push(`Duplicate field key: ${key}`);
+
+    if (errors.length) {
+      const errEl = document.getElementById('form-design-error');
+      if (errEl) {
+        errEl.innerHTML = '<ul style="margin:0;padding-left:20px">' + errors.map(e => `<li>${escapeHTML(e)}</li>`).join('') + '</ul>';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    // Hide error
+    const errEl = document.getElementById('form-design-error');
+    if (errEl) errEl.classList.add('hidden');
+
+    const fieldData = {
+      key, label, type, required, description, placeholder,
+      default_value: defaultValue !== '' ? defaultValue : undefined,
+      options: options.length > 0 ? options : undefined,
+      validation: Object.keys(v).length > 0 ? v : undefined,
+    };
+
+    if (this.fieldEditIndex >= 0) {
+      this.formDraft.fields[this.fieldEditIndex] = { ...this.formDraft.fields[this.fieldEditIndex], ...fieldData };
+    } else {
+      this.formDraft.fields.push(fieldData);
+    }
+
+    this.fieldEditIndex = -1;
+    this.renderFieldModal(-1, null);
+    this.renderFormFields();
+  },
+
+  cancelFieldModal() {
+    this.fieldEditIndex = -1;
+    const modal = document.getElementById('form-field-modal');
+    if (modal) modal.classList.add('hidden');
+  },
+
+  async saveFormDraft() {
+    const name = document.getElementById('form-name').value.trim();
+    const key = document.getElementById('form-key').value.trim();
+    const description = document.getElementById('form-description').value.trim();
+
+    const errors = [];
+    if (!name) errors.push('Form name is required');
+    if (!key) errors.push('Form key is required');
+    if (!key.match(/^[a-z][a-z0-9_]*$/)) errors.push('Form key must be lowercase letters, numbers, and underscores, starting with a letter');
+    if (key.length > 64) errors.push('Form key is too long (max 64 characters)');
+    if (!this.formDraft.fields || !this.formDraft.fields.length) errors.push('Form must have at least one field');
+
+    // Check for duplicate field keys
+    const fieldKeys = (this.formDraft.fields || []).map(f => f.key).filter(k => k);
+    const dupKeys = fieldKeys.filter((k, i) => fieldKeys.indexOf(k) !== i);
+    if (dupKeys.length) errors.push(`Duplicate field keys: ${[...new Set(dupKeys)].join(', ')}`);
+
+    if (errors.length) {
+      const errEl = document.getElementById('form-design-error');
+      if (errEl) {
+        errEl.innerHTML = '<ul style="margin:0;padding-left:20px">' + errors.map(e => `<li>${escapeHTML(e)}</li>`).join('') + '</ul>';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    // Hide error
+    const errEl = document.getElementById('form-design-error');
+    if (errEl) errEl.classList.add('hidden');
+
+    // Update form metadata
+    this.formDraft.name = name;
+    this.formDraft.key = key;
+    this.formDraft.description = description;
+    this.formDraft.fields.forEach((f, i) => { f.display_order = i; });
+
+    try {
+      const saveBtn = document.getElementById('btn-form-save');
+      const originalText = saveBtn.innerHTML;
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="loading-spinner" style="width:14px;height:14px"></span> Saving…';
+
+      if (this.formEditMode && this.formCurrentId) {
+        await FormAPI.updateForm(this.formCurrentId, this.formDraft);
+        showToast('Form updated successfully', 'success');
+      } else {
+        const res = await FormAPI.createForm(this.formDraft);
+        this.formCurrentId = res?.id;
+        this.formEditMode = true;
+        this.formDraft.id = res?.id;
+        showToast('Form created successfully', 'success');
+      }
+
+      // Update UI to reflect saved state
+      this.renderFormDesign();
+
+      // Show publish button for new drafts
+      const publishBtn = document.getElementById('btn-form-publish');
+      if (publishBtn) publishBtn.style.display = this.formDraft.status === 'DRAFT' ? 'inline-flex' : 'none';
+    } catch (err) {
+      let msg = err.message || 'Failed to save form';
+      if (err.status === 404) {
+        msg = 'Form API endpoint not yet available. Form saved locally only.';
+        showToast(msg, 'info');
+      } else if (err.status === 409) {
+        msg = 'Cannot modify a published form. Create a new version instead.';
+      }
+      const errEl = document.getElementById('form-design-error');
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+    } finally {
+      const saveBtn = document.getElementById('btn-form-save');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<span class="icon" aria-hidden="true">💾</span> Save Draft'; }
+    }
+  },
+
+  async publishForm() {
+    const formId = this.formCurrentId;
+    if (!formId) return;
+
+    if (!confirm('Publish this form? Once published, it cannot be edited. You will need to create a new version for further changes.')) {
+      return;
+    }
+
+    try {
+      // For now, just update the status to ACTIVE (the backend would handle versioning)
+      const updated = { ...this.formDraft, status: 'ACTIVE' };
+      await FormAPI.updateForm(formId, updated);
+      this.formDraft = updated;
+      this.renderFormDesign();
+      showToast('Form published successfully', 'success');
+    } catch (err) {
+      showToast(`Failed to publish: ${escapeHTML(err.message)}`, 'error');
+    }
+  },
+
+  previewForm() {
+    // Use the same renderer as runtime to prevent drift
+    const modal = document.getElementById('form-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+
+    const titleEl = document.getElementById('form-modal-title');
+    if (titleEl) titleEl.textContent = `${this.formDraft.name || 'Preview'} (Draft)`;
+
+    // Use the runtime form renderer for preview
+    const body = document.getElementById('form-modal-body');
+    if (body) {
+      body.innerHTML = '';
+      if (window.FormRenderer) {
+        FormRenderer.renderForm(this.formDraft, body, {
+          onSubmit: () => {
+            showToast('This is a preview. No data is saved.', 'info');
+            const msg = body.querySelector('.form-message');
+            if (msg) { msg.className = 'form-message info'; msg.classList.remove('hidden'); msg.textContent = 'Preview mode - form is not saved.'; }
+          },
+          onCancel: () => { this.hideFormModal(); },
+        });
+      }
+    }
+  },
+
+  hideFormModal() {
+    const modal = document.getElementById('form-modal');
+    if (modal) { modal.classList.add('hidden'); modal.style.display = ''; }
+  },
+
+  clearFormSearch() {
+    this.formSearchTerm = '';
+    this.formStatusFilter = '';
+    const searchEl = document.getElementById('form-search');
+    if (searchEl) searchEl.value = '';
+    const statusEl = document.getElementById('form-status-filter');
+    if (statusEl) statusEl.value = '';
+    this.loadFormList(1);
+  },
+
+  async assignFormToWorkflow(formId) {
+    this.assignCurrentFormId = formId;
+    const modal = document.getElementById('form-assign-modal');
+    if (!modal) return;
+
+    const workflowSelect = document.getElementById('assign-workflow');
+    if (!workflowSelect) return;
+    workflowSelect.innerHTML = '<option value="">Loading workflows…</option>';
+    modal.classList.remove('hidden');
+
+    try {
+       const res = await api('GET', this.orgPath('/workflows'));
+      const workflows = res.data || [];
+      workflowSelect.innerHTML = '<option value="">Select workflow…</option>' + workflows.map(w =>
+        `<option value="${w.id}">${escapeHTML(w.name || w.key)}</option>`).join('');
+    } catch (err) {
+      workflowSelect.innerHTML = '<option value="">Error loading workflows</option>';
+    }
+
+    document.getElementById('assign-required').checked = false;
+  },
+
+  onWorkflowSelected(workflowId) {
+    const stateSelect = document.getElementById('assign-state');
+    if (!stateSelect) return;
+    stateSelect.innerHTML = '';
+
+    // Get workflow details to find states
+     api('GET', this.orgPath(`/workflows/${workflowId}`))
+      .then(res => {
+        const wf = res.data;
+        const states = wf.states || [];
+        stateSelect.innerHTML = '<option value="">Select state…</option>' + states.map(s =>
+          `<option value="${s.key}">${escapeHTML(s.name || s.key)}</option>`).join('');
+      })
+      .catch(() => {
+        stateSelect.innerHTML = '<option value="">Error loading states</option>';
+      });
+  },
+
+  cancelAssignModal() {
+    const modal = document.getElementById('form-assign-modal');
+    if (modal) modal.classList.add('hidden');
+    this.assignCurrentFormId = null;
+  },
+
+  async saveAssignForm() {
+    const workflowSelect = document.getElementById('assign-workflow');
+    const stateSelect = document.getElementById('assign-state');
+    const requiredCheckbox = document.getElementById('assign-required');
+
+    const workflowId = workflowSelect?.value;
+    const stateKey = stateSelect?.value;
+    const required = requiredCheckbox?.checked || false;
+
+    if (!workflowId || !stateKey) {
+      showToast('Please select a workflow and state', 'error');
+      return;
+    }
+
+    try {
+      await FormAPI.assignFormToWorkflowState(this.assignCurrentFormId, {
+        workflow_id: workflowId,
+        state_key: stateKey,
+        required: required,
+      });
+      showToast('Form assigned to workflow state', 'success');
+      this.cancelAssignModal();
+      // Refresh detail view
+      if (this.formCurrentId) this.showFormDetail(this.formCurrentId);
+    } catch (err) {
+      showToast(`Failed to assign form: ${escapeHTML(err.message)}`, 'error');
+    }
+  },
+
+  async removeFormAssignment(formId, workflowId) {
+    if (!confirm('Remove this form assignment?')) return;
+    try {
+      // DELETE the assignment
+      await api('DELETE', this.orgPath(`/forms/${formId}/assignments/${workflowId}`));
+      showToast('Assignment removed', 'success');
+      this.showFormDetail(formId);
+    } catch (err) {
+      showToast(`Failed to remove assignment: ${escapeHTML(err.message)}`, 'error');
+    }
+  },
 };
 
 const router = {
@@ -2107,7 +2873,12 @@ router.on('login', () => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
 });
 
 router.on('dashboard', async () => {
@@ -2118,7 +2889,12 @@ router.on('dashboard', async () => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
   await app.loadDashboard();
 });
 
@@ -2131,7 +2907,12 @@ router.on('case', async (id) => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
   await app.loadCase(id);
 });
 
@@ -2143,7 +2924,12 @@ router.on('new-case', (preselectId) => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
   app.selectedWorkflow = null;
   app.loadNewCaseWorkflows(preselectId);
 });
@@ -2151,16 +2937,39 @@ router.on('new-case', (preselectId) => {
 router.on('workflows', () => {
   app.switchView('view-workflows');
   app.loadWorkflowList(1);
-  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
 });
 
 router.on('workflow', (id) => {
   if (!id) { router.navigate('workflows'); return; }
   app.showWorkflowDetail(id);
-  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
 });
 
 router.on('new-workflow', () => {
   app.showWorkflowCreateView();
-  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+});
+
+router.on('forms', () => {
+  app.switchView('view-forms');
+  app.loadFormList(1);
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+});
+
+router.on('form-design', (id) => {
+  app.showFormDesignView(id);
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+});
+
+router.on('form-detail', (id) => {
+  if (!id) { router.navigate('forms'); return; }
+  app.showFormDetail(id);
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
 });

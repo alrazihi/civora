@@ -120,10 +120,98 @@ async function submitForm(caseId, values, opts) {
   return res.data || null;
 }
 
+// ── Form Management API ───────────────────────────────────────────────
+// These endpoints are the admin-facing contract for managing form
+// definitions. They mirror the workflow-definition CRUD pattern.
+// Until the backend implements these, 404 is expected for all calls.
+
+/**
+ * List form definitions for the organization.
+ * @param {object} [opts] - Pagination and filter options.
+ * @param {number} [opts.page] - Page number (1-based).
+ * @param {number} [opts.per_page] - Results per page.
+ * @param {string} [opts.search] - Search by name or key.
+ * @param {string} [opts.status] - Filter by status (DRAFT, ACTIVE, ARCHIVED).
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listForms(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.per_page) params.set('per_page', String(opts.per_page));
+  if (opts.search) params.set('search', opts.search);
+  if (opts.status) params.set('status', opts.status);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/forms${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * Get a single form definition by ID.
+ * @param {string} formId
+ * @returns {Promise<object>}
+ */
+async function getForm(formId) {
+  const res = await api('GET', `/organizations/${orgId}/forms/${formId}`);
+  return res.data || null;
+}
+
+/**
+ * Create a new form definition (draft status).
+ * @param {object} formData - The form definition.
+ * @returns {Promise<object>}
+ */
+async function createForm(formData) {
+  const res = await api('POST', `/organizations/${orgId}/forms`, formData);
+  return res.data || null;
+}
+
+/**
+ * Update a form definition.
+ * Only drafts can be modified. Active/published forms return 409.
+ * @param {string} formId
+ * @param {object} formData - Updated form definition.
+ * @returns {Promise<object>}
+ */
+async function updateForm(formId, formData) {
+  const res = await api('PUT', `/organizations/${orgId}/forms/${formId}`, formData);
+  return res.data || null;
+}
+
+/**
+ * Delete a form definition. Only drafts can be deleted.
+ * @param {string} formId
+ */
+async function deleteForm(formId) {
+  await api('DELETE', `/organizations/${orgId}/forms/${formId}`);
+}
+
+/**
+ * List form submissions for a case and form key.
+ * @param {string} caseId
+ * @param {string} formKey
+ * @returns {Promise<object[]>}
+ */
+async function getFormSubmissions(caseId, formKey) {
+  const encodedKey = encodeURIComponent(formKey);
+  const res = await api('GET', `/organizations/${orgId}/cases/${caseId}/form/${encodedKey}/submissions`);
+  return (res.data || []).filter(Boolean);
+}
+
+/**
+ * Assign a form to a workflow state.
+ * @param {string} formId
+ * @param {object} assignment - { workflow_id, state_key, required, display_order }
+ * @returns {Promise<object>}
+ */
+async function assignFormToWorkflowState(formId, assignment) {
+  const res = await api('POST', `/organizations/${orgId}/forms/${formId}/assignments`, assignment);
+  return res.data || null;
+}
+
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState };
 } else {
   // Browser global
-  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm };
+  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, assignFormToWorkflowState };
 }

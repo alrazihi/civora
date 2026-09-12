@@ -128,9 +128,10 @@
           <p>Operational Overview</p>
         </div>
         <nav aria-label="Dashboard actions">
-          <button class="btn" onclick="router.navigate('new-case')" aria-label="Create new service request"><span class="icon" aria-hidden="true">➕</span> New Request</button>
-          <button class="btn secondary" onclick="router.navigate('workflows')" aria-label="View workflows"><span class="icon" aria-hidden="true">🔄</span> Workflows</button>
-          <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true">🚪</span> Logout</button>
+           <button class="btn" onclick="router.navigate('new-case')" aria-label="Create new service request"><span class="icon" aria-hidden="true">➕</span> New Request</button>
+           <button class="btn secondary" onclick="router.navigate('workflows')" aria-label="View workflows"><span class="icon" aria-hidden="true">🔄</span> Workflows</button>
+           <button class="btn secondary" id="btn-forms-nav" style="display:none" onclick="router.navigate('forms')" aria-label="Manage forms"><span class="icon" aria-hidden="true">📋</span> Forms</button>
+           <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true">🚪</span> Logout</button>
         </nav>
       </div>
       <div id="dashboard-stats-loading" class="loading hidden" style="padding:8px 0"><div class="loading-spinner" aria-hidden="true"></div> Loading statistics…</div>
@@ -370,11 +371,329 @@
     </div>
   </div>
 
-  <div id="view-new-workflow" class="hidden">
-    <div class="container" id="main-content">
-      <div id="wf-create-container"></div>
-    </div>
-  </div>
+   <div id="view-new-workflow" class="hidden">
+     <div class="container" id="main-content">
+       <div id="wf-create-container"></div>
+     </div>
+   </div>
+
+   <div id="view-forms" class="hidden">
+     <div class="container" id="main-content">
+       <div class="header">
+         <div>
+           <h1>Forms</h1>
+           <p>Manage organization forms</p>
+         </div>
+         <nav aria-label="Forms actions">
+           <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon" aria-hidden="true">🏠</span> Dashboard</button>
+           <button class="btn" id="btn-create-form" onclick="app.showFormCreateView()"><span class="icon" aria-hidden="true">➕</span> Create Form</button>
+         </nav>
+       </div>
+
+       <div class="card">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+           <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:250px">
+             <span class="icon">🔍</span>
+             <input type="text" id="form-search" placeholder="Search forms by name or key…" style="flex:1">
+           </div>
+           <div id="form-filters" style="display:flex;gap:8px;align-items:center">
+             <select id="form-status-filter" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg)">
+               <option value="">All statuses</option>
+               <option value="DRAFT">Draft</option>
+               <option value="ACTIVE">Active</option>
+               <option value="ARCHIVED">Archived</option>
+             </select>
+           </div>
+         </div>
+
+         <div id="form-list-loading" class="loading hidden" style="padding:20px;text-align:center">
+           <div class="loading-spinner" aria-hidden="true"></div> Loading forms…
+         </div>
+         <div id="form-list-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger)" role="alert"></div>
+
+         <table id="form-table" aria-label="Forms">
+           <thead>
+             <tr>
+               <th scope="col">Name</th>
+               <th scope="col">Key</th>
+               <th scope="col">Version</th>
+               <th scope="col">Status</th>
+               <th scope="col">Fields</th>
+               <th scope="col">Last Updated</th>
+               <th scope="col">Actions</th>
+             </tr>
+           </thead>
+           <tbody id="form-table-body">
+             <tr><td colspan="7" class="empty">Loading forms…</td></tr>
+           </tbody>
+         </table>
+         <div id="form-empty" class="empty hidden" style="padding:40px;text-align:center">No forms match your search. <a href="#" onclick="app.clearFormSearch()">Clear filters</a>.</div>
+         <div id="form-pagination" style="margin-top:12px"></div>
+       </div>
+     </div>
+   </div>
+
+   <div id="view-form-design" class="hidden">
+     <div class="container" id="main-content">
+       <div class="header">
+         <div>
+           <h1 id="form-design-title"></h1>
+           <p id="form-design-subtitle" style="color:var(--text-secondary);margin-top:4px">
+             <span id="form-design-status" class="badge"></span>
+             <span id="form-design-key" class="text-muted" style="font-size:0.85rem"></span>
+           </p>
+         </div>
+         <nav aria-label="Form design actions">
+           <button class="btn secondary" onclick="router.navigate('forms')"><span class="icon" aria-hidden="true">←</span> Forms</button>
+           <button class="btn secondary" id="btn-form-preview" onclick="app.previewForm()"><span class="icon" aria-hidden="true">👁️</span> Preview</button>
+           <button class="btn" id="btn-form-save" onclick="app.saveFormDraft()"><span class="icon" aria-hidden="true">💾</span> Save Draft</button>
+           <button class="btn" id="btn-form-publish" style="display:none" onclick="app.publishForm()"><span class="icon" aria-hidden="true">🚀</span> Publish</button>
+         </nav>
+       </div>
+
+       <div id="form-design-error" class="hidden" style="color:var(--danger);padding:12px 16px;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger);margin-bottom:16px" role="alert"></div>
+       <div id="form-design-success" class="hidden" style="color:var(--success);padding:12px 16px;background:var(--success-light);border-radius:var(--radius-sm);border:1px solid var(--success);margin-bottom:16px" role="status"></div>
+
+       <div class="card">
+         <h2>Form Details</h2>
+         <div class="form-fields">
+           <div class="form-field">
+             <label for="form-name">Name <span class="required-marker">*</span></label>
+             <input id="form-name" type="text" placeholder="e.g. Intake Questionnaire" style="width:100%">
+           </div>
+           <div class="form-field">
+             <label for="form-key">Key <span class="required-marker">*</span></label>
+             <input id="form-key" type="text" placeholder="e.g. intake_form" style="width:100%">
+             <p class="field-description">Machine-readable identifier. Lowercase letters, numbers, and underscores only.</p>
+           </div>
+           <div class="form-field">
+             <label for="form-description">Description</label>
+             <textarea id="form-description" rows="3" placeholder="Describe what this form is for…" style="width:100%"></textarea>
+           </div>
+         </div>
+       </div>
+
+       <div class="card" style="margin-top:16px">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+           <h2 style="margin:0">Fields</h2>
+           <button class="btn" onclick="app.addField()"><span class="icon" aria-hidden="true">➕</span> Add Field</button>
+         </div>
+
+         <div id="form-fields-list" style="display:grid;gap:12px">
+           <div class="empty" style="padding:20px;text-align:center">No fields yet. Add one to get started.</div>
+         </div>
+       </div>
+     </div>
+   </div>
+
+   <div id="view-form-detail" class="hidden">
+     <div class="container" id="main-content">
+       <div class="header">
+         <div>
+           <h1 id="form-detail-title"></h1>
+           <p id="form-detail-subtitle" style="color:var(--text-secondary);margin-top:4px">
+             <span id="form-detail-status" class="badge"></span>
+             <span id="form-detail-key" class="text-muted" style="font-size:0.85rem"></span>
+           </p>
+         </div>
+          <nav aria-label="Form detail actions">
+            <button class="btn secondary" onclick="router.navigate('forms')"><span class="icon" aria-hidden="true">←</span> Forms</button>
+            <button class="btn" id="btn-edit-form" onclick="app.showFormEditView(app.formCurrentId)"><span class="icon" aria-hidden="true">✏️</span> Edit</button>
+            <button class="btn secondary" id="btn-assign-form" onclick="app.assignFormToWorkflow(app.formCurrentId)"><span class="icon" aria-hidden="true">🔗</span> Assign to State</button>
+          </nav>
+       </div>
+
+       <div id="form-detail-error" class="hidden" style="color:var(--danger);padding:12px 16px;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger);margin-bottom:16px" role="alert"></div>
+
+        <div class="card">
+          <h2>Form Details</h2>
+          <dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px">
+            <dt>Name</dt>
+           <dd id="form-detail-name"></dd>
+           <dt>Key</dt>
+           <dd id="form-detail-key-val"></dd>
+           <dt>Description</dt>
+           <dd id="form-detail-description"></dd>
+           <dt>Version</dt>
+           <dd id="form-detail-version"></dd>
+           <dt>Status</dt>
+           <dd id="form-detail-status-val"></dd>
+         </dl>
+       </div>
+
+       <div class="card" style="margin-top:16px">
+         <h2>Fields</h2>
+         <table class="table" id="form-detail-fields-table" aria-label="Form fields">
+           <thead>
+             <tr><th>Key</th><th>Label</th><th>Type</th><th>Required</th><th>Validation</th></tr>
+           </thead>
+           <tbody></tbody>
+         </table>
+       </div>
+
+       <div class="card" style="margin-top:16px">
+         <h2>Workflow Assignments</h2>
+         <div id="form-workflow-assignments" class="empty">No workflow assignments yet.</div>
+       </div>
+     </div>
+   </div>
+
+   <div id="form-field-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="form-field-modal-title">
+     <div class="card" style="max-width:600px;width:100%">
+       <h2 id="form-field-modal-title">Add Field</h2>
+
+       <div class="form-fields">
+         <div class="form-field">
+           <label for="field-label">Label <span class="required-marker">*</span></label>
+           <input id="field-label" type="text" placeholder="e.g. Full Name" style="width:100%">
+         </div>
+
+         <div class="form-field">
+           <label for="field-key">Key <span class="required-marker">*</span></label>
+           <input id="field-key" type="text" placeholder="e.g. full_name" style="width:100%">
+           <p class="field-description">Machine-readable identifier. Lowercase letters, numbers, and underscores only.</p>
+         </div>
+
+         <div class="form-field">
+           <label for="field-type">Field Type <span class="required-marker">*</span></label>
+           <select id="field-type" style="width:100%">
+             <option value="text">Text</option>
+             <option value="textarea">Textarea</option>
+             <option value="number">Number</option>
+             <option value="decimal">Decimal</option>
+             <option value="date">Date</option>
+             <option value="datetime">DateTime</option>
+             <option value="boolean">Boolean (Checkbox)</option>
+             <option value="select">Select</option>
+             <option value="multiselect">Multi-Select</option>
+             <option value="radio">Radio Group</option>
+             <option value="checkbox">Checkbox Group</option>
+             <option value="email">Email</option>
+             <option value="phone">Phone</option>
+           </select>
+         </div>
+
+         <div class="form-field">
+           <label>
+             <input type="checkbox" id="field-required">
+             Marked as required
+           </label>
+         </div>
+
+         <div class="form-field">
+           <label for="field-description">Description</label>
+           <input id="field-description" type="text" placeholder="Help text shown below the field" style="width:100%">
+         </div>
+
+         <div class="form-field">
+           <label for="field-placeholder">Placeholder</label>
+           <input id="field-placeholder" type="text" placeholder="e.g. Jane Doe" style="width:100%">
+         </div>
+
+         <div class="form-field">
+           <label for="field-default">Default Value</label>
+           <input id="field-default" type="text" placeholder="e.g. N/A" style="width:100%">
+         </div>
+
+         <div id="field-options-container" class="form-field" style="display:none">
+           <label>Options <span class="required-marker">*</span></label>
+           <p class="text-muted" style="font-size:0.85rem;margin:0 0 8px">Define the selectable values for this field.</p>
+           <div id="field-options-list" style="display:grid;gap:8px">
+             <div class="option-row" style="display:flex;gap:8px;align-items:center">
+               <input type="text" class="option-value" placeholder="Value" style="flex:1">
+               <input type="text" class="option-label" placeholder="Display Label" style="flex:2">
+               <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+             </div>
+           </div>
+           <button type="button" class="btn secondary sm" style="margin-top:8px" onclick="app.addOption()"><span class="icon" aria-hidden="true">➕</span> Add Option</button>
+         </div>
+
+         <div class="form-field">
+           <label>Validation</label>
+           <div id="field-validation-rules" style="display:grid;gap:8px">
+             <div id="validation-required" style="display:block">
+               <label style="display:flex;align-items:center;gap:8px">
+                 <input type="checkbox" id="val-required" onchange="app.toggleValidation('required', this.checked)">
+                 Required field
+               </label>
+             </div>
+             <div id="validation-min" style="display:none">
+               <label style="display:flex;align-items:center;gap:8px">
+                 <input type="checkbox" id="val-minimum" onchange="app.toggleValidation('minimum',this.checked)">
+                 Minimum number
+                 <input type="number" class="val-input" data-val="minimum" style="width:80px" min="0">
+               </label>
+             </div>
+             <div id="validation-max" style="display:none">
+               <label style="display:flex;align-items:center;gap:8px">
+                 <input type="checkbox" id="val-maximum" onchange="app.toggleValidation('maximum',this.checked)">
+                 Maximum number
+                 <input type="number" class="val-input" data-val="maximum" style="width:80px" min="0">
+               </label>
+             </div>
+             <div id="validation-min-length" style="display:none">
+               <label style="display:flex;align-items:center;gap:8px">
+                 <input type="checkbox" id="val-min_length" onchange="app.toggleValidation('min_length',this.checked)">
+                 Min length
+                 <input type="number" class="val-input" data-val="min_length" style="width:80px" min="1">
+               </label>
+             </div>
+             <div id="validation-max-length" style="display:none">
+               <label style="display:flex;align-items:center;gap:8px">
+                 <input type="checkbox" id="val-max_length" onchange="app.toggleValidation('max_length',this.checked)">
+                 Max length
+                 <input type="number" class="val-input" data-val="max_length" style="width:80px" min="1">
+               </label>
+             </div>
+             <div id="validation-pattern" style="display:none">
+               <label style="display:flex;align-items:center;gap:8px">
+                 <input type="checkbox" id="val-pattern" onchange="app.toggleValidation('pattern',this.checked)">
+                 Pattern (regex)
+                 <input type="text" class="val-input" data-val="pattern" style="width:200px" placeholder="e.g. ^[A-Z]{2}\d{4}$">
+               </label>
+             </div>
+           </div>
+         </div>
+       </div>
+
+       <div style="display:flex;gap:8px;justify-content:flex-end">
+         <button type="button" class="btn secondary" onclick="app.cancelFieldModal()"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+         <button type="button" class="btn" onclick="app.saveFieldModal()">Save</button>
+       </div>
+     </div>
+   </div>
+
+   <div id="form-assign-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="form-assign-modal-title">
+     <div class="card" style="max-width:600px;width:100%">
+       <h2 id="form-assign-modal-title">Assign Form to Workflow State</h2>
+
+       <div class="form-fields">
+         <div class="form-field">
+           <label for="assign-workflow">Workflow <span class="required-marker">*</span></label>
+           <select id="assign-workflow" style="width:100%"></select>
+         </div>
+
+         <div class="form-field">
+           <label for="assign-state">Workflow State <span class="required-marker">*</span></label>
+           <select id="assign-state" style="width:100%"></select>
+         </div>
+
+         <div class="form-field">
+           <label>
+             <input type="checkbox" id="assign-required">
+             Form is required at this state
+           </label>
+         </div>
+       </div>
+
+       <div style="display:flex;gap:8px;justify-content:flex-end">
+         <button type="button" class="btn secondary" onclick="app.cancelAssignModal()"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+         <button type="button" class="btn" onclick="app.saveAssignForm()">Save</button>
+       </div>
+     </div>
+   </div>
+
+
 
   <div id="eligibility-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="elig-modal-title">
     <div class="card" style="max-width:500px;width:100%">

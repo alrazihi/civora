@@ -371,8 +371,8 @@ test.describe('Dynamic Form Renderer', () => {
       expect(page.locator(`[data-field-key="${key}"]`)).toBeVisible();
     });
 
-    // Required fields should have asterisk marker
-    await expect(page.locator('.required-marker')).toHaveCount(5); // full_name, email, household_size, preferred_contact, consent
+     // Required fields should have asterisk marker (scoped to form container)
+    await expect(page.locator('#form-container .required-marker')).toHaveCount(5); // full_name, email, household_size, preferred_contact, consent
 
     // Submit button should exist
     await expect(page.locator('#form-container button[type="submit"]')).toHaveCount(1);
