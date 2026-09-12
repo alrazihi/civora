@@ -94,7 +94,9 @@ func (h *Handler) CreateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-	defer r.Body.Close()
+	defer func() {
+		_ = r.Body.Close()
+	}()
 
 	var req struct {
 		Key          string                      `json:"key"`
@@ -332,7 +334,9 @@ func (h *Handler) UpdateWorkflowDefinition(w http.ResponseWriter, r *http.Reques
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-	defer r.Body.Close()
+	defer func() {
+		_ = r.Body.Close()
+	}()
 
 	var req struct {
 		Key          string                      `json:"key"`

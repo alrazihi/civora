@@ -74,7 +74,9 @@ func (r *PostgresEvidenceRepository) FindByServiceRequest(ctx context.Context, o
 	if err != nil {
 		return nil, fmt.Errorf("failed to query evidence: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []*domain.Evidence
 	for rows.Next() {
@@ -113,7 +115,9 @@ func (r *PostgresEvidenceRepository) FindByOrganization(ctx context.Context, org
 	if err != nil {
 		return nil, fmt.Errorf("failed to query evidence: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []*domain.Evidence
 	for rows.Next() {

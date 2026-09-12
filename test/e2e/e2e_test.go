@@ -107,7 +107,9 @@ func SetupTestServer(t *testing.T) *TestServer {
 	db, err := database.NewDatabase(dsn, cfg.Database.Driver)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		db.DB.Close()
+		if err := db.DB.Close(); err != nil {
+			t.Logf("failed to close database connection: %v", err)
+		}
 	})
 
 	migrator := database.NewMigrator(db.DB, migrations.FS)
