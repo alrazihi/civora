@@ -32,6 +32,32 @@ go test -short -c ./test/e2e/            # compile e2e tests without running
 Integration and e2e tests require a PostgreSQL instance with a `civora_test` user
 and database. They are skipped automatically when `-short` is passed.
 
+### Frontend E2E tests (Playwright)
+
+The web frontend (`web/`) ships a Playwright suite under `web/e2e/`. It serves
+`web/` as a static site (no Go backend or PostgreSQL required) and mocks the
+API via request interception, so it runs fully offline.
+
+```bash
+cd web/e2e
+
+# Install deps once (also installs the chromium browser)
+npm install
+npx playwright install --with-deps chromium
+
+# Run the suite (default: 2 workers locally; 1 worker in CI)
+npm test
+# or: npx playwright test
+
+# Interactively step through tests
+npm run test:ui
+```
+
+The static server is started/stopped automatically by `globalSetup`/`globalTeardown`;
+`npm test` (alias) takes care of this. Tests live in `web/e2e/tests/` and are
+written in TypeScript (`cases.spec.ts`).
+
+
 To start the database locally with Docker Compose:
 
 ```bash
