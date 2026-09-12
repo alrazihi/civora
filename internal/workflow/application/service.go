@@ -15,9 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type sqlExecer interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-}
 
 // TransitionObserver is an optional generic extension point for applications
 // that need to react to a transition before it commits.

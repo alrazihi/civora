@@ -179,7 +179,9 @@ SELECT id, organization_id, actor_id, action, resource,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit events: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var events []*domain.AuditEvent
 	for rows.Next() {
@@ -240,7 +242,9 @@ SELECT id, organization_id, actor_id, action, resource,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit events by resource: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var events []*domain.AuditEvent
 	for rows.Next() {
@@ -286,7 +290,9 @@ func (r *PostgresAuditRepository) AllOrganizationIDs(ctx context.Context) ([]uui
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit organization ids: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var ids []uuid.UUID
 	for rows.Next() {

@@ -83,7 +83,9 @@ func (r *PostgresFollowUpRepository) FindByServiceRequest(ctx context.Context, o
 	if err != nil {
 		return nil, fmt.Errorf("failed to query follow-ups: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []*domain.FollowUp
 	for rows.Next() {
@@ -122,7 +124,9 @@ func (r *PostgresFollowUpRepository) FindByOrganization(ctx context.Context, org
 	if err != nil {
 		return nil, fmt.Errorf("failed to query follow-ups: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var items []*domain.FollowUp
 	for rows.Next() {
