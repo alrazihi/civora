@@ -555,6 +555,7 @@ const app = {
       this.renderSectionActions();
       this.renderActions();
       await this.loadTimeline(id);
+      await this.loadRequiredForms(id);
 
       // Show content, hide loading
       if (loadingEl) loadingEl.classList.add('hidden');
@@ -1905,7 +1906,176 @@ async loadSection(name, path) {
   logout() {
     clearAuth();
     router.navigate('login');
-  }
+  },
+
+  // ── Dynamic Form Integration ─────────────────────────────────────────────
+  //
+  // The following methods provide a generic integration point between
+  // the workflow engine and the dynamic form renderer.  When a case is
+  // loaded we ask the backend (via getRequiredForms) which forms are
+  // required at the current workflow state.  The backend may return
+  // zero, one, or more form definitions.
+  //
+  // Current implementation state:
+  //   • The backend endpoint does not yet exist (404 is expected).
+  //   • getRequiredForms gracefully handles 404 and returns an empty
+  //     array so the UI shows "no required forms".
+  //   • When a form IS returned, it is rendered via FormRenderer.
+  //
+  // To activate: the backend needs to expose
+  //   GET /organizations/{orgId}/cases/{caseId}/workflow/forms
+  // returning: { data: [FormDefinition, ...] }
+
+  currentFormDef: null,
+  currentFormState: null,
+
+   async getRequiredForms(caseId, workflowState) {
+     try {
+       const res = await api('GET',
+         this.orgPath(`/cases/${caseId}/workflow/forms`) +
+         (workflowState ? `?state=${encodeURIComponent(workflowState)}` : ''));
+       return res.data || [];
+    } catch (err) {
+      if (err.message && err.message.includes('404')) {
+        return [];
+      }
+      if (err.message && err.message.includes('403')) {
+        console.warn('Not authorized to view forms for this case');
+        return [];
+      }
+      console.error('Error loading required forms:', err);
+      return [];
+    }
+  },
+
+  async loadRequiredForms(caseId) {
+    const formCard = document.getElementById('card-dynamic-form');
+    const formTitle = document.getElementById('dynamic-form-title');
+    const container = document.getElementById('form-container');
+
+    if (!formCard || !container) return;
+
+    const currentState = this.currentWorkflow?.instance?.current_state;
+    const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow, this._terminalStates);
+
+    if (isTerminal) {
+      formCard.style.display = 'none';
+      return;
+    }
+
+    try {
+      FormRenderer.showFormLoading(container, 'Loading required forms…');
+      formCard.style.display = 'block';
+      formCard.classList.remove('terminal-state');
+
+      const forms = await this.getRequiredForms(caseId, currentState);
+
+      if (!forms.length) {
+        formCard.style.display = 'none';
+        return;
+      }
+
+      const formDef = forms[0];
+      this.currentFormDef = formDef;
+
+      formTitle.textContent = formDef.name || 'Required Form';
+      formCard.style.display = 'block';
+
+      if (FormRenderer && typeof FormRenderer.renderForm === 'function') {
+        this.currentFormState = FormRenderer.renderForm(
+          formDef,
+          container,
+          {
+            onSubmit: (e, values, formState, formDef) => { this.handleFormSubmit(e, values, formState, formDef); },
+            onCancel: () => { this.hideFormModal(); },
+          }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load forms:', err);
+      if (container) {
+        FormRenderer.showFormEmpty(container, 'Unable to load the required form at this time.');
+      }
+    }
+  },
+
+  async handleFormSubmit(e, values, formState, formDef) {
+    const formCard = document.getElementById('card-dynamic-form');
+    const container = document.getElementById('form-container');
+    if (!formCard || !container) return;
+
+    const messageEl = container.querySelector('.form-message');
+    const showMessage = (type, text) => {
+      let msgEl = container.querySelector('.form-message');
+      if (!msgEl) {
+        msgEl = document.createElement('div');
+        msgEl.className = 'form-message ' + type;
+        container.appendChild(msgEl);
+      }
+      msgEl.textContent = text;
+      msgEl.className = 'form-message ' + type;
+    };
+
+    if (messageEl) {
+      messageEl.classList.add('hidden');
+      messageEl.textContent = '';
+    }
+
+    // Disable submit button
+    const submitBtn = container.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loading-spinner" style="width:16px;height:16px"></span> Submitting…';
+    }
+
+    try {
+      const res = await submitForm(this.currentCase.id, values, {
+        formKey: formDef.key,
+        submissionId: this.currentFormSubmissionId,
+      });
+
+      showMessage('success', 'Form submitted successfully.');
+      this.currentFormSubmissionId = res?.id || this.currentFormSubmissionId;
+      this.currentFormState = null;
+
+      // Clear form state after successful submission
+      formCard.style.display = 'none';
+
+      // Reload case to reflect any workflow changes
+      await this.loadCase(this.currentCase.id);
+      this.renderSectionActions();
+      this.renderActions();
+
+      showToast('Form submitted successfully', 'success');
+    } catch (err) {
+      if (err.status === 403) {
+        showMessage('error', 'You are not authorized to submit this form.');
+      } else if (err.status === 400) {
+        // Server-side validation errors
+        const errData = err.data || {};
+        const fieldErrors = errData?.error?.field_errors || errData?.field_errors;
+        if (fieldErrors) {
+          formState.setServerErrors(fieldErrors);
+        } else {
+          showMessage('error', errData?.error?.message || err.message || 'Please correct the errors above.');
+        }
+      } else {
+        showMessage('error', err.message);
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="icon">💾</span> Submit';
+      }
+    }
+  },
+
+  hideFormModal() {
+    const modal = document.getElementById('form-modal');
+    if (modal) modal.classList.add('hidden');
+    this.currentFormDef = null;
+    this.currentFormState = null;
+  },
 };
 
 const router = {
@@ -1937,6 +2107,7 @@ router.on('login', () => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
 });
 
 router.on('dashboard', async () => {
@@ -1947,6 +2118,7 @@ router.on('dashboard', async () => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
   await app.loadDashboard();
 });
 
@@ -1959,6 +2131,7 @@ router.on('case', async (id) => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
   await app.loadCase(id);
 });
 
@@ -1970,6 +2143,7 @@ router.on('new-case', (preselectId) => {
   document.getElementById('view-workflows').classList.add('hidden');
   document.getElementById('view-workflow-detail').classList.add('hidden');
   document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
   app.selectedWorkflow = null;
   app.loadNewCaseWorkflows(preselectId);
 });
@@ -1977,13 +2151,16 @@ router.on('new-case', (preselectId) => {
 router.on('workflows', () => {
   app.switchView('view-workflows');
   app.loadWorkflowList(1);
+  document.getElementById('form-modal').classList.add('hidden');
 });
 
 router.on('workflow', (id) => {
   if (!id) { router.navigate('workflows'); return; }
   app.showWorkflowDetail(id);
+  document.getElementById('form-modal').classList.add('hidden');
 });
 
 router.on('new-workflow', () => {
   app.showWorkflowCreateView();
+  document.getElementById('form-modal').classList.add('hidden');
 });
