@@ -137,26 +137,48 @@ test.describe('New case workflow selection', () => {
     await expect(page.locator('#view-case')).toBeVisible();
   });
 
-  test('blocks creation when the workflow has no known service type', async ({ page }) => {
+  test('supports custom workflows without a known service type mapping', async ({ page }) => {
     await openDashboard(page);
     page.route(routes.workflows, async (route) => {
       await route.fulfill({
         json: {
           success: true,
-          data: [{ ...EMERGENCY_WORKFLOW, id: 'wf-custom', key: 'CUSTOM_UNKNOWN' }],
+          data: [{ ...EMERGENCY_WORKFLOW, id: 'wf-custom', key: 'CUSTOM_SUPPORT', name: 'Custom Support' }],
+        },
+      });
+    });
+    // POST cases is mocked by attachCaseMocks? No — we override below for this test.
+    page.route(routes.casesCreate, async (route, request) => {
+      if (request.method() !== 'POST') { await route.continue(); return; }
+      const body = JSON.parse(request.postData() || '{}');
+      await route.fulfill({
+        json: { success: true, data: { id: 'case-custom', title: body.title, status: 'REQUESTED', service_type: body.service_type, priority: body.priority, workflow_id: body.workflow_id } },
+      });
+    });
+    await page.route(routes.caseWorkflow('case-custom'), async (route) => {
+      await route.fulfill({
+        json: {
+          success: true,
+          data: {
+            instance: {
+              id: 'inst-custom',
+              workflow_definition_id: 'wf-custom',
+              current_state: 'REQUESTED',
+              started_at: '2026-09-12T01:00:00Z',
+            },
+            definition: { ...EMERGENCY_WORKFLOW, id: 'wf-custom', key: 'CUSTOM_SUPPORT', name: 'Custom Support', initial_state: 'REQUESTED' },
+          },
         },
       });
     });
     await page.evaluate(() => router.navigate('new-case'));
 
-    await expect(page.locator('#workflow-preview')).toContainText(/not directly usable/i);
-    // Invoke the handler directly: the form's required-field validation
-    // (empty title) prevents the native submit event from firing.
-    await page.evaluate(() => app.createCase({ preventDefault() {} }));
-    // The workflow has no known service type, so case creation is blocked with
-    // an error toast and no navigation occurs.
-    await expect(page.locator('.toast.error')).toContainText(/cannot be used to create a case/i, { timeout: 1000 });
-    await expect(page).toHaveURL(/#new-case$/);
+    await page.fill('#c-title', 'Custom workflow case');
+    await newCaseSubmit(page).click();
+
+    // Custom workflow is now supported: navigation occurs to the new case.
+    await expect(page).toHaveURL(/#case\/case-custom/);
+    await expect(page.locator('#view-case')).toBeVisible();
   });
 });
 

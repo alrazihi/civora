@@ -230,17 +230,14 @@ const app = {
       showToast('Select a workflow definition before creating a case', 'error');
       return;
     }
-    const serviceType = deriveServiceTypeForWorkflow(workflow);
-    if (!serviceType) {
-      showToast(`Workflow "${workflow.name}" cannot be used to create a case with the current API. Only service-type workflows are supported.`, 'error');
-      return;
-    }
+    const serviceType = deriveServiceTypeForWorkflow(workflow) || 'GENERAL';
     const data = {
       title: document.getElementById('c-title').value.trim(),
       description: document.getElementById('c-desc').value.trim(),
       service_type: serviceType,
       priority: document.getElementById('c-priority').value || 'NORMAL',
       person_id: document.getElementById('new-case-person-id').value || undefined,
+      workflow_id: workflow.id,
     };
     if (!data.title) {
       showToast('Title is required', 'error');
@@ -267,7 +264,7 @@ const app = {
       throw new Error('No workflow instance was attached to the created case');
     }
     if (String(instance.workflow_definition_id) !== String(expectedDefId)) {
-      throw new Error(`Selected workflow was not attached to the case (expected definition ${expectedDefId}, got ${instance.workflow_definition_id}). The backend does not currently support explicit workflow selection by definition id; it binds workflows by service_type.`);
+      throw new Error(`Selected workflow was not attached to the case (expected definition ${expectedDefId}, got ${instance.workflow_definition_id}).`);
     }
   },
 
@@ -357,13 +354,11 @@ const app = {
     });
     const preview = document.getElementById('workflow-preview');
     if (preview) {
-      const usable = deriveServiceTypeForWorkflow(wf);
       preview.innerHTML = `
         <h3 style="margin-top:0">Selected Workflow</h3>
         <p style="margin:4px 0"><strong>${escapeHTML(wf.name)}</strong> <span class="badge wf-status-${(wf.status || 'DRAFT').toLowerCase()}">${escapeHTML(wf.status || 'DRAFT')}</span></p>
         <p class="text-muted" style="margin:4px 0">Key: ${escapeHTML(wf.key)} · Version ${wf.version || 1} · Initial state: ${escapeHTML(wf.initial_state || '—')}</p>
         <p class="text-muted" style="margin:4px 0">States: ${(wf.states || []).length} · Transitions: ${(wf.transitions || []).length}</p>
-        ${usable ? '' : '<p style="color:var(--warning);margin:4px 0">This workflow is not directly usable for case creation.</p>'}
       `;
     }
   },

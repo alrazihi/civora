@@ -1575,21 +1575,10 @@ paths:
       tags: [Cases]
       summary: Change case status
       description: |
-        Transitions a case to a new status. Invalid transitions are rejected.
-
-        Valid transitions:
-        - NEW → OPEN
-        - NEW → IN_REVIEW
-        - OPEN → IN_REVIEW
-        - IN_REVIEW → ASSESSMENT
-        - IN_REVIEW → OPEN (reopen)
-        - ASSESSMENT → DECISION_PENDING
-        - DECISION_PENDING → APPROVED
-        - DECISION_PENDING → REJECTED
-        - APPROVED → IN_PROGRESS
-        - REJECTED → CLOSED
-        - IN_PROGRESS → FOLLOW_UP
-        - FOLLOW_UP → CLOSED
+        Transitions a case to a new status via the linked workflow definition.
+        The target status must correspond to a valid `to_state` on an active
+        transition from the case's current workflow state. Invalid or
+        unauthorized transitions are rejected. Requires authentication.
       security:
         - BearerAuth: []
       parameters:

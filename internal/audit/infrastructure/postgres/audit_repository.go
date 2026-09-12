@@ -376,6 +376,11 @@ func (r *PostgresAuditRepository) PurgeOld(ctx context.Context, olderThan time.T
 	return int(total), nil
 }
 
+type auditEventRow struct {
+	metadataJSON []byte
+	event        domain.AuditEvent
+}
+
 func (r *PostgresAuditRepository) rebuildAuditChain(ctx context.Context, tx *sql.Tx, orgID uuid.UUID) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, organization_id, actor_id, action, resource, resource_id,
@@ -388,36 +393,46 @@ func (r *PostgresAuditRepository) rebuildAuditChain(ctx context.Context, tx *sql
 	if err != nil {
 		return fmt.Errorf("failed to read audit chain: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var previousHash *string
+	var buffered []auditEventRow
 	for rows.Next() {
-		var event domain.AuditEvent
-		var metadataJSON []byte
+		var row auditEventRow
 		if err := rows.Scan(
-			&event.ID,
-			&event.OrganizationID,
-			&event.ActorID,
-			&event.Action,
-			&event.Resource,
-			&event.ResourceID,
-			&event.Outcome,
-			&event.RequestID,
-			&metadataJSON,
-			&event.Timestamp,
-			&event.PreviousHash,
-			&event.Hash,
+			&row.event.ID,
+			&row.event.OrganizationID,
+			&row.event.ActorID,
+			&row.event.Action,
+			&row.event.Resource,
+			&row.event.ResourceID,
+			&row.event.Outcome,
+			&row.event.RequestID,
+			&row.metadataJSON,
+			&row.event.Timestamp,
+			&row.event.PreviousHash,
+			&row.event.Hash,
 		); err != nil {
+			_ = rows.Close()
 			return fmt.Errorf("failed to scan audit chain: %w", err)
 		}
-		if len(metadataJSON) > 0 {
-			if err := json.Unmarshal(metadataJSON, &event.Metadata); err != nil {
+		if len(row.metadataJSON) > 0 {
+			if err := json.Unmarshal(row.metadataJSON, &row.event.Metadata); err != nil {
+				_ = rows.Close()
 				return fmt.Errorf("failed to unmarshal audit metadata: %w", err)
 			}
 		}
+		buffered = append(buffered, row)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("failed to iterate audit chain: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("failed to close audit chain cursor: %w", err)
+	}
 
-		event.PreviousHash = previousHash
-		hash, err := event.ComputeHash()
+	var previousHash *string
+	for _, row := range buffered {
+		row.event.PreviousHash = previousHash
+		hash, err := row.event.ComputeHash()
 		if err != nil {
 			return fmt.Errorf("failed to recompute audit hash: %w", err)
 		}
@@ -425,14 +440,11 @@ func (r *PostgresAuditRepository) rebuildAuditChain(ctx context.Context, tx *sql
 			UPDATE audit.audit_events
 			SET previous_hash = $1, hash = $2
 			WHERE id = $3
-		`, event.PreviousHash, hash, event.ID); err != nil {
+		`, row.event.PreviousHash, hash, row.event.ID); err != nil {
 			return fmt.Errorf("failed to update audit chain: %w", err)
 		}
 		hashValue := hash
 		previousHash = &hashValue
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("failed to iterate audit chain: %w", err)
 	}
 	return nil
 }
