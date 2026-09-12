@@ -808,10 +808,8 @@ func (s *WorkflowService) GetValidTransitions(ctx context.Context, tenantID, ins
 
 	var valid []domain.WorkflowTransition
 	for _, t := range transitions {
-		if target, ok := statesMap[t.ToState]; ok {
-			if !target.Terminal || instance.CurrentState == t.FromState {
-				valid = append(valid, t)
-			}
+		if _, ok := statesMap[t.ToState]; ok {
+			valid = append(valid, t)
 		}
 	}
 	return valid, nil

@@ -162,14 +162,25 @@ Optional improvement: Dedicated endpoint for section-action availability would e
 
 | Check | Result |
 |-------|--------|
-| `go test -short ./...` | All packages pass |
+| `go test -short ./...` | All 53 packages pass |
 | `go vet ./...` | Clean |
 | `gofmt -l .` | No unformatted files |
 | `go build ./...` | Pass |
-| `node --check app.js` | Pass |
-| `node --check api.js` | Pass |
-| `node --check tests.js` | Pass |
-| 46-point verification script | 46/46 PASS |
+| `npx @redocly/cli lint api/openapi/openapi.yaml` | Valid |
+| Integration/e2e tests | Skipped (no PostgreSQL available) |
+
+### Post-Report Fixes
+
+After the improvements report was authored, the following additional fixes were applied and verified:
+
+| Fix | Description |
+|-----|-------------|
+| Dashboard element IDs | `loadDashboard()` now references `dashboard-stats-loading`/`dashboard-stats-error` matching `web/index.html` |
+| Terminal state detection | `isCaseTerminal()` uses workflow definition terminal states instead of hardcoded `REJECTED` |
+| Generic workflow sections | `buildSectionTransitionMap()` falls back to mapping all transitions to all sections for generic workflows |
+| Dead code removal | Removed unused `steps`/`connectors` in `renderWorkflowProgress()` |
+| Transition query logic | Simplified tautological condition in `GetValidTransitions()` |
+| Seed comments | Corrected contradictory comments for Case A in seed data |
 
 ---
 

@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - JSONB scan panic in eligibility repository
 - Foreign key violation in E2E test due to nil UUID for `responsible_staff`
+- Dashboard loading/error element IDs in `web/js/app.js` now match `web/index.html` (`dashboard-stats-loading`/`dashboard-stats-error`)
+- `isCaseTerminal()` no longer hardcodes `REJECTED`; uses only `CLOSED` plus workflow definition terminal states for generic workflow support
+- `buildSectionTransitionMap()` uses name-based matching and fallback to map all transitions to all sections for generic workflows
+- Removed dead `steps`/`connectors` code in `renderWorkflowProgress()` in `web/js/app.js`
+- Simplified tautological condition in `GetValidTransitions()` (`internal/workflow/application/service.go`)
+- Corrected contradictory seed data comments for Case A in `cmd/seed/main.go`
 
 ---
 

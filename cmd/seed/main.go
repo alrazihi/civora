@@ -261,9 +261,10 @@ func main() {
 		log.Fatalf("failed to link workflow instance A to case: %v", err)
 	}
 
-	// CASE A — ACTIVE (at IN_REVIEW): no final decision yet
-	// No eligibility/evidence/assessment for case A to demonstrate the
-	// actual worker experience at IN_REVIEW.
+	// CASE A — ACTIVE (at IN_REVIEW):
+	// Already linked to workflow instance A (IN_REVIEW).
+	// Eligibility, evidence, and assessment demonstrate mid-workflow state.
+	// No decision recorded yet.
 
 	// CASE B — COMPLETED (full lifecycle)
 	instanceBID := uuid.New()

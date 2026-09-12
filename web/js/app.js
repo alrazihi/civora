@@ -63,13 +63,10 @@ function getTerminalStates(def) {
 }
 
 function isCaseTerminal(caseStatus, workflowInstance) {
-  // Terminal case statuses (regardless of workflow)
-  const terminalCaseStatuses = ['CLOSED', 'REJECTED'];
-  if (terminalCaseStatuses.includes(caseStatus)) return true;
-
-  // Also check workflow instance terminal states
-  if (workflowInstance) {
+  if (caseStatus === 'CLOSED') return true;
+  if (workflowInstance && workflowInstance.definition) {
     const terminalStates = getTerminalStates(workflowInstance.definition);
+    if (terminalStates.includes(caseStatus)) return true;
     if (terminalStates.includes(workflowInstance.instance.current_state)) return true;
   }
   return false;
@@ -202,8 +199,8 @@ const app = {
   async loadDashboard() {
     const tbody = document.getElementById('case-table-body');
     const statsEl = document.getElementById('dashboard-stats');
-    const loadingEl = document.getElementById('dashboard-loading');
-    const errorEl = document.getElementById('dashboard-error');
+    const loadingEl = document.getElementById('dashboard-stats-loading');
+    const errorEl = document.getElementById('dashboard-stats-error');
     const emptyEl = document.getElementById('dashboard-empty');
 
     // Show loading state
@@ -440,32 +437,6 @@ const app = {
     const terminalStates = getTerminalStates(def);
     const isTerminal = terminalStates.includes(currentState);
 
-    const steps = stateKeys.map((state, idx) => {
-      let cls = 'workflow-step';
-      if (idx < currentIndex) cls += ' completed';
-      else if (idx === currentIndex) cls += ' active';
-      else cls += ' pending';
-      if (isTerminal && idx <= currentIndex) cls += ' completed';
-      const stateDef = sortedStates[idx];
-      const label = stateDef?.name || state;
-      const description = stateDef?.description || '';
-      return `
-        <div class="${cls}" data-state="${escapeHTML(state)}" role="listitem" aria-current="${idx === currentIndex ? 'step' : 'false'}">
-          <div class="step-marker" aria-hidden="true">
-            ${idx < currentIndex ? '✓' : (idx === currentIndex ? '' : (idx + 1))}
-          </div>
-          <div class="step-content">
-            <span class="step-label">${escapeHTML(label)}</span>
-            ${description ? `<span class="step-description">${escapeHTML(description)}</span>` : ''}
-          </div>
-        </div>
-      `;
-    });
-
-    const connectors = stateKeys.slice(0, -1).map((_, idx) => `
-      <div class="workflow-connector ${idx < currentIndex ? 'completed' : ''} ${isTerminal && idx <= currentIndex ? 'completed' : ''}" aria-hidden="true"></div>
-    `).join('');
-
     let cleanHtml = '<div class="workflow-steps-container" role="list" aria-label="Workflow progress">';
     stateKeys.forEach((state, idx) => {
       let cls = 'workflow-step';
@@ -494,7 +465,6 @@ const app = {
     });
     cleanHtml += '</div>';
 
-    // Add legend
     cleanHtml += `
       <div class="workflow-legend" aria-hidden="true">
         <span class="legend-item"><span class="legend-dot completed"></span> Completed</span>
@@ -569,43 +539,44 @@ const app = {
       decision: [], assistance: [], followup: []
     };
 
-    for (const t of availableTransitions) {
-      const key = (t.key || '').toLowerCase();
-      const name = (t.name || '').toLowerCase();
-
-      if (key.includes('elig') || key === 'open' || key === 'review' || key === 'reopen')
-        map.eligibility.push(t.key);
-      if (key.includes('evidence') || key.includes('doc') || key.includes('upload') || key === 'open' || key === 'review')
-        map.evidence.push(t.key);
-      if (key.includes('assess'))
-        map.assessment.push(t.key);
-      if (key.includes('decide') || key.includes('approve') || key.includes('reject'))
-        map.decision.push(t.key);
-      if (key.includes('assist') || key.includes('start') || key.includes('progress') || key.includes('follow') || key === 'complete')
-        map.assistance.push(t.key);
-      if (key.includes('follow') || key === 'complete')
-        map.followup.push(t.key);
-    }
+    const matchedKeys = new Set();
 
     for (const t of availableTransitions) {
       const key = (t.key || '').toLowerCase();
       const name = (t.name || '').toLowerCase();
-      if (!map.eligibility.includes(t.key) && (name.includes('elig') || name.includes('open') || name.includes('review')))
-        map.eligibility.push(t.key);
-      if (!map.evidence.includes(t.key) && (name.includes('evidence') || name.includes('document') || name.includes('open') || name.includes('review')))
-        map.evidence.push(t.key);
-      if (!map.assessment.includes(t.key) && name.includes('assess'))
-        map.assessment.push(t.key);
-      if (!map.decision.includes(t.key) && (name.includes('decide') || name.includes('approve') || name.includes('reject')))
-        map.decision.push(t.key);
-      if (!map.assistance.includes(t.key) && (name.includes('assist') || name.includes('start') || name.includes('progress') || name.includes('follow')))
-        map.assistance.push(t.key);
-      if (!map.followup.includes(t.key) && name.includes('follow'))
-        map.followup.push(t.key);
+
+      let matched = false;
+      if (key.includes('elig') || key === 'open' || key === 'review' || key === 'reopen') { map.eligibility.push(t.key); matched = true; }
+      if (key.includes('evidence') || key.includes('doc') || key.includes('upload') || key === 'open' || key === 'review') { map.evidence.push(t.key); matched = true; }
+      if (key.includes('assess')) { map.assessment.push(t.key); matched = true; }
+      if (key.includes('decide') || key.includes('approve') || key.includes('reject')) { map.decision.push(t.key); matched = true; }
+      if (key.includes('assist') || key.includes('start') || key.includes('progress') || key.includes('follow') || key === 'complete') { map.assistance.push(t.key); matched = true; }
+      if (key.includes('follow') || key === 'complete') { map.followup.push(t.key); matched = true; }
+
+      if (!map.eligibility.includes(t.key) && (name.includes('elig') || name.includes('open') || name.includes('review'))) { map.eligibility.push(t.key); matched = true; }
+      if (!map.evidence.includes(t.key) && (name.includes('evidence') || name.includes('document') || name.includes('open') || name.includes('review'))) { map.evidence.push(t.key); matched = true; }
+      if (!map.assessment.includes(t.key) && name.includes('assess')) { map.assessment.push(t.key); matched = true; }
+      if (!map.decision.includes(t.key) && (name.includes('decide') || name.includes('approve') || name.includes('reject'))) { map.decision.push(t.key); matched = true; }
+      if (!map.assistance.includes(t.key) && (name.includes('assist') || name.includes('start') || name.includes('progress') || name.includes('follow'))) { map.assistance.push(t.key); matched = true; }
+      if (!map.followup.includes(t.key) && name.includes('follow')) { map.followup.push(t.key); matched = true; }
+
+      if (matched) matchedKeys.add(t.key);
     }
 
-    for (const k of Object.keys(map))
+    for (const k of Object.keys(map)) {
       map[k] = [...new Set(map[k])];
+    }
+
+    // For generic workflows where no transition keywords match section names,
+    // enable all sections since sections are independent data collections.
+    const anyUnmatched = availableTransitions.some(t => !matchedKeys.has(t.key));
+    if (anyUnmatched && availableTransitions.length > 0) {
+      for (const k of Object.keys(map)) {
+        if (map[k].length === 0) {
+          map[k] = availableTransitions.map(t => t.key);
+        }
+      }
+    }
 
     return map;
   },
