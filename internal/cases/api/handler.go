@@ -32,6 +32,11 @@ type CaseService interface {
 	GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
 	ChangeStatus(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
 	AssignCase(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
+	GetCaseForms(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.CaseFormAvailability, error)
+	SubmitForm(ctx context.Context, orgID, caseID, submittedBy uuid.UUID, formVersionID uuid.UUID, data map[string]interface{}) (*application.SubmissionResponse, error)
+	GetSubmission(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error)
+	ListSubmissions(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
+	GetWorkflowRequirements(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
@@ -50,7 +55,12 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Get("/{caseId}/timeline", h.GetCaseTimeline)
 			r.Post("/{caseId}/transitions", h.ChangeCaseStatus)
 			r.Post("/{caseId}/assign", h.AssignCase)
+			r.Get("/{caseId}/forms", h.GetCaseForms)
+			r.Get("/{caseId}/form-submissions", h.ListSubmissions)
+			r.Get("/{caseId}/workflow/requirements", h.GetWorkflowRequirements)
 		})
+		r.Post("/{caseId}/form-submissions", h.SubmitForm)
+		r.Get("/{caseId}/form-submissions/{submissionId}", h.GetSubmission)
 	})
 }
 
@@ -423,3 +433,153 @@ func writeCaseError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
 }
+
+func (h *Handler) GetCaseForms(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	forms, err := h.svc.GetCaseForms(ctx, orgID, caseID)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, forms, nil)
+}
+
+func (h *Handler) SubmitForm(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+	userID := getUserID(r)
+
+	var req application.SubmitFormParams
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	submission, err := h.svc.SubmitForm(ctx, orgID, caseID, userID, req.FormVersionID, req.Data)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusCreated, submission, nil)
+}
+
+func (h *Handler) GetSubmission(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+	submissionID, ok := parseUUID(r, "submissionId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid submission ID")
+		return
+	}
+
+	submission, err := h.svc.GetSubmission(ctx, orgID, caseID, submissionID)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, submission, nil)
+}
+
+func (h *Handler) ListSubmissions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	submissions, err := h.svc.ListSubmissions(ctx, orgID, caseID)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, submissions, nil)
+}
+
+func (h *Handler) GetWorkflowRequirements(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	requirements, err := h.svc.GetWorkflowRequirements(ctx, orgID, caseID)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, requirements, nil)
+}
+
+func writeCaseFormError(w http.ResponseWriter, err error) {
+	switch {
+	case err == application.ErrCaseNotFound:
+		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "case not found")
+	case err == application.ErrWorkflowInstanceNotFound:
+		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow instance not found")
+	case err == application.ErrFormNotAssigned:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form is not assigned to the current workflow state")
+	case err == application.ErrFormNotPublished:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form version is not published")
+	case err == application.ErrFormArchived:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form is archived")
+	case err == application.ErrSubmissionExists:
+		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "submission already exists for this case and form version")
+	case err == application.ErrUnknownFields:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "submission contains unknown fields")
+	case err == application.ErrFieldValidationFailed:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "field validation failed")
+	case err == application.ErrOptionValidationFailed:
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "option validation failed")
+	case errors.Is(err, domain.ErrCaseTenantViolation):
+		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "tenant violation")
+	default:
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
+	}
+}
+

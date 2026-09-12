@@ -39,6 +39,7 @@ import (
 	formapi "github.com/alrazihi/civora/internal/forms/api"
 	formapp "github.com/alrazihi/civora/internal/forms/application"
 	formpostgres "github.com/alrazihi/civora/internal/forms/infrastructure/postgres"
+	submissionpostgres "github.com/alrazihi/civora/internal/form_submission/infrastructure/postgres"
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
@@ -165,6 +166,15 @@ func main() {
 	orgHandler := orgapi.NewHandler(orgService)
 
 	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowService)
+	caseService.SetFormRepos(
+		workflowDefRepo,
+		workflowInstanceRepo,
+		formRepo,
+		formVersionRepo,
+		formFieldRepo,
+		workflowAssignmentRepo,
+		submissionpostgres.NewPostgresFormSubmissionRepository(db.DB),
+	)
 	caseHandler := caseapi.NewHandler(caseService)
 
 	personService := peoplapp.NewPersonService(personRepo, auditService)
