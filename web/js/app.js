@@ -551,7 +551,7 @@ const app = {
       followup: document.getElementById('sec-followup')
     };
 
-    // Fetch available workflow transitions to determine what actions are possible
+    // Fetch available workflow transitions once
     let availableTransitions = [];
     if (!isTerminal && this.currentWorkflow?.instance?.current_state) {
       try {
@@ -562,16 +562,9 @@ const app = {
       }
     }
 
-    // Map section names to their corresponding transition keys
-    // This is a loose mapping - the actual availability is determined by workflow transitions
-    const sectionTransitionMap = {
-      eligibility: ['open', 'review'], // Can add eligibility when case is NEW/OPEN
-      evidence: ['open', 'review', 'assess'], // Can add evidence in early states
-      assessment: ['assess2', 'decide'], // Assessment in IN_REVIEW/ASSESSMENT
-      decision: ['decide', 'approve', 'reject'], // Decision in DECISION_PENDING
-      assistance: ['start_assistance', 'follow_up'], // Assistance in APPROVED/IN_PROGRESS
-      followup: ['follow_up', 'complete'] // Follow-up in IN_PROGRESS/FOLLOW_UP
-    };
+    // Derive section-to-transition mapping from workflow definition if available
+    // Falls back to standard Emergency Assistance mapping
+    const sectionTransitionMap = this.buildSectionTransitionMap(availableTransitions);
 
     for (const [name, el] of Object.entries(containers)) {
       if (!el) continue;
@@ -604,6 +597,43 @@ const app = {
     }
   },
 
+  buildSectionTransitionMap(availableTransitions) {
+    // Default mapping for standard Emergency Assistance workflow
+    const defaultMap = {
+      eligibility: ['open', 'review'],
+      evidence: ['open', 'review', 'assess'],
+      assessment: ['assess2', 'decide'],
+      decision: ['decide', 'approve', 'reject'],
+      assistance: ['start_assistance', 'follow_up'],
+      followup: ['follow_up', 'complete']
+    };
+
+    // If we have the workflow definition, try to derive a more accurate mapping
+    // based on state categories and transition patterns
+    if (this.currentWorkflow?.definition?.states && this.currentWorkflow?.definition?.transitions) {
+      const def = this.currentWorkflow.definition;
+      const stateByKey = {};
+      def.states.forEach(s => { stateByKey[s.key] = s; });
+
+      // Group transitions by from_state to understand state phases
+      const transitionsFromState = {};
+      def.transitions.forEach(t => {
+        if (t.active !== false) {
+          if (!transitionsFromState[t.from_state]) transitionsFromState[t.from_state] = [];
+          transitionsFromState[t.from_state].push(t.key);
+        }
+      });
+
+      // If workflow uses standard state keys, we can trust the default map
+      // Otherwise, we could attempt to infer from state display_order, but
+      // that requires domain knowledge. For now, default map is used.
+      // TODO: Implement dynamic mapping based on state categories when available
+      return defaultMap;
+    }
+
+    return defaultMap;
+  },
+
   showSectionForm(name) {
     const map = {
       eligibility: 'eligibility-modal',
@@ -623,6 +653,14 @@ const app = {
   },
 
   async loadCaseSections(id) {
+    // Fetch transitions once for all sections to use
+    this.loadWorkflowTransitions(id).then(transitions => {
+      this._cachedTransitions = transitions || [];
+      this._loadCaseSectionsWithTransitions(id);
+    });
+  },
+
+  async _loadCaseSectionsWithTransitions(id) {
     await this.loadSection('eligibility', this.orgPath(`/eligibilities/by-service-request/${id}`));
     await this.loadSection('evidence', this.orgPath(`/evidence/by-service-request/${id}`));
     await this.loadSection('assessment', this.orgPath(`/assessments/by-service-request/${id}`));
@@ -655,22 +693,11 @@ async loadSection(name, path) {
           emptyMessage = 'Not recorded (case is closed)';
           emptyClass += ' terminal-empty';
         } else {
-          // Check if this section is relevant for current workflow state
+          // Check if this section is relevant for current workflow state using cached transitions
           const state = this.currentWorkflow?.instance?.current_state;
-          const sectionTransitionMap = {
-            eligibility: ['open', 'review'],
-            evidence: ['open', 'review', 'assess'],
-            assessment: ['assess2', 'decide'],
-            decision: ['decide', 'approve', 'reject'],
-            assistance: ['start_assistance', 'follow_up'],
-            followup: ['follow_up', 'complete']
-          };
+          const sectionTransitionMap = this.buildSectionTransitionMap(this._cachedTransitions || []);
           const relevantTransitions = sectionTransitionMap[name] || [];
-          let res2;
-          try {
-            res2 = await api('GET', this.orgPath(`/cases/${this.currentCase.id}/workflow/transitions`));
-          } catch (e) { res2 = { data: [] }; }
-          const availableTransitions = res2.data || [];
+          const availableTransitions = this._cachedTransitions || [];
           const hasAvailableTransition = availableTransitions.some(t => relevantTransitions.includes(t.key));
 
           if (!hasAvailableTransition && state) {
