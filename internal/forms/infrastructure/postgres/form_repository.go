@@ -50,8 +50,49 @@ func (r *PostgresFormRepository) FindByIDTx(ctx context.Context, tx *sql.Tx, org
 	return r.scanForm(row)
 }
 
+func (r *PostgresFormRepository) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Form, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, status, created_by, created_at, updated_at
+		FROM forms
+		WHERE organization_id = $1 AND id = $2
+		FOR UPDATE
+	`
+	row := r.queryRow(ctx, tx, query, orgID, id)
+	return r.scanForm(row)
+}
+
 func (r *PostgresFormRepository) FindByKey(ctx context.Context, orgID uuid.UUID, key string) (*domain.Form, error) {
 	return r.FindByKeyTx(ctx, nil, orgID, key)
+}
+
+func (r *PostgresFormRepository) FindByIDs(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]*domain.Form, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id, organization_id, key, name, description, status, created_by, created_at, updated_at
+		FROM forms
+		WHERE organization_id = $1 AND id = ANY($2::uuid[])
+	`
+	rows, err := r.db.QueryContext(ctx, query, orgID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch forms: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var forms []*domain.Form
+	for rows.Next() {
+		f, err := r.scanFormFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		forms = append(forms, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return forms, nil
 }
 
 func (r *PostgresFormRepository) FindByKeyTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, key string) (*domain.Form, error) {

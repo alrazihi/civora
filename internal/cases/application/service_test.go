@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
+	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	peopleDomain "github.com/alrazihi/civora/internal/people/domain"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
+	assignmentdomain "github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -230,44 +232,227 @@ func (m *mockUserChecker) addMember(orgID, userID uuid.UUID) {
 	m.members[orgID][userID] = true
 }
 
+type mockAssignmentRepo struct {
+	assignments map[uuid.UUID]*assignmentdomain.WorkflowStateFormAssignment
+	byState     map[string][]*assignmentdomain.WorkflowStateFormAssignment
+}
+
+func newMockAssignmentRepo() *mockAssignmentRepo {
+	return &mockAssignmentRepo{
+		assignments: make(map[uuid.UUID]*assignmentdomain.WorkflowStateFormAssignment),
+		byState:     make(map[string][]*assignmentdomain.WorkflowStateFormAssignment),
+	}
+}
+
+func (m *mockAssignmentRepo) DB() *sql.DB { return nil }
+
+func (m *mockAssignmentRepo) Save(ctx context.Context, a *assignmentdomain.WorkflowStateFormAssignment) error {
+	return m.SaveTx(ctx, nil, a)
+}
+
+func (m *mockAssignmentRepo) SaveTx(ctx context.Context, tx *sql.Tx, a *assignmentdomain.WorkflowStateFormAssignment) error {
+	m.assignments[a.ID] = a
+	key := a.WorkflowDefinitionID.String() + "|" + a.WorkflowStateKey
+	m.byState[key] = append(m.byState[key], a)
+	return nil
+}
+
+func (m *mockAssignmentRepo) FindByID(ctx context.Context, tenantID, id uuid.UUID) (*assignmentdomain.WorkflowStateFormAssignment, error) {
+	return m.FindByIDTx(ctx, nil, tenantID, id)
+}
+
+func (m *mockAssignmentRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*assignmentdomain.WorkflowStateFormAssignment, error) {
+	a, ok := m.assignments[id]
+	if !ok || a.TenantID != tenantID {
+		return nil, assignmentdomain.ErrAssignmentNotFound
+	}
+	return a, nil
+}
+
+func (m *mockAssignmentRepo) FindByWorkflowAndState(ctx context.Context, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
+	key := workflowDefID.String() + "|" + stateKey
+	return m.byState[key], nil
+}
+
+func (m *mockAssignmentRepo) FindByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
+	return m.FindByWorkflowAndState(ctx, tenantID, workflowDefID, stateKey)
+}
+
+func (m *mockAssignmentRepo) ListByWorkflow(ctx context.Context, tenantID, workflowDefID uuid.UUID) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
+	var result []*assignmentdomain.WorkflowStateFormAssignment
+	for _, a := range m.assignments {
+		if a.WorkflowDefinitionID == workflowDefID {
+			result = append(result, a)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockAssignmentRepo) Update(ctx context.Context, a *assignmentdomain.WorkflowStateFormAssignment) error {
+	return m.UpdateTx(ctx, nil, a)
+}
+
+func (m *mockAssignmentRepo) UpdateTx(ctx context.Context, tx *sql.Tx, a *assignmentdomain.WorkflowStateFormAssignment) error {
+	m.assignments[a.ID] = a
+	return nil
+}
+
+func (m *mockAssignmentRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	return m.DeleteTx(ctx, nil, tenantID, id)
+}
+
+func (m *mockAssignmentRepo) DeleteTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) error {
+	delete(m.assignments, id)
+	return nil
+}
+
+func (m *mockAssignmentRepo) DeleteByWorkflowAndState(ctx context.Context, tenantID, workflowDefID uuid.UUID, stateKey string) error {
+	return m.DeleteByWorkflowAndStateTx(ctx, nil, tenantID, workflowDefID, stateKey)
+}
+
+func (m *mockAssignmentRepo) DeleteByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) error {
+	key := workflowDefID.String() + "|" + stateKey
+	delete(m.byState, key)
+	return nil
+}
+
+func (m *mockAssignmentRepo) FindByWorkflowAndStateForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
+	return m.FindByWorkflowAndState(ctx, tenantID, workflowDefID, stateKey)
+}
+
+type mockSubmissionRepo struct {
+	submissions map[uuid.UUID]*submissiondomain.FormSubmission
+	byCase      map[uuid.UUID][]*submissiondomain.FormSubmission
+	byCaseAndFV map[string]*submissiondomain.FormSubmission
+}
+
+func newMockSubmissionRepo() *mockSubmissionRepo {
+	return &mockSubmissionRepo{
+		submissions: make(map[uuid.UUID]*submissiondomain.FormSubmission),
+		byCase:      make(map[uuid.UUID][]*submissiondomain.FormSubmission),
+		byCaseAndFV: make(map[string]*submissiondomain.FormSubmission),
+	}
+}
+
+func (m *mockSubmissionRepo) DB() *sql.DB { return nil }
+
+func (m *mockSubmissionRepo) Save(ctx context.Context, s *submissiondomain.FormSubmission) error {
+	return m.SaveTx(ctx, nil, s)
+}
+
+func (m *mockSubmissionRepo) SaveTx(ctx context.Context, tx *sql.Tx, s *submissiondomain.FormSubmission) error {
+	m.submissions[s.ID] = s
+	m.byCase[s.CaseID] = append(m.byCase[s.CaseID], s)
+	m.byCaseAndFV[s.CaseID.String()+"|"+s.FormVersionID.String()] = s
+	return nil
+}
+
+func (m *mockSubmissionRepo) FindByID(ctx context.Context, tenantID, id uuid.UUID) (*submissiondomain.FormSubmission, error) {
+	return m.FindByIDTx(ctx, nil, tenantID, id)
+}
+
+func (m *mockSubmissionRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*submissiondomain.FormSubmission, error) {
+	s, ok := m.submissions[id]
+	if !ok || s.TenantID != tenantID {
+		return nil, submissiondomain.ErrSubmissionNotFound
+	}
+	return s, nil
+}
+
+func (m *mockSubmissionRepo) FindByCaseAndFormVersion(ctx context.Context, tenantID, caseID, formVersionID uuid.UUID) (*submissiondomain.FormSubmission, error) {
+	return m.FindByCaseAndFormVersionTx(ctx, nil, tenantID, caseID, formVersionID)
+}
+
+func (m *mockSubmissionRepo) FindByCaseAndFormVersionTx(ctx context.Context, tx *sql.Tx, tenantID, caseID, formVersionID uuid.UUID) (*submissiondomain.FormSubmission, error) {
+	s, ok := m.byCaseAndFV[caseID.String()+"|"+formVersionID.String()]
+	if !ok || s.TenantID != tenantID {
+		return nil, submissiondomain.ErrSubmissionNotFound
+	}
+	return s, nil
+}
+
+func (m *mockSubmissionRepo) ListByCase(ctx context.Context, tenantID, caseID uuid.UUID) ([]*submissiondomain.FormSubmission, error) {
+	return m.ListByCaseTx(ctx, nil, tenantID, caseID)
+}
+
+func (m *mockSubmissionRepo) ListByCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID) ([]*submissiondomain.FormSubmission, error) {
+	var result []*submissiondomain.FormSubmission
+	for _, s := range m.byCase[caseID] {
+		if s.TenantID == tenantID {
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockSubmissionRepo) Update(ctx context.Context, s *submissiondomain.FormSubmission) error {
+	return m.UpdateTx(ctx, nil, s)
+}
+
+func (m *mockSubmissionRepo) UpdateTx(ctx context.Context, tx *sql.Tx, s *submissiondomain.FormSubmission) error {
+	m.submissions[s.ID] = s
+	return nil
+}
+
+func (m *mockSubmissionRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	return m.DeleteTx(ctx, nil, tenantID, id)
+}
+
+func (m *mockSubmissionRepo) DeleteTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) error {
+	delete(m.submissions, id)
+	return nil
+}
+
+func (m *mockSubmissionRepo) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*submissiondomain.FormSubmission, error) {
+	return m.FindByIDTx(ctx, tx, tenantID, id)
+}
+
+func (m *mockSubmissionRepo) FindByCaseAndFormVersionForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, caseID, formVersionID uuid.UUID) (*submissiondomain.FormSubmission, error) {
+	return m.FindByCaseAndFormVersionTx(ctx, tx, tenantID, caseID, formVersionID)
+}
+
 type mockWorkflowService struct {
-	instanceID  uuid.UUID
-	caseID      uuid.UUID
-	state       string
-	transitions map[string]workflowdomain.WorkflowTransition
-	observer    workflowapp.TransitionObserver
+	instanceID    uuid.UUID
+	caseID        uuid.UUID
+	state         string
+	workflowDefID uuid.UUID
+	transitions   map[string]workflowdomain.WorkflowTransition
+	observer      workflowapp.TransitionObserver
 }
 
 func newMockWorkflowService(initialState string) *mockWorkflowService {
 	return &mockWorkflowService{
-		instanceID:  uuid.New(),
-		state:       initialState,
-		transitions: make(map[string]workflowdomain.WorkflowTransition),
+		instanceID:    uuid.New(),
+		state:         initialState,
+		workflowDefID: uuid.New(),
+		transitions:   make(map[string]workflowdomain.WorkflowTransition),
 	}
 }
 
 func (m *mockWorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	m.caseID = caseID
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: m.workflowDefID}, nil
 }
 
 func (m *mockWorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	m.caseID = caseID
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: m.workflowDefID}, nil
 }
 
 func (m *mockWorkflowService) CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	m.caseID = caseID
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+	m.workflowDefID = workflowDefID
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: workflowDefID}, nil
 }
 
 func (m *mockWorkflowService) CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	m.caseID = caseID
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+	m.workflowDefID = workflowDefID
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: workflowDefID}, nil
 }
 
 func (m *mockWorkflowService) GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state}, nil
+	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: m.workflowDefID}, nil
 }
 
 func (m *mockWorkflowService) ExecuteTransition(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error) {
@@ -885,4 +1070,108 @@ func TestCreateCase_WithZeroWorkflowIDRejected(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid workflow ID")
+}
+
+func TestChangeStatus_BlockedByIncompleteRequiredForms(t *testing.T) {
+	repo := newMockCaseRepo()
+	wf := newMockWorkflowService("ASSESSMENT")
+	wf.addTransition("decide", "ASSESSMENT", "DECISION_PENDING")
+	assignmentRepo := newMockAssignmentRepo()
+	submissionRepo := newMockSubmissionRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil, wf)
+	svc.SetFormRepos(nil, nil, nil, nil, nil, assignmentRepo, submissionRepo)
+	if registrar, ok := any(wf).(workflowapp.TransitionObserverRegistrar); ok {
+		registrar.SetTransitionObserver(svc)
+	}
+
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowDefID := uuid.New()
+	formVersionID := uuid.New()
+	wf.workflowDefID = workflowDefID
+
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    userID,
+	})
+	require.NoError(t, err)
+
+	instance, _ := wf.CreateInstanceForCase(context.Background(), orgID, c.ID, "", userID)
+	_ = instance
+
+	assignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(
+		orgID, workflowDefID, uuid.New(), formVersionID, userID,
+		"ASSESSMENT", true, 0,
+	)
+	assignment.WorkflowDefinitionID = workflowDefID
+	assignment.Active = true
+	_ = assignmentRepo.SaveTx(context.Background(), nil, assignment)
+
+	_, err = svc.ChangeStatus(context.Background(), ChangeCaseStatusParams{
+		OrganizationID: orgID,
+		CaseID:         c.ID,
+		Status:         domain.CaseStatusDecisionPending,
+		ActorID:        userID,
+		ActorRole:      "staff",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrRequiredFormsIncomplete)
+}
+
+func TestChangeStatus_AllowsTransitionWhenFormsComplete(t *testing.T) {
+	repo := newMockCaseRepo()
+	wf := newMockWorkflowService("ASSESSMENT")
+	wf.addTransition("decide", "ASSESSMENT", "DECISION_PENDING")
+	assignmentRepo := newMockAssignmentRepo()
+	submissionRepo := newMockSubmissionRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil, wf)
+	svc.SetFormRepos(nil, nil, nil, nil, nil, assignmentRepo, submissionRepo)
+	if registrar, ok := any(wf).(workflowapp.TransitionObserverRegistrar); ok {
+		registrar.SetTransitionObserver(svc)
+	}
+
+	orgID := uuid.New()
+	userID := uuid.New()
+	workflowDefID := uuid.New()
+	formVersionID := uuid.New()
+	wf.workflowDefID = workflowDefID
+
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Test Case",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    userID,
+	})
+	require.NoError(t, err)
+
+	instance, _ := wf.CreateInstanceForCase(context.Background(), orgID, c.ID, "", userID)
+	_ = instance
+
+	assignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(
+		orgID, workflowDefID, uuid.New(), formVersionID, userID,
+		"ASSESSMENT", true, 0,
+	)
+	assignment.WorkflowDefinitionID = workflowDefID
+	assignment.Active = true
+	_ = assignmentRepo.SaveTx(context.Background(), nil, assignment)
+
+	submission, err := submissiondomain.NewFormSubmission(
+		orgID, c.ID, uuid.New(), formVersionID, userID,
+		map[string]interface{}{"field": "value"}, submissiondomain.SubmissionStatusSubmitted,
+	)
+	require.NoError(t, err)
+	_ = submissionRepo.SaveTx(context.Background(), nil, submission)
+
+	_, err = svc.ChangeStatus(context.Background(), ChangeCaseStatusParams{
+		OrganizationID: orgID,
+		CaseID:         c.ID,
+		Status:         domain.CaseStatusDecisionPending,
+		ActorID:        userID,
+		ActorRole:      "staff",
+	})
+	require.NoError(t, err)
 }

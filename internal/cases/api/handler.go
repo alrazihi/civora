@@ -429,6 +429,8 @@ func writeCaseError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "invalid state transition")
 	case errors.Is(err, workflowdomain.ErrWorkflowInstanceNotFound{}):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow instance not found")
+	case errors.Is(err, application.ErrRequiredFormsIncomplete):
+		shared.WriteError(w, http.StatusConflict, shared.CodeRequiredFormsIncomplete, "required forms are incomplete")
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
@@ -576,10 +578,11 @@ func writeCaseFormError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "field validation failed")
 	case err == application.ErrOptionValidationFailed:
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "option validation failed")
+	case errors.Is(err, application.ErrRequiredFormsIncomplete):
+		shared.WriteError(w, http.StatusConflict, shared.CodeRequiredFormsIncomplete, "required forms are incomplete")
 	case errors.Is(err, domain.ErrCaseTenantViolation):
 		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "tenant violation")
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}
 }
-

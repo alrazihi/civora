@@ -56,6 +56,23 @@ func (m *mockFormRepo) FindByKeyTx(ctx context.Context, tx *sql.Tx, orgID uuid.U
 	return m.FindByKey(ctx, orgID, key)
 }
 
+func (m *mockFormRepo) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Form, error) {
+	return m.FindByIDTx(ctx, tx, orgID, id)
+}
+
+func (m *mockFormRepo) FindByIDs(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]*domain.Form, error) {
+	var result []*domain.Form
+	for _, f := range m.forms {
+		for _, id := range ids {
+			if f.ID == id {
+				result = append(result, f)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 func (m *mockFormRepo) List(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Form, int, error) {
 	return nil, 0, nil
 }
@@ -113,6 +130,23 @@ func (m *mockVersionRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, ver
 	return m.FindByID(ctx, orgID, versionID)
 }
 
+func (m *mockVersionRepo) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) (*domain.FormVersion, error) {
+	return m.FindByIDTx(ctx, tx, orgID, versionID)
+}
+
+func (m *mockVersionRepo) FindByIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*domain.FormVersion, error) {
+	var result []*domain.FormVersion
+	for _, v := range m.versions {
+		for _, id := range versionIDs {
+			if v.ID == id {
+				result = append(result, v)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 func (m *mockVersionRepo) ListByFormID(ctx context.Context, orgID, formID uuid.UUID) ([]*domain.FormVersion, error) {
 	return nil, nil
 }
@@ -140,6 +174,23 @@ func (m *mockFieldRepo) FindByVersion(ctx context.Context, orgID, versionID uuid
 
 func (m *mockFieldRepo) FindByVersionTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) ([]*domain.FormField, error) {
 	return nil, nil
+}
+
+func (m *mockFieldRepo) FindByVersionForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) ([]*domain.FormField, error) {
+	return m.FindByVersionTx(ctx, tx, orgID, versionID)
+}
+
+func (m *mockFieldRepo) FindFieldsByVersionIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*domain.FormField, error) {
+	var result []*domain.FormField
+	for _, f := range m.fields {
+		for _, vid := range versionIDs {
+			if f.FormVersionID == vid {
+				result = append(result, f)
+				break
+			}
+		}
+	}
+	return result, nil
 }
 
 func (m *mockFieldRepo) FindByID(ctx context.Context, orgID, fieldID uuid.UUID) (*domain.FormField, error) {

@@ -64,6 +64,17 @@ func (r *PostgresFormSubmissionRepository) FindByID(ctx context.Context, tenantI
 	return r.FindByIDTx(ctx, nil, tenantID, id)
 }
 
+func (r *PostgresFormSubmissionRepository) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*domain.FormSubmission, error) {
+	query := `
+		SELECT id, tenant_id, case_id, form_id, form_version_id, submitted_by, status, data, submitted_at, updated_at
+		FROM form_submissions
+		WHERE tenant_id = $1 AND id = $2
+		FOR UPDATE
+	`
+	row := r.queryRow(ctx, tx, query, tenantID, id)
+	return r.scanSubmission(row)
+}
+
 func (r *PostgresFormSubmissionRepository) FindByCaseAndFormVersionTx(ctx context.Context, tx *sql.Tx, tenantID, caseID, formVersionID uuid.UUID) (*domain.FormSubmission, error) {
 	query := `
 		SELECT id, tenant_id, case_id, form_id, form_version_id, submitted_by, status, data, submitted_at, updated_at
@@ -76,6 +87,17 @@ func (r *PostgresFormSubmissionRepository) FindByCaseAndFormVersionTx(ctx contex
 
 func (r *PostgresFormSubmissionRepository) FindByCaseAndFormVersion(ctx context.Context, tenantID, caseID, formVersionID uuid.UUID) (*domain.FormSubmission, error) {
 	return r.FindByCaseAndFormVersionTx(ctx, nil, tenantID, caseID, formVersionID)
+}
+
+func (r *PostgresFormSubmissionRepository) FindByCaseAndFormVersionForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, caseID, formVersionID uuid.UUID) (*domain.FormSubmission, error) {
+	query := `
+		SELECT id, tenant_id, case_id, form_id, form_version_id, submitted_by, status, data, submitted_at, updated_at
+		FROM form_submissions
+		WHERE tenant_id = $1 AND case_id = $2 AND form_version_id = $3
+		FOR UPDATE
+	`
+	row := r.queryRow(ctx, tx, query, tenantID, caseID, formVersionID)
+	return r.scanSubmission(row)
 }
 
 func (r *PostgresFormSubmissionRepository) ListByCase(ctx context.Context, tenantID, caseID uuid.UUID) ([]*domain.FormSubmission, error) {

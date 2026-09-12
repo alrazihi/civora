@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-
 // TransitionObserver is an optional generic extension point for applications
 // that need to react to a transition before it commits.
 type TransitionObserver interface {

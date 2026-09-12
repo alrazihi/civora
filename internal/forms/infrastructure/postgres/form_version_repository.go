@@ -92,6 +92,47 @@ func (r *PostgresFormVersionRepository) FindByIDTx(ctx context.Context, tx *sql.
 	return r.scanVersion(row)
 }
 
+func (r *PostgresFormVersionRepository) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) (*domain.FormVersion, error) {
+	query := `
+		SELECT id, form_id, organization_id, version, status, created_by, created_at, published_at, updated_at
+		FROM form_versions
+		WHERE id = $1 AND organization_id = $2
+		FOR UPDATE
+	`
+	row := r.queryRow(ctx, tx, query, versionID, orgID)
+	return r.scanVersion(row)
+}
+
+func (r *PostgresFormVersionRepository) FindByIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*domain.FormVersion, error) {
+	if len(versionIDs) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id, form_id, organization_id, version, status, created_by, created_at, published_at, updated_at
+		FROM form_versions
+		WHERE organization_id = $1 AND id = ANY($2::uuid[])
+	`
+	rows, err := r.db.QueryContext(ctx, query, orgID, versionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch form versions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var versions []*domain.FormVersion
+	for rows.Next() {
+		v, err := r.scanVersionFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		versions = append(versions, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return versions, nil
+}
+
 func (r *PostgresFormVersionRepository) ListByFormID(ctx context.Context, orgID, formID uuid.UUID) ([]*domain.FormVersion, error) {
 	query := `
 		SELECT id, form_id, organization_id, version, status, created_by, created_at, published_at, updated_at

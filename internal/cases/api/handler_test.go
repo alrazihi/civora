@@ -21,16 +21,16 @@ import (
 )
 
 type mockCaseService struct {
-	createCaseFn     func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
-	changeStatusFn   func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
-	assignCaseFn     func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
-	getCaseFn        func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
-	getCaseTimeline  func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
-	listCasesFn      func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
-	getStatisticsFn  func(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error)
-	getCaseFormsFn   func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.CaseFormAvailability, error)
-	submitFormFn     func(ctx context.Context, orgID, caseID, submittedBy, formVersionID uuid.UUID, data map[string]interface{}) (*application.SubmissionResponse, error)
-	getSubmissionFn  func(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error)
+	createCaseFn      func(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error)
+	changeStatusFn    func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error)
+	assignCaseFn      func(ctx context.Context, params application.AssignCaseParams) (*domain.Case, error)
+	getCaseFn         func(ctx context.Context, orgID, id uuid.UUID) (*domain.Case, error)
+	getCaseTimeline   func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.TimelineEvent, error)
+	listCasesFn       func(ctx context.Context, orgID uuid.UUID, limit, offset int, filter domain.CaseFilter) ([]*domain.Case, int, error)
+	getStatisticsFn   func(ctx context.Context, orgID uuid.UUID) (*domain.CaseStatistics, error)
+	getCaseFormsFn    func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.CaseFormAvailability, error)
+	submitFormFn      func(ctx context.Context, orgID, caseID, submittedBy, formVersionID uuid.UUID, data map[string]interface{}) (*application.SubmissionResponse, error)
+	getSubmissionFn   func(ctx context.Context, orgID, caseID, submissionID uuid.UUID) (*application.SubmissionResponse, error)
 	listSubmissionsFn func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
 	getWorkflowReqsFn func(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
 }
@@ -261,4 +261,32 @@ func TestCreateCase_EmptyTitle(t *testing.T) {
 	r.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestChangeCaseStatus_RequiredFormsIncomplete_Returns409(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	caseID := uuid.New()
+
+	svc := &mockCaseService{
+		changeStatusFn: func(ctx context.Context, params application.ChangeCaseStatusParams) (*domain.Case, error) {
+			return nil, application.ErrRequiredFormsIncomplete
+		},
+	}
+	r := setupCaseRouter(svc)
+
+	token := generateTestJWT(t, "test-secret", userID.String(), orgID.String(), "staff")
+	body := `{"status":"OPEN"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases/"+caseID.String()+"/transitions", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+
+	var resp shared.APIResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, string(shared.CodeRequiredFormsIncomplete), resp.Error.Code)
 }

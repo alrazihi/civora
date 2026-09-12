@@ -18,6 +18,7 @@ type WorkflowStateFormAssignmentRepository interface {
 
 	FindByWorkflowAndState(ctx context.Context, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*WorkflowStateFormAssignment, error)
 	FindByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*WorkflowStateFormAssignment, error)
+	FindByWorkflowAndStateForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*WorkflowStateFormAssignment, error)
 
 	ListByWorkflow(ctx context.Context, tenantID, workflowDefID uuid.UUID) ([]*WorkflowStateFormAssignment, error)
 

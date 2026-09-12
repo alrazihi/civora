@@ -111,6 +111,10 @@ func (m *mockFormRepo) FindByID(ctx context.Context, orgID, id uuid.UUID) (*doma
 func (m *mockFormRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Form, error) {
 	return m.FindByID(ctx, orgID, id)
 }
+
+func (m *mockFormRepo) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*domain.Form, error) {
+	return m.FindByIDTx(ctx, tx, orgID, id)
+}
 func (m *mockFormRepo) FindByKey(ctx context.Context, orgID uuid.UUID, key string) (*domain.Form, error) {
 	return nil, domain.ErrFormNotFound
 }
@@ -126,6 +130,19 @@ func (m *mockFormRepo) Update(ctx context.Context, orgID uuid.UUID, id uuid.UUID
 }
 func (m *mockFormRepo) UpdateTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, id uuid.UUID, form *domain.Form) error {
 	return m.Update(ctx, orgID, id, form)
+}
+
+func (m *mockFormRepo) FindByIDs(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]*domain.Form, error) {
+	var result []*domain.Form
+	for _, f := range m.forms {
+		for _, id := range ids {
+			if f.ID == id {
+				result = append(result, f)
+				break
+			}
+		}
+	}
+	return result, nil
 }
 
 type mockFormVersionRepo struct {
@@ -166,6 +183,24 @@ func (m *mockFormVersionRepo) FindByID(ctx context.Context, orgID, versionID uui
 func (m *mockFormVersionRepo) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) (*domain.FormVersion, error) {
 	return m.FindByID(ctx, orgID, versionID)
 }
+
+func (m *mockFormVersionRepo) FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) (*domain.FormVersion, error) {
+	return m.FindByIDTx(ctx, tx, orgID, versionID)
+}
+
+func (m *mockFormVersionRepo) FindByIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*domain.FormVersion, error) {
+	var result []*domain.FormVersion
+	for _, v := range m.versions {
+		for _, id := range versionIDs {
+			if v.ID == id {
+				result = append(result, v)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 func (m *mockFormVersionRepo) ListByFormID(ctx context.Context, orgID, formID uuid.UUID) ([]*domain.FormVersion, error) {
 	return nil, nil
 }
@@ -236,6 +271,10 @@ func (m *mockAssignmentRepo) DeleteByWorkflowAndState(ctx context.Context, tenan
 }
 func (m *mockAssignmentRepo) DeleteByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) error {
 	return nil
+}
+
+func (m *mockAssignmentRepo) FindByWorkflowAndStateForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
+	return m.FindByWorkflowAndState(ctx, tenantID, workflowDefID, stateKey)
 }
 
 type mockAuditor struct {

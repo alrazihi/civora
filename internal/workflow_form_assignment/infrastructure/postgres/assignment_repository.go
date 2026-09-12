@@ -93,6 +93,34 @@ func (r *PostgresWorkflowStateFormAssignmentRepository) FindByWorkflowAndStateTx
 	return assignments, nil
 }
 
+func (r *PostgresWorkflowStateFormAssignmentRepository) FindByWorkflowAndStateForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
+	query := `
+		SELECT id, tenant_id, workflow_definition_id, workflow_state_key, form_id, form_version_id, required, display_order, active, created_by, created_at, updated_at
+		FROM workflow_state_form_assignments
+		WHERE tenant_id = $1 AND workflow_definition_id = $2 AND workflow_state_key = $3
+		FOR UPDATE
+		ORDER BY display_order ASC
+	`
+	rows, err := r.query(ctx, tx, query, tenantID, workflowDefID, stateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query assignments by workflow and state for update: %w", err)
+	}
+	defer rows.Close()
+
+	var assignments []*assignmentdomain.WorkflowStateFormAssignment
+	for rows.Next() {
+		assignment, err := r.scanAssignmentFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, assignment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating assignment rows: %w", err)
+	}
+	return assignments, nil
+}
+
 func (r *PostgresWorkflowStateFormAssignmentRepository) FindByWorkflowAndState(ctx context.Context, tenantID, workflowDefID uuid.UUID, stateKey string) ([]*assignmentdomain.WorkflowStateFormAssignment, error) {
 	return r.FindByWorkflowAndStateTx(ctx, nil, tenantID, workflowDefID, stateKey)
 }

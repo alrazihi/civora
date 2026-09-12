@@ -11,6 +11,8 @@ type FormRepository interface {
 	SaveTx(ctx context.Context, tx *sql.Tx, form *Form) error
 	FindByID(ctx context.Context, orgID, id uuid.UUID) (*Form, error)
 	FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*Form, error)
+	FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) (*Form, error)
+	FindByIDs(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]*Form, error)
 	FindByKey(ctx context.Context, orgID uuid.UUID, key string) (*Form, error)
 	FindByKeyTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, key string) (*Form, error)
 	List(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*Form, int, error)
@@ -27,6 +29,8 @@ type FormVersionRepository interface {
 	FindActiveVersionTx(ctx context.Context, tx *sql.Tx, orgID, formID uuid.UUID) (*FormVersion, error)
 	FindByID(ctx context.Context, orgID, versionID uuid.UUID) (*FormVersion, error)
 	FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) (*FormVersion, error)
+	FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) (*FormVersion, error)
+	FindByIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*FormVersion, error)
 	ListByFormID(ctx context.Context, orgID, formID uuid.UUID) ([]*FormVersion, error)
 }
 
@@ -35,6 +39,8 @@ type FormFieldRepository interface {
 	SaveTx(ctx context.Context, tx *sql.Tx, field *FormField) error
 	FindByVersion(ctx context.Context, orgID, versionID uuid.UUID) ([]*FormField, error)
 	FindByVersionTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) ([]*FormField, error)
+	FindByVersionForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) ([]*FormField, error)
+	FindFieldsByVersionIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*FormField, error)
 	FindByID(ctx context.Context, orgID, fieldID uuid.UUID) (*FormField, error)
 	FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, fieldID uuid.UUID) (*FormField, error)
 	UpdateTx(ctx context.Context, tx *sql.Tx, field *FormField) error

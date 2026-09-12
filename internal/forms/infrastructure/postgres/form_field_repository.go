@@ -90,6 +90,65 @@ func (r *PostgresFormFieldRepository) FindByVersionTx(ctx context.Context, tx *s
 	return fields, nil
 }
 
+func (r *PostgresFormFieldRepository) FindByVersionForUpdateTx(ctx context.Context, tx *sql.Tx, orgID, versionID uuid.UUID) ([]*domain.FormField, error) {
+	query := `
+		SELECT id, form_id, form_version_id, organization_id, key, label, type, required, description, placeholder, default_value, validation, options_json, "order", created_at, updated_at
+		FROM form_fields
+		WHERE form_version_id = $1 AND organization_id = $2
+		FOR UPDATE
+		ORDER BY "order" ASC, id ASC
+	`
+	rows, err := r.query(ctx, tx, query, versionID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query fields for update: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var fields []*domain.FormField
+	for rows.Next() {
+		f, err := r.scanFieldFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		fields = append(fields, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return fields, nil
+}
+
+func (r *PostgresFormFieldRepository) FindFieldsByVersionIDs(ctx context.Context, orgID uuid.UUID, versionIDs []uuid.UUID) ([]*domain.FormField, error) {
+	if len(versionIDs) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id, form_id, form_version_id, organization_id, key, label, type, required, description, placeholder, default_value, validation, options_json, "order", created_at, updated_at
+		FROM form_fields
+		WHERE organization_id = $1 AND form_version_id = ANY($2::uuid[])
+		ORDER BY "order" ASC, id ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, orgID, versionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch form fields: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var fields []*domain.FormField
+	for rows.Next() {
+		f, err := r.scanFieldFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		fields = append(fields, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return fields, nil
+}
+
 func (r *PostgresFormFieldRepository) FindByID(ctx context.Context, orgID, fieldID uuid.UUID) (*domain.FormField, error) {
 	return r.FindByIDTx(ctx, nil, orgID, fieldID)
 }

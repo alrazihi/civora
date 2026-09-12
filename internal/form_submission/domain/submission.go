@@ -32,16 +32,16 @@ const (
 )
 
 type FormSubmission struct {
-	ID             uuid.UUID
-	TenantID       uuid.UUID
-	CaseID         uuid.UUID
-	FormID         uuid.UUID
-	FormVersionID  uuid.UUID
-	SubmittedBy    uuid.UUID
-	Status         SubmissionStatus
-	Data           map[string]interface{}
-	SubmittedAt    time.Time
-	UpdatedAt      time.Time
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	CaseID        uuid.UUID
+	FormID        uuid.UUID
+	FormVersionID uuid.UUID
+	SubmittedBy   uuid.UUID
+	Status        SubmissionStatus
+	Data          map[string]interface{}
+	SubmittedAt   time.Time
+	UpdatedAt     time.Time
 }
 
 func NewFormSubmission(
@@ -73,15 +73,15 @@ func NewFormSubmission(
 
 	now := time.Now().UTC()
 	return &FormSubmission{
-		ID:             uuid.New(),
-		TenantID:       tenantID,
-		CaseID:         caseID,
-		FormID:         formID,
-		FormVersionID:  formVersionID,
-		SubmittedBy:    submittedBy,
-		Status:         status,
-		Data:           data,
-		SubmittedAt:    now,
-		UpdatedAt:      now,
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		CaseID:        caseID,
+		FormID:        formID,
+		FormVersionID: formVersionID,
+		SubmittedBy:   submittedBy,
+		Status:        status,
+		Data:          data,
+		SubmittedAt:   now,
+		UpdatedAt:     now,
 	}, nil
 }

@@ -10,35 +10,36 @@ import (
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
-	formdomain "github.com/alrazihi/civora/internal/forms/domain"
-	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
-	assignmentdomain "github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
 	"github.com/alrazihi/civora/internal/database"
+	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
+	formdomain "github.com/alrazihi/civora/internal/forms/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
+	assignmentdomain "github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrCaseNotFound            = errors.New("case not found")
-	ErrCaseInvalidInput        = errors.New("invalid input")
-	ErrCaseTransition          = errors.New("invalid state transition")
-	ErrCaseUserNotFound        = errors.New("assignee not found")
-	ErrCaseTenantViolation     = errors.New("user does not belong to organization")
-	ErrPersonNotFound          = errors.New("person not found")
-	ErrPersonTenantViolation   = errors.New("person does not belong to organization")
-	ErrWorkflowNotAvailable    = errors.New("workflow engine not available for this operation")
+	ErrCaseNotFound             = errors.New("case not found")
+	ErrCaseInvalidInput         = errors.New("invalid input")
+	ErrCaseTransition           = errors.New("invalid state transition")
+	ErrCaseUserNotFound         = errors.New("assignee not found")
+	ErrCaseTenantViolation      = errors.New("user does not belong to organization")
+	ErrPersonNotFound           = errors.New("person not found")
+	ErrPersonTenantViolation    = errors.New("person does not belong to organization")
+	ErrWorkflowNotAvailable     = errors.New("workflow engine not available for this operation")
 	ErrWorkflowInstanceNotFound = errors.New("workflow instance not found")
-	ErrFormNotAssigned         = errors.New("form is not assigned to the current workflow state")
-	ErrFormNotPublished        = errors.New("form version is not published")
-	ErrFormArchived            = errors.New("form is archived")
-	ErrSubmissionExists        = errors.New("submission already exists for this case and form version")
-	ErrUnknownFields           = errors.New("submission contains unknown fields")
-	ErrFieldValidationFailed   = errors.New("field validation failed")
-	ErrOptionValidationFailed  = errors.New("option validation failed")
-	ErrInvalidSubmissionData   = errors.New("invalid submission data")
+	ErrFormNotAssigned          = errors.New("form is not assigned to the current workflow state")
+	ErrFormNotPublished         = errors.New("form version is not published")
+	ErrFormArchived             = errors.New("form is archived")
+	ErrSubmissionExists         = errors.New("submission already exists for this case and form version")
+	ErrUnknownFields            = errors.New("submission contains unknown fields")
+	ErrFieldValidationFailed    = errors.New("field validation failed")
+	ErrOptionValidationFailed   = errors.New("option validation failed")
+	ErrInvalidSubmissionData    = errors.New("invalid submission data")
+	ErrRequiredFormsIncomplete  = errors.New("required forms are incomplete")
 )
 
 // WorkflowTransitionExecutor abstracts the workflow engine for the case service.
@@ -59,19 +60,19 @@ type UserChecker interface {
 }
 
 type CaseService struct {
-	repo                domain.CaseRepository
-	personFinder        shared.PersonFinder
-	userChecker         UserChecker
-	auditor             auditdomain.EventRecorder
-	auditRepo           auditdomain.AuditRepository
-	workflowSvc         WorkflowTransitionExecutor
-	workflowDefRepo     workflowdomain.WorkflowDefinitionRepository
+	repo                 domain.CaseRepository
+	personFinder         shared.PersonFinder
+	userChecker          UserChecker
+	auditor              auditdomain.EventRecorder
+	auditRepo            auditdomain.AuditRepository
+	workflowSvc          WorkflowTransitionExecutor
+	workflowDefRepo      workflowdomain.WorkflowDefinitionRepository
 	workflowInstanceRepo workflowdomain.WorkflowInstanceRepository
-	formRepo            formdomain.FormRepository
-	formVersionRepo     formdomain.FormVersionRepository
-	formFieldRepo       formdomain.FormFieldRepository
-	assignmentRepo      assignmentdomain.WorkflowStateFormAssignmentRepository
-	submissionRepo      submissiondomain.FormSubmissionRepository
+	formRepo             formdomain.FormRepository
+	formVersionRepo      formdomain.FormVersionRepository
+	formFieldRepo        formdomain.FormFieldRepository
+	assignmentRepo       assignmentdomain.WorkflowStateFormAssignmentRepository
+	submissionRepo       submissiondomain.FormSubmissionRepository
 }
 
 func NewCaseService(
@@ -87,19 +88,19 @@ func NewCaseService(
 		wf = workflowSvc[0]
 	}
 	svc := &CaseService{
-		repo:                repo,
-		personFinder:        personFinder,
-		userChecker:         userChecker,
-		auditor:             auditor,
-		auditRepo:           auditRepo,
-		workflowSvc:         wf,
-		workflowDefRepo:     nil,
+		repo:                 repo,
+		personFinder:         personFinder,
+		userChecker:          userChecker,
+		auditor:              auditor,
+		auditRepo:            auditRepo,
+		workflowSvc:          wf,
+		workflowDefRepo:      nil,
 		workflowInstanceRepo: nil,
-		formRepo:            nil,
-		formVersionRepo:     nil,
-		formFieldRepo:       nil,
-		assignmentRepo:      nil,
-		submissionRepo:      nil,
+		formRepo:             nil,
+		formVersionRepo:      nil,
+		formFieldRepo:        nil,
+		assignmentRepo:       nil,
+		submissionRepo:       nil,
 	}
 	if ws, ok := wf.(workflowapp.TransitionObserverRegistrar); ok {
 		ws.SetTransitionObserver(svc)
@@ -119,49 +120,49 @@ type CreateCaseParams struct {
 }
 
 type CaseFormAvailability struct {
-	AssignmentID    uuid.UUID                       `json:"assignment_id"`
-	FormID          uuid.UUID                       `json:"form_id"`
-	FormVersionID   uuid.UUID                       `json:"form_version_id"`
-	FormKey         string                          `json:"form_key"`
-	FormName        string                          `json:"form_name"`
-	FormDescription string                          `json:"form_description"`
-	Version         int                             `json:"version"`
-	Required        bool                            `json:"required"`
-	DisplayOrder    int                             `json:"display_order"`
-	Active          bool                            `json:"active"`
-	Fields          []FormFieldAvailability         `json:"fields"`
+	AssignmentID    uuid.UUID               `json:"assignment_id"`
+	FormID          uuid.UUID               `json:"form_id"`
+	FormVersionID   uuid.UUID               `json:"form_version_id"`
+	FormKey         string                  `json:"form_key"`
+	FormName        string                  `json:"form_name"`
+	FormDescription string                  `json:"form_description"`
+	Version         int                     `json:"version"`
+	Required        bool                    `json:"required"`
+	DisplayOrder    int                     `json:"display_order"`
+	Active          bool                    `json:"active"`
+	Fields          []FormFieldAvailability `json:"fields"`
 }
 
 type FormFieldAvailability struct {
-	Key         string                           `json:"key"`
-	Label       string                           `json:"label"`
-	Type        formdomain.FieldType             `json:"type"`
-	Required    bool                             `json:"required"`
-	Placeholder string                           `json:"placeholder"`
-	Options     []formdomain.FormOption          `json:"options,omitempty"`
-	Validation  map[string]interface{}           `json:"validation,omitempty"`
+	Key         string                  `json:"key"`
+	Label       string                  `json:"label"`
+	Type        formdomain.FieldType    `json:"type"`
+	Required    bool                    `json:"required"`
+	Placeholder string                  `json:"placeholder"`
+	Options     []formdomain.FormOption `json:"options,omitempty"`
+	Validation  map[string]interface{}  `json:"validation,omitempty"`
 }
 
 type SubmissionResponse struct {
-	ID            uuid.UUID                       `json:"id"`
-	CaseID        uuid.UUID                       `json:"case_id"`
-	FormID        uuid.UUID                       `json:"form_id"`
-	FormVersionID uuid.UUID                       `json:"form_version_id"`
-	Status        submissiondomain.SubmissionStatus      `json:"status"`
-	Data          map[string]interface{}           `json:"data"`
-	SubmittedBy   uuid.UUID                       `json:"submitted_by"`
-	SubmittedAt   time.Time                       `json:"submitted_at"`
-	UpdatedAt     time.Time                       `json:"updated_at"`
+	ID            uuid.UUID                         `json:"id"`
+	CaseID        uuid.UUID                         `json:"case_id"`
+	FormID        uuid.UUID                         `json:"form_id"`
+	FormVersionID uuid.UUID                         `json:"form_version_id"`
+	Status        submissiondomain.SubmissionStatus `json:"status"`
+	Data          map[string]interface{}            `json:"data"`
+	SubmittedBy   uuid.UUID                         `json:"submitted_by"`
+	SubmittedAt   time.Time                         `json:"submitted_at"`
+	UpdatedAt     time.Time                         `json:"updated_at"`
 }
 
 type WorkflowRequirements struct {
-	CaseID           uuid.UUID                        `json:"case_id"`
-	CurrentState     string                           `json:"current_state"`
-	TotalRequired    int                              `json:"total_required"`
-	SubmittedCount   int                              `json:"submitted_count"`
-	MissingRequired  []*CaseFormAvailability          `json:"missing_required"`
-	SubmittedForms   []*SubmissionResponse            `json:"submitted_forms"`
-	CanProceed       bool                             `json:"can_proceed"`
+	CaseID          uuid.UUID               `json:"case_id"`
+	CurrentState    string                  `json:"current_state"`
+	TotalRequired   int                     `json:"total_required"`
+	SubmittedCount  int                     `json:"submitted_count"`
+	MissingRequired []*CaseFormAvailability `json:"missing_required"`
+	SubmittedForms  []*SubmissionResponse   `json:"submitted_forms"`
+	CanProceed      bool                    `json:"can_proceed"`
 }
 
 type GetCaseFormsParams struct {
@@ -288,6 +289,10 @@ func (s *CaseService) ChangeStatus(ctx context.Context, params ChangeCaseStatusP
 }
 
 func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params ChangeCaseStatusParams) (*domain.Case, error) {
+	if s.workflowSvc == nil {
+		return nil, ErrWorkflowNotAvailable
+	}
+
 	c, err := s.repo.FindByID(ctx, params.OrganizationID, params.CaseID)
 	if err != nil {
 		return nil, ErrCaseNotFound
@@ -316,6 +321,10 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 
 	var result *domain.Case
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.checkRequiredFormsCompleteInTx(ctx, tx, params.OrganizationID, params.CaseID, instance.WorkflowDefID, instance.CurrentState); err != nil {
+			return err
+		}
+
 		_, err = s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
 			TenantID:      params.OrganizationID,
 			InstanceID:    instance.ID,
@@ -367,6 +376,35 @@ func (s *CaseService) changeStatusViaWorkflow(ctx context.Context, params Change
 	}
 
 	return result, nil
+}
+
+func (s *CaseService) checkRequiredFormsCompleteInTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, currentState string) error {
+	if s.assignmentRepo == nil || s.submissionRepo == nil {
+		return nil
+	}
+
+	assignments, err := s.assignmentRepo.FindByWorkflowAndStateForUpdateTx(ctx, tx, tenantID, workflowDefID, currentState)
+	if err != nil {
+		return fmt.Errorf("failed to load form assignments: %w", err)
+	}
+
+	var missingFormVersions []uuid.UUID
+	for _, assignment := range assignments {
+		if !assignment.Active || !assignment.Required {
+			continue
+		}
+
+		_, err := s.submissionRepo.FindByCaseAndFormVersionForUpdateTx(ctx, tx, tenantID, caseID, assignment.FormVersionID)
+		if err == submissiondomain.ErrSubmissionNotFound {
+			missingFormVersions = append(missingFormVersions, assignment.FormVersionID)
+		}
+	}
+
+	if len(missingFormVersions) > 0 {
+		return fmt.Errorf("%w: missing form versions %v", ErrRequiredFormsIncomplete, missingFormVersions)
+	}
+
+	return nil
 }
 
 type AssignCaseParams struct {
@@ -596,35 +634,69 @@ func (s *CaseService) GetCaseForms(ctx context.Context, orgID, caseID uuid.UUID)
 		return nil, fmt.Errorf("failed to get form assignments: %w", err)
 	}
 
-	var result []*CaseFormAvailability
+	var activeAssignments []*assignmentdomain.WorkflowStateFormAssignment
+	var formIDs []uuid.UUID
+	var versionIDs []uuid.UUID
 	for _, assignment := range assignments {
 		if !assignment.Active {
 			continue
 		}
+		activeAssignments = append(activeAssignments, assignment)
+		formIDs = append(formIDs, assignment.FormID)
+		versionIDs = append(versionIDs, assignment.FormVersionID)
+	}
 
-		form, err := s.formRepo.FindByID(ctx, orgID, assignment.FormID)
+	forms, err := s.formRepo.FindByIDs(ctx, orgID, formIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch forms: %w", err)
+	}
+
+	formByID := make(map[uuid.UUID]*formdomain.Form)
+	for _, f := range forms {
+		formByID[f.ID] = f
+	}
+
+	versions, err := s.formVersionRepo.FindByIDs(ctx, orgID, versionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch form versions: %w", err)
+	}
+
+	versionByID := make(map[uuid.UUID]*formdomain.FormVersion)
+	for _, v := range versions {
+		versionByID[v.ID] = v
+	}
+
+	var activeVersionIDs []uuid.UUID
+	for _, v := range versions {
+		if v.Status == formdomain.FormVersionStatusPublished {
+			activeVersionIDs = append(activeVersionIDs, v.ID)
+		}
+	}
+
+	fieldsByVersionID := make(map[uuid.UUID][]*formdomain.FormField)
+	if len(activeVersionIDs) > 0 {
+		allFields, err := s.formFieldRepo.FindFieldsByVersionIDs(ctx, orgID, activeVersionIDs)
 		if err != nil {
+			return nil, fmt.Errorf("failed to batch-fetch form fields: %w", err)
+		}
+		for _, f := range allFields {
+			fieldsByVersionID[f.FormVersionID] = append(fieldsByVersionID[f.FormVersionID], f)
+		}
+	}
+
+	var result []*CaseFormAvailability
+	for _, assignment := range activeAssignments {
+		form, ok := formByID[assignment.FormID]
+		if !ok || form.Status == formdomain.FormStatusArchived {
 			continue
 		}
 
-		if form.Status == formdomain.FormStatusArchived {
+		formVersion, ok := versionByID[assignment.FormVersionID]
+		if !ok || formVersion.Status != formdomain.FormVersionStatusPublished {
 			continue
 		}
 
-		formVersion, err := s.formVersionRepo.FindByID(ctx, orgID, assignment.FormVersionID)
-		if err != nil {
-			continue
-		}
-
-		if formVersion.Status != formdomain.FormVersionStatusPublished {
-			continue
-		}
-
-		fields, err := s.formFieldRepo.FindByVersion(ctx, orgID, formVersion.ID)
-		if err != nil {
-			continue
-		}
-
+		fields := fieldsByVersionID[formVersion.ID]
 		fieldAvailabilities := make([]FormFieldAvailability, len(fields))
 		for i, field := range fields {
 			fieldAvailabilities[i] = FormFieldAvailability{
@@ -675,48 +747,6 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 		return nil, ErrWorkflowInstanceNotFound
 	}
 
-	formVersion, err := s.formVersionRepo.FindByID(ctx, orgID, formVersionID)
-	if err != nil {
-		return nil, ErrFormNotPublished
-	}
-
-	if formVersion.Status != formdomain.FormVersionStatusPublished {
-		return nil, ErrFormNotPublished
-	}
-
-	form, err := s.formRepo.FindByID(ctx, orgID, formVersion.FormID)
-	if err != nil {
-		return nil, ErrFormNotPublished
-	}
-
-	if form.Status == formdomain.FormStatusArchived {
-		return nil, ErrFormArchived
-	}
-
-	assignments, err := s.assignmentRepo.FindByWorkflowAndState(ctx, orgID, instance.WorkflowDefID, instance.CurrentState)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check form assignments: %w", err)
-	}
-
-	assignmentFound := false
-	for _, assignment := range assignments {
-		if assignment.FormVersionID == formVersionID && assignment.Active {
-			assignmentFound = true
-			break
-		}
-	}
-	if !assignmentFound {
-		return nil, ErrFormNotAssigned
-	}
-
-	existingSubmission, err := s.submissionRepo.FindByCaseAndFormVersion(ctx, orgID, caseID, formVersionID)
-	if err != nil && err != submissiondomain.ErrSubmissionNotFound {
-		return nil, fmt.Errorf("failed to check existing submission: %w", err)
-	}
-	if existingSubmission != nil {
-		return nil, ErrSubmissionExists
-	}
-
 	fields, err := s.formFieldRepo.FindByVersion(ctx, orgID, formVersionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get form fields: %w", err)
@@ -729,7 +759,7 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 	submission, err := submissiondomain.NewFormSubmission(
 		orgID,
 		caseID,
-		form.ID,
+		uuid.Nil,
 		formVersionID,
 		submittedBy,
 		data,
@@ -741,6 +771,56 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 
 	var savedSubmission *submissiondomain.FormSubmission
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		lockedForm, err := s.formRepo.FindByIDForUpdateTx(ctx, tx, orgID, formVersionID)
+		if err != nil {
+			return ErrFormNotPublished
+		}
+		if lockedForm.Status == formdomain.FormStatusArchived {
+			return ErrFormArchived
+		}
+
+		lockedVersion, err := s.formVersionRepo.FindByIDForUpdateTx(ctx, tx, orgID, formVersionID)
+		if err != nil {
+			return ErrFormNotPublished
+		}
+		if lockedVersion.Status != formdomain.FormVersionStatusPublished {
+			return ErrFormNotPublished
+		}
+
+		submission.FormID = lockedForm.ID
+
+		lockedAssignments, err := s.assignmentRepo.FindByWorkflowAndStateForUpdateTx(ctx, tx, orgID, instance.WorkflowDefID, instance.CurrentState)
+		if err != nil {
+			return fmt.Errorf("failed to check form assignments: %w", err)
+		}
+
+		assignmentFound := false
+		for _, assignment := range lockedAssignments {
+			if assignment.FormVersionID == formVersionID && assignment.Active {
+				assignmentFound = true
+				break
+			}
+		}
+		if !assignmentFound {
+			return ErrFormNotAssigned
+		}
+
+		existingSubmission, err := s.submissionRepo.FindByCaseAndFormVersionForUpdateTx(ctx, tx, orgID, caseID, formVersionID)
+		if err != nil && err != submissiondomain.ErrSubmissionNotFound {
+			return fmt.Errorf("failed to check existing submission: %w", err)
+		}
+		if existingSubmission != nil {
+			return ErrSubmissionExists
+		}
+
+		lockedFields, err := s.formFieldRepo.FindByVersionForUpdateTx(ctx, tx, orgID, formVersionID)
+		if err != nil {
+			return fmt.Errorf("failed to get form fields: %w", err)
+		}
+		if err := validateSubmissionData(data, lockedFields); err != nil {
+			return err
+		}
+
 		if err := s.submissionRepo.SaveTx(ctx, tx, submission); err != nil {
 			return fmt.Errorf("failed to save submission: %w", err)
 		}
@@ -755,7 +835,7 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 				Outcome:        "success",
 				Metadata: map[string]interface{}{
 					"case_id":         caseID.String(),
-					"form_id":         form.ID.String(),
+					"form_id":         lockedForm.ID.String(),
 					"form_version_id": formVersionID.String(),
 					"field_count":     len(data),
 				},
@@ -870,35 +950,69 @@ func (s *CaseService) GetWorkflowRequirements(ctx context.Context, orgID, caseID
 		return nil, fmt.Errorf("failed to get form assignments: %w", err)
 	}
 
-	var requiredForms []*CaseFormAvailability
+	var requiredAssignments []*assignmentdomain.WorkflowStateFormAssignment
+	var formIDs []uuid.UUID
+	var versionIDs []uuid.UUID
 	for _, assignment := range assignments {
 		if !assignment.Active || !assignment.Required {
 			continue
 		}
+		requiredAssignments = append(requiredAssignments, assignment)
+		formIDs = append(formIDs, assignment.FormID)
+		versionIDs = append(versionIDs, assignment.FormVersionID)
+	}
 
-		form, err := s.formRepo.FindByID(ctx, orgID, assignment.FormID)
+	forms, err := s.formRepo.FindByIDs(ctx, orgID, formIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch forms: %w", err)
+	}
+
+	formByID := make(map[uuid.UUID]*formdomain.Form)
+	for _, f := range forms {
+		formByID[f.ID] = f
+	}
+
+	versions, err := s.formVersionRepo.FindByIDs(ctx, orgID, versionIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch form versions: %w", err)
+	}
+
+	versionByID := make(map[uuid.UUID]*formdomain.FormVersion)
+	for _, v := range versions {
+		versionByID[v.ID] = v
+	}
+
+	var publishedVersionIDs []uuid.UUID
+	for _, v := range versions {
+		if v.Status == formdomain.FormVersionStatusPublished {
+			publishedVersionIDs = append(publishedVersionIDs, v.ID)
+		}
+	}
+
+	fieldsByVersionID := make(map[uuid.UUID][]*formdomain.FormField)
+	if len(publishedVersionIDs) > 0 {
+		allFields, err := s.formFieldRepo.FindFieldsByVersionIDs(ctx, orgID, publishedVersionIDs)
 		if err != nil {
+			return nil, fmt.Errorf("failed to batch-fetch form fields: %w", err)
+		}
+		for _, f := range allFields {
+			fieldsByVersionID[f.FormVersionID] = append(fieldsByVersionID[f.FormVersionID], f)
+		}
+	}
+
+	var requiredForms []*CaseFormAvailability
+	for _, assignment := range requiredAssignments {
+		form, ok := formByID[assignment.FormID]
+		if !ok || form.Status == formdomain.FormStatusArchived {
 			continue
 		}
 
-		if form.Status == formdomain.FormStatusArchived {
+		formVersion, ok := versionByID[assignment.FormVersionID]
+		if !ok || formVersion.Status != formdomain.FormVersionStatusPublished {
 			continue
 		}
 
-		formVersion, err := s.formVersionRepo.FindByID(ctx, orgID, assignment.FormVersionID)
-		if err != nil {
-			continue
-		}
-
-		if formVersion.Status != formdomain.FormVersionStatusPublished {
-			continue
-		}
-
-		fields, err := s.formFieldRepo.FindByVersion(ctx, orgID, formVersion.ID)
-		if err != nil {
-			continue
-		}
-
+		fields := fieldsByVersionID[formVersion.ID]
 		fieldAvailabilities := make([]FormFieldAvailability, len(fields))
 		for i, field := range fields {
 			fieldAvailabilities[i] = FormFieldAvailability{
@@ -957,13 +1071,13 @@ func (s *CaseService) GetWorkflowRequirements(ctx context.Context, orgID, caseID
 	}
 
 	return &WorkflowRequirements{
-		CaseID:           caseID,
-		CurrentState:     instance.CurrentState,
-		TotalRequired:    len(requiredForms),
-		SubmittedCount:   len(submittedResponses),
-		MissingRequired:  missingRequired,
-		SubmittedForms:   submittedResponses,
-		CanProceed:       len(missingRequired) == 0,
+		CaseID:          caseID,
+		CurrentState:    instance.CurrentState,
+		TotalRequired:   len(requiredForms),
+		SubmittedCount:  len(submittedResponses),
+		MissingRequired: missingRequired,
+		SubmittedForms:  submittedResponses,
+		CanProceed:      len(missingRequired) == 0,
 	}, nil
 }
 

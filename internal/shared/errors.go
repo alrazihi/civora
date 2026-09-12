@@ -5,15 +5,16 @@ import "fmt"
 type ErrorCode string
 
 const (
-	CodeInvalidInput    ErrorCode = "INVALID_INPUT"
-	CodeUnauthorized    ErrorCode = "UNAUTHORIZED"
-	CodeForbidden       ErrorCode = "FORBIDDEN"
-	CodeNotFound        ErrorCode = "NOT_FOUND"
-	CodeConflict        ErrorCode = "CONFLICT"
-	CodeInternalError   ErrorCode = "INTERNAL_ERROR"
-	CodeBadRequest      ErrorCode = "BAD_REQUEST"
-	CodeStateTransition ErrorCode = "STATE_TRANSITION"
-	CodeTenantViolation ErrorCode = "TENANT_VIOLATION"
+	CodeInvalidInput            ErrorCode = "INVALID_INPUT"
+	CodeUnauthorized            ErrorCode = "UNAUTHORIZED"
+	CodeForbidden               ErrorCode = "FORBIDDEN"
+	CodeNotFound                ErrorCode = "NOT_FOUND"
+	CodeConflict                ErrorCode = "CONFLICT"
+	CodeInternalError           ErrorCode = "INTERNAL_ERROR"
+	CodeBadRequest              ErrorCode = "BAD_REQUEST"
+	CodeStateTransition         ErrorCode = "STATE_TRANSITION"
+	CodeTenantViolation         ErrorCode = "TENANT_VIOLATION"
+	CodeRequiredFormsIncomplete ErrorCode = "REQUIRED_FORMS_INCOMPLETE"
 )
 
 type Error struct {

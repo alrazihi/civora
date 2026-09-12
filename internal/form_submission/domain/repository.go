@@ -15,9 +15,11 @@ type FormSubmissionRepository interface {
 
 	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*FormSubmission, error)
 	FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*FormSubmission, error)
+	FindByIDForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*FormSubmission, error)
 
 	FindByCaseAndFormVersion(ctx context.Context, tenantID, caseID, formVersionID uuid.UUID) (*FormSubmission, error)
 	FindByCaseAndFormVersionTx(ctx context.Context, tx *sql.Tx, tenantID, caseID, formVersionID uuid.UUID) (*FormSubmission, error)
+	FindByCaseAndFormVersionForUpdateTx(ctx context.Context, tx *sql.Tx, tenantID, caseID, formVersionID uuid.UUID) (*FormSubmission, error)
 
 	ListByCase(ctx context.Context, tenantID, caseID uuid.UUID) ([]*FormSubmission, error)
 
