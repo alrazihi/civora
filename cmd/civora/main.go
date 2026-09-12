@@ -55,6 +55,9 @@ import (
 	workflowapi "github.com/alrazihi/civora/internal/workflow/api"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
+	assignmentapi "github.com/alrazihi/civora/internal/workflow_form_assignment/api"
+	assignmentapp "github.com/alrazihi/civora/internal/workflow_form_assignment/application"
+	assignmentpostgres "github.com/alrazihi/civora/internal/workflow_form_assignment/infrastructure/postgres"
 	"github.com/alrazihi/civora/migrations"
 )
 
@@ -105,6 +108,7 @@ func main() {
 	workflowTransitionRepo := workflowpostgres.NewPostgresWorkflowTransitionRepository(db.DB)
 	workflowInstanceRepo := workflowpostgres.NewPostgresWorkflowInstanceRepository(db.DB)
 	workflowHistoryRepo := workflowpostgres.NewPostgresWorkflowTransitionHistoryRepository(db.DB)
+	workflowAssignmentRepo := assignmentpostgres.NewPostgresWorkflowStateFormAssignmentRepository(db.DB)
 
 	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
@@ -114,6 +118,14 @@ func main() {
 		workflowTransitionRepo,
 		workflowInstanceRepo,
 		workflowHistoryRepo,
+		auditService,
+	)
+
+	assignmentService := assignmentapp.NewWorkflowStateFormAssignmentService(
+		workflowDefRepo,
+		formRepo,
+		formVersionRepo,
+		workflowAssignmentRepo,
 		auditService,
 	)
 
@@ -182,6 +194,7 @@ func main() {
 	auditHandler := auditapi.NewHandler(auditService)
 
 	workflowHandler := workflowapi.NewHandler(workflowService)
+	assignmentHandler := assignmentapi.NewHandler(assignmentService)
 
 	srv := server.New(cfg, db.DB)
 	identityHandler.RegisterRoutes(srv.Router(), authMiddleware)
@@ -197,6 +210,7 @@ func main() {
 	formHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
