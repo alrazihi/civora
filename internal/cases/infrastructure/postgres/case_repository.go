@@ -200,6 +200,23 @@ func (r *PostgresCaseRepository) Statistics(ctx context.Context, orgID uuid.UUID
 	stats.Rejected = int(rejected)
 	stats.Urgent = int(urgent)
 
+	var awaitingReview, awaitingDecision, inProgress, followUp int64
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'IN_REVIEW'),
+			COUNT(*) FILTER (WHERE status = 'DECISION_PENDING'),
+			COUNT(*) FILTER (WHERE status = 'IN_PROGRESS'),
+			COUNT(*) FILTER (WHERE status = 'FOLLOW_UP')
+		FROM cases
+		WHERE organization_id = $1
+	`, orgID).Scan(&awaitingReview, &awaitingDecision, &inProgress, &followUp); err != nil {
+		return nil, fmt.Errorf("failed to calculate case status breakdown: %w", err)
+	}
+	stats.AwaitingReview = int(awaitingReview)
+	stats.AwaitingDecision = int(awaitingDecision)
+	stats.InProgress = int(inProgress)
+	stats.FollowUp = int(followUp)
+
 	if err := r.scanCounts(ctx, `
 		SELECT status, COUNT(*)
 		FROM cases
@@ -224,6 +241,32 @@ func (r *PostgresCaseRepository) Statistics(ctx context.Context, orgID uuid.UUID
 	`, orgID, stats.ByPriority); err != nil {
 		return nil, err
 	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, organization_id, case_number, title, description,
+			   status, service_type, priority, person_id, created_by, assigned_to,
+			   created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state
+		FROM cases
+		WHERE organization_id = $1
+		ORDER BY created_at DESC
+		LIMIT 5
+	`, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent cases: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		c, err := r.scanCaseFromRows(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan recent case: %w", err)
+		}
+		stats.RecentCases = append(stats.RecentCases, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate recent cases: %w", err)
+	}
+
 	return stats, nil
 }
 

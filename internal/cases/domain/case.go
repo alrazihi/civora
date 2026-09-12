@@ -26,14 +26,19 @@ const (
 )
 
 type CaseStatistics struct {
-	Total         int            `json:"total"`
-	Open          int            `json:"open"`
-	Closed        int            `json:"closed"`
-	Rejected      int            `json:"rejected"`
-	Urgent        int            `json:"urgent"`
-	ByStatus      map[string]int `json:"by_status"`
-	ByServiceType map[string]int `json:"by_service_type"`
-	ByPriority    map[string]int `json:"by_priority"`
+	Total            int            `json:"total"`
+	Open             int            `json:"open"`
+	Closed           int            `json:"closed"`
+	Rejected         int            `json:"rejected"`
+	Urgent           int            `json:"urgent"`
+	AwaitingReview   int            `json:"awaiting_review"`
+	AwaitingDecision int            `json:"awaiting_decision"`
+	InProgress       int            `json:"in_progress"`
+	FollowUp         int            `json:"follow_up"`
+	ByStatus         map[string]int `json:"by_status"`
+	ByServiceType    map[string]int `json:"by_service_type"`
+	ByPriority       map[string]int `json:"by_priority"`
+	RecentCases      []*Case        `json:"recent_cases,omitempty"`
 }
 
 type ServiceType string

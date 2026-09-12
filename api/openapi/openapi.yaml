@@ -279,7 +279,7 @@ components:
 
     CaseStatistics:
       type: object
-      required: [total, open, closed, rejected, urgent, by_status, by_service_type, by_priority]
+      required: [total, open, closed, rejected, urgent, awaiting_review, awaiting_decision, in_progress, follow_up, by_status, by_service_type, by_priority, recent_cases]
       properties:
         total:
           type: integer
@@ -301,6 +301,22 @@ components:
           type: integer
           format: int32
           minimum: 0
+        awaiting_review:
+          type: integer
+          format: int32
+          minimum: 0
+        awaiting_decision:
+          type: integer
+          format: int32
+          minimum: 0
+        in_progress:
+          type: integer
+          format: int32
+          minimum: 0
+        follow_up:
+          type: integer
+          format: int32
+          minimum: 0
         by_status:
           type: object
           additionalProperties:
@@ -319,6 +335,10 @@ components:
             type: integer
             format: int32
             minimum: 0
+        recent_cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/Case'
 
     CreateCaseRequest:
       type: object

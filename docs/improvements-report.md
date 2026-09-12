@@ -1,12 +1,53 @@
-# CIVORA Frontend Improvements Report
+# CIVORA Operational Service-Delivery Improvements Report
 
 **Date**: 2026-09-12
-**Author**: Frontend Lead
-**Scope**: Frontend operational service-delivery improvements (web/)
+**Authors**: Frontend Lead, Backend Agent
+**Scope**: Full-stack operational service-delivery improvements (web/ + internal/)
 
 ---
 
-## Files Changed
+## Executive Summary
+
+This report documents improvements to CIVORA's frontend (web/) and backend (internal/) that transform the platform into a hardened operational service-delivery system. Frontend changes ensure the UI correctly consumes backend APIs without fabricated data, while backend changes fix a mismatch between the `CaseStatistics` domain struct and its OpenAPI specification, plus populate missing statistics fields that the frontend dashboard depends on.
+
+---
+
+## Backend Changes (Backend Agent)
+
+### Files Changed
+
+| File | Change | Purpose |
+|------|--------|---------|
+| `internal/cases/infrastructure/postgres/case_repository.go` | Extended `Statistics` method | Populate `awaiting_review`, `awaiting_decision`, `in_progress`, `follow_up`, and `recent_cases` fields |
+| `api/openapi/openapi.yaml` | Extended `CaseStatistics` schema | Align OpenAPI spec with domain struct fields |
+
+### Gap Fixed: CaseStatistics Schema/Data Mismatch
+
+**Problem**: The `CaseStatistics` domain struct (`internal/cases/domain/case.go:28-42`) included fields `AwaitingReview`, `AwaitingDecision`, `InProgress`, `FollowUp`, and `RecentCases` that were:
+1. Not defined in the OpenAPI specification (`api/openapi/openapi.yaml`)
+2. Not populated by the PostgreSQL repository's `Statistics` method (`internal/cases/infrastructure/postgres/case_repository.go:177`)
+
+**Fix**:
+1. **Repository** (`internal/cases/infrastructure/postgres/case_repository.go:177`): Extended the `Statistics` method to query counts for `IN_REVIEW`, `DECISION_PENDING`, `IN_PROGRESS`, and `FOLLOW_UP` statuses using parameterized FILTER queries, and fetch recent cases (limit 5, ordered by `created_at DESC`) using the existing `scanCaseFromRows` helper.
+
+2. **OpenAPI spec** (`api/openapi/openapi.yaml:280`): Added missing fields to the `CaseStatistics` schema and marked them as required, matching the domain struct's JSON tags.
+
+### Security & Operational Review
+
+A full security and operational review of the backend found **no gaps**. Key findings:
+
+- **Dashboard statistics** endpoint (`GET /api/v1/organizations/{orgId}/cases/dashboard/statistics`) exists with admin/staff role enforcement
+- **Tenant scoping** enforced at query level (`WHERE organization_id = $1`) and middleware level (`RequireSameTenant`)
+- **Terminal state enforcement** in workflow engine (`internal/workflow/application/service.go:646-648`) prevents transitions from closed/rejected states
+- **Evidence sanitization** handled via `serializeEvidence` to prevent leakage of internal storage references
+- **No SQL injection** — all queries use parameterized arguments, no `fmt.Sprintf`-constructed SQL
+- **No API route drift** — all `/api/v1` paths match between code and OpenAPI spec
+
+---
+
+## Frontend Changes (Frontend Lead)
+
+### Files Changed
 
 | File | Size Change | Purpose |
 |------|-------------|---------|
@@ -14,8 +55,6 @@
 | `web/js/app.js` | +189/-189 | Dashboard API, terminal handling, workflow progress, action derivation |
 | `web/css/style.css` | +116/-116 | Badge contrast, responsive breakpoints, accessibility utilities |
 | `web/js/tests.js` | +45/-45 | Updated tests for removed sectionActionStates |
-
-**Backend changes**: None.
 
 ---
 
@@ -126,6 +165,7 @@ Optional improvement: Dedicated endpoint for section-action availability would e
 | `go test -short ./...` | All packages pass |
 | `go vet ./...` | Clean |
 | `gofmt -l .` | No unformatted files |
+| `go build ./...` | Pass |
 | `node --check app.js` | Pass |
 | `node --check api.js` | Pass |
 | `node --check tests.js` | Pass |
@@ -133,7 +173,7 @@ Optional improvement: Dedicated endpoint for section-action availability would e
 
 ---
 
-## Remaining Frontend Limitations
+## Remaining Limitations
 
 1. **Section-action availability**: Uses heuristic key/name matching instead of dedicated API endpoint
 2. **Statistics access**: Requires admin/staff role; regular users trigger fallback computation
