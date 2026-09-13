@@ -1484,14 +1484,19 @@ components:
           type: string
           description: The field type. Immutable after creation; cannot be changed via update.
           enum:
-          - text
-          - textarea
-          - number
-          - select
-          - multiselect
-          - date
-          - boolean
-          - file
+          - TEXT
+          - TEXTAREA
+          - NUMBER
+          - DECIMAL
+          - DATE
+          - DATETIME
+          - BOOLEAN
+          - SELECT
+          - MULTISELECT
+          - RADIO
+          - CHECKBOX
+          - EMAIL
+          - PHONE
         required:
           type: boolean
         order:
