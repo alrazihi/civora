@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/tls"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,12 +66,6 @@ func TestBodySizeLimit_AllowsNormalSize(t *testing.T) {
 
 func TestBodySizeLimit_RejectsOversized(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, 11<<20)
-		n, err := r.Body.Read(buf)
-		if err != nil && n == 0 {
-			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
-			return
-		}
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -78,12 +73,48 @@ func TestBodySizeLimit_RejectsOversized(t *testing.T) {
 	ts := httptest.NewServer(wrapped)
 	defer ts.Close()
 
-	largeBody := strings.Repeat("a", 11<<20)
+	largeBody := strings.Repeat("a", 2<<20)
 	resp, err := http.Post(ts.URL, "application/json", strings.NewReader(largeBody))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
+}
+
+func TestBodySizeLimit_RejectsOversizedWithoutContentLength(t *testing.T) {
+	handler := BodySizeLimit()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL, &chunkedReader{data: make([]byte, 2<<20)})
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
+}
+
+type chunkedReader struct {
+	data []byte
+	pos  int
+}
+
+func (c *chunkedReader) Read(p []byte) (int, error) {
+	if c.pos >= len(c.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, c.data[c.pos:])
+	c.pos += n
+	return n, nil
 }
 
 func TestCORS_SetsHeaders(t *testing.T) {

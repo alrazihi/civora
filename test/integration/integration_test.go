@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowService, uuid.UUID) {
+func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowService, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	orgID := helpers.SeedOrg(db)
 	defRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db)
@@ -122,13 +122,14 @@ func seedWorkflowDefinition(t *testing.T, db *sql.DB) (*workflowapp.WorkflowServ
 		require.NoError(t, err)
 	}
 
-	return workflowSvc, orgID
+	return workflowSvc, orgID, def.ID
 }
 
 func setupAppServices(t *testing.T) (
 	*orgapp.OrganizationService,
 	*caseapp.CaseService,
 	*sql.DB,
+	uuid.UUID,
 	uuid.UUID,
 ) {
 	t.Helper()
@@ -147,12 +148,13 @@ func setupAppServices(t *testing.T) (
 	roleCreator := identityDomain.NewDefaultRoleCreator(roleRepo)
 	orgSvc := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 
-	workflowSvc, workflowOrgID := seedWorkflowDefinition(t, db)
+	workflowSvc, workflowOrgID, workflowDefID := seedWorkflowDefinition(t, db)
 
 	return orgSvc,
 		caseapp.NewCaseService(caseRepo, personRepo, identityDomain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowSvc),
 		db,
-		workflowOrgID
+		workflowOrgID,
+		workflowDefID
 }
 
 func TestOrganizationLifecycle(t *testing.T) {
@@ -160,7 +162,7 @@ func TestOrganizationLifecycle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, _, _, _ := setupAppServices(t)
+	orgSvc, _, _, _, _ := setupAppServices(t)
 	ctx := context.Background()
 
 	org, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
@@ -185,7 +187,7 @@ func TestOrganizationDuplicateSlug(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, _, _, _ := setupAppServices(t)
+	orgSvc, _, _, _, _ := setupAppServices(t)
 	ctx := context.Background()
 
 	slug := "dup-slug-" + uuid.NewString()[:8]
@@ -210,7 +212,7 @@ func TestCaseLifecycle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 
@@ -221,6 +223,7 @@ func TestCaseLifecycle(t *testing.T) {
 		Description:    "Family needs food assistance",
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityHigh,
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
 	require.NoError(t, err)
@@ -305,7 +308,7 @@ func TestCaseInvalidTransition(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 
@@ -316,6 +319,7 @@ func TestCaseInvalidTransition(t *testing.T) {
 		Description:    "Description",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
 	require.NoError(t, err)
@@ -335,7 +339,7 @@ func TestCaseTenantIsolation(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	orgSvc, caseSvc, db, workflowOrgID := setupAppServices(t)
+	orgSvc, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 
 	org2, err := orgSvc.CreateOrganization(ctx, orgapp.CreateOrganizationParams{
@@ -352,6 +356,7 @@ func TestCaseTenantIsolation(t *testing.T) {
 		Description:    "Description",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
 	require.NoError(t, err)
@@ -366,7 +371,7 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 
@@ -378,6 +383,7 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 		Description:    "Description",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
 	require.NoError(t, err)
@@ -405,6 +411,8 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, firstHash, "first audit event should have a hash")
 }
+
+func uuidPtr(id uuid.UUID) *uuid.UUID { return &id }
 
 type failingAuditRepo struct {
 	auditpostgres.PostgresAuditRepository
@@ -447,6 +455,7 @@ func TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure(t *testing.T) {
 		Description:    "Should not persist if audit fails",
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
+		WorkflowID:     uuidPtr(uuid.New()),
 		CreatedByID:    actorID,
 	})
 	require.Error(t, err, "CreateCase should fail when audit recording fails")

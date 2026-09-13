@@ -68,6 +68,11 @@ func validateCommonFieldValidation(v map[string]any) error {
 			}
 		}
 	}
+	if pattern, ok := v["pattern"].(string); ok {
+		if _, err := regexp.Compile(pattern); err != nil {
+			return fmt.Errorf("%w: invalid pattern: %v", ErrFormFieldInvalid, err)
+		}
+	}
 	return nil
 }
 
@@ -158,20 +163,10 @@ func validateDateFormatValidation(v map[string]any) error {
 }
 
 func validateEmailFieldValidation(v map[string]any) error {
-	if pattern, ok := v["pattern"].(string); ok {
-		if _, err := regexp.Compile(pattern); err != nil {
-			return fmt.Errorf("invalid pattern: %v", err)
-		}
-	}
 	return nil
 }
 
 func validatePhoneFieldValidation(v map[string]any) error {
-	if pattern, ok := v["pattern"].(string); ok {
-		if _, err := regexp.Compile(pattern); err != nil {
-			return fmt.Errorf("invalid pattern: %v", err)
-		}
-	}
 	return nil
 }
 

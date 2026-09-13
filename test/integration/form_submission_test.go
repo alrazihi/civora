@@ -170,6 +170,7 @@ func TestFormSubmission_GetCaseFormsBatchQueries(t *testing.T) {
 		ServiceType:    casedomain.ServiceTypeGeneral,
 		Priority:       casedomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDef.ID,
 	})
 	require.NoError(t, err)
 
@@ -234,6 +235,7 @@ func TestFormSubmission_GetWorkflowRequirementsWithSubmission(t *testing.T) {
 		ServiceType:    casedomain.ServiceTypeGeneral,
 		Priority:       casedomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDef.ID,
 	})
 	require.NoError(t, err)
 
@@ -296,6 +298,7 @@ func TestFormSubmission_MultipleFormsBatchQueries(t *testing.T) {
 		ServiceType:    casedomain.ServiceTypeGeneral,
 		Priority:       casedomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDef.ID,
 	})
 	require.NoError(t, err)
 
@@ -372,6 +375,7 @@ func TestWorkflowTransition_GenericPath_EnforcesRequiredForms(t *testing.T) {
 		ServiceType:    casedomain.ServiceTypeGeneral,
 		Priority:       casedomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDef.ID,
 	})
 	require.NoError(t, err)
 
@@ -486,6 +490,7 @@ func TestFormSubmission_EnforcesSnakeCaseNumericValidation(t *testing.T) {
 		ServiceType:    casedomain.ServiceTypeGeneral,
 		Priority:       casedomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDef.ID,
 	})
 	require.NoError(t, err)
 

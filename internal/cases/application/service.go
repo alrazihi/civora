@@ -48,8 +48,6 @@ var (
 
 // WorkflowTransitionExecutor abstracts the workflow engine for the case service.
 type WorkflowTransitionExecutor interface {
-	CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
-	CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	CreateInstanceForCaseByDefIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
@@ -202,17 +200,10 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 		return nil, fmt.Errorf("%w: %v", ErrCaseInvalidInput, err)
 	}
 
-	var workflowDefKey string
-	if params.WorkflowID != nil {
-		if *params.WorkflowID == uuid.Nil {
-			return nil, fmt.Errorf("%w: invalid workflow ID", ErrCaseInvalidInput)
-		}
-		c.WorkflowID = params.WorkflowID
-	} else {
-		key := domain.WorkflowKeyForServiceType(c.ServiceType)
-		c.WorkflowKey = key
-		workflowDefKey = key
+	if params.WorkflowID == nil || *params.WorkflowID == uuid.Nil {
+		return nil, fmt.Errorf("%w: workflow_id is required", ErrCaseInvalidInput)
 	}
+	c.WorkflowID = params.WorkflowID
 
 	const maxRetries = 3
 	var result *domain.Case
@@ -241,13 +232,7 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 			}
 
 			if s.workflowSvc != nil {
-				var instance *workflowdomain.WorkflowInstance
-				var instanceErr error
-				if params.WorkflowID != nil {
-					instance, instanceErr = s.workflowSvc.CreateInstanceForCaseByDefIDTx(ctx, tx, c.OrganizationID, c.ID, *params.WorkflowID, c.CreatedByID)
-				} else {
-					instance, instanceErr = s.workflowSvc.CreateInstanceForCaseTx(ctx, tx, c.OrganizationID, c.ID, workflowDefKey, c.CreatedByID)
-				}
+				instance, instanceErr := s.workflowSvc.CreateInstanceForCaseByDefIDTx(ctx, tx, c.OrganizationID, c.ID, *params.WorkflowID, c.CreatedByID)
 				if instanceErr != nil {
 					return fmt.Errorf("failed to create workflow instance for case: %w", instanceErr)
 				}
@@ -1446,9 +1431,9 @@ func validationNumber(v map[string]interface{}, keys ...string) (float64, bool) 
 
 // validatePatternConstraint enforces an optional custom regex configured via
 // the `pattern` validation key on email/phone fields. The forms domain
-// validator already verified the pattern compiles at definition time, so a
-// pattern that fails to compile here is ignored rather than rejecting the
-// submission outright.
+// validator verifies the pattern compiles at definition time, so a pattern
+// that fails to compile here indicates a data integrity issue and is treated
+// as a validation error rather than silently ignored.
 func validatePatternConstraint(field *formdomain.FormField, strVal string) error {
 	pattern, ok := field.Validation["pattern"].(string)
 	if !ok || pattern == "" {
@@ -1456,7 +1441,7 @@ func validatePatternConstraint(field *formdomain.FormField, strVal string) error
 	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil
+		return fmt.Errorf("%w: field %q has invalid pattern: %v", ErrFieldValidationFailed, field.Key, err)
 	}
 	if !re.MatchString(strVal) {
 		return fmt.Errorf("%w: field %q does not match the required pattern", ErrFieldValidationFailed, field.Key)

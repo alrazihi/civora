@@ -20,6 +20,9 @@ import (
 	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
 	eligibilityapp "github.com/alrazihi/civora/internal/eligibility/application"
 	eligibilitypostgres "github.com/alrazihi/civora/internal/eligibility/infrastructure/postgres"
+	formapp "github.com/alrazihi/civora/internal/forms/application"
+	formdomain "github.com/alrazihi/civora/internal/forms/domain"
+	formpostgres "github.com/alrazihi/civora/internal/forms/infrastructure/postgres"
 	identityDomain "github.com/alrazihi/civora/internal/identity/domain"
 	identitypostgres "github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
@@ -87,7 +90,7 @@ func TestConcurrentCaseTransitions(t *testing.T) {
 	require.NoError(t, err)
 	actorID := helpers.SeedUser(db, org.ID)
 
-	_, _, _ = seedWorkflowDefinitionForConcurrency(ctx, db, t, org.ID, uuid.Nil)
+	_, concurrentDefID, _ := seedWorkflowDefinitionForConcurrency(ctx, db, t, org.ID, uuid.Nil)
 
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: org.ID,
@@ -96,6 +99,7 @@ func TestConcurrentCaseTransitions(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &concurrentDefID,
 	})
 	require.NoError(t, err)
 
@@ -215,7 +219,7 @@ func TestConcurrentDuplicateDecision(t *testing.T) {
 	require.NoError(t, err)
 	actorID := helpers.SeedUser(db, org.ID)
 
-	_, _, _ = seedWorkflowDefinitionForConcurrency(ctx, db, t, org.ID, uuid.Nil)
+	_, concurrentDefID, _ := seedWorkflowDefinitionForConcurrency(ctx, db, t, org.ID, uuid.Nil)
 
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: org.ID,
@@ -224,6 +228,7 @@ func TestConcurrentDuplicateDecision(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeGeneral,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &concurrentDefID,
 	})
 	require.NoError(t, err)
 
@@ -391,7 +396,7 @@ func seedWorkflowDefinitionForConcurrency(ctx context.Context, db *sql.DB, t *te
 		return workflowSvc, concurrentDefID, nil
 	}
 
-	instance, err := workflowSvc.CreateInstanceForCase(ctx, orgID, caseID, "concurrent_test", uuid.Nil)
+	instance, err := workflowSvc.CreateInstanceForCaseByDefID(ctx, orgID, caseID, concurrentDefID, uuid.Nil)
 	require.NoError(t, err)
 
 	return workflowSvc, concurrentDefID, instance
@@ -455,4 +460,199 @@ func TestConcurrentWorkflowInstanceTransitions(t *testing.T) {
 	updated, err := workflowSvc.GetInstanceByCaseID(ctx, org.ID, instance.CaseID)
 	require.NoError(t, err)
 	assert.Equal(t, "OPEN", updated.CurrentState)
+}
+
+func setupFormConcurrencyServices(t *testing.T) (*formapp.FormService, *sql.DB) {
+	t.Helper()
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	formRepo := formpostgres.NewPostgresFormRepository(db)
+	versionRepo := formpostgres.NewPostgresFormVersionRepository(db)
+	fieldRepo := formpostgres.NewPostgresFormFieldRepository(db)
+	auditRepo := auditpostgres.NewPostgresAuditRepository(db)
+	auditService := auditapp.NewAuditService(auditRepo, config.AuditConfig{Enabled: true})
+
+	svc := formapp.NewFormService(formRepo, versionRepo, fieldRepo, auditService)
+	return svc, db
+}
+
+func TestConcurrentFormArchiving(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping concurrency test")
+	}
+
+	svc, db := setupFormConcurrencyServices(t)
+	ctx := context.Background()
+
+	org, err := setupConcurrencyOrg(ctx, db, t)
+	require.NoError(t, err)
+	actorID := helpers.SeedUser(db, org.ID)
+
+	form, err := svc.CreateForm(ctx, formapp.CreateFormParams{
+		OrganizationID: org.ID,
+		Key:            "concurrent-archive",
+		Name:           "Concurrent Archive",
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	var successCount int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.ArchiveForm(ctx, formapp.ArchiveFormParams{
+				OrganizationID: org.ID,
+				FormID:         form.ID,
+				ActorID:        actorID,
+			})
+			if err != nil {
+				t.Logf("ArchiveForm error: %v", err)
+			}
+			mu.Lock()
+			if err == nil {
+				successCount++
+			}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+
+	fetched, err := svc.GetForm(ctx, formapp.GetFormParams{
+		OrganizationID: org.ID,
+		FormID:         form.ID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, formdomain.FormStatusArchived, fetched.Status)
+	assert.GreaterOrEqual(t, successCount, 1, "at least one concurrent archive should succeed")
+}
+
+func TestConcurrentVersionPublishing(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping concurrency test")
+	}
+
+	svc, db := setupFormConcurrencyServices(t)
+	ctx := context.Background()
+
+	org, err := setupConcurrencyOrg(ctx, db, t)
+	require.NoError(t, err)
+	actorID := helpers.SeedUser(db, org.ID)
+
+	form, err := svc.CreateForm(ctx, formapp.CreateFormParams{
+		OrganizationID: org.ID,
+		Key:            "concurrent-publish",
+		Name:           "Concurrent Publish",
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	version, err := svc.CreateVersion(ctx, formapp.CreateVersionParams{
+		OrganizationID: org.ID,
+		FormID:         form.ID,
+		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	var successCount int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.PublishVersion(ctx, formapp.PublishVersionParams{
+				OrganizationID: org.ID,
+				VersionID:      version.ID,
+				ActorID:        actorID,
+			})
+			if err != nil {
+				t.Logf("PublishVersion error: %v", err)
+			}
+			mu.Lock()
+			if err == nil {
+				successCount++
+			}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, successCount, 1, "at least one concurrent publish should succeed")
+
+	active, err := svc.GetActiveVersion(ctx, formapp.GetActiveVersionParams{
+		OrganizationID: org.ID,
+		FormID:         form.ID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, version.ID, active.ID)
+	assert.Equal(t, formdomain.FormVersionStatusPublished, active.Status)
+}
+
+func TestConcurrentDuplicateFieldKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping concurrency test")
+	}
+
+	svc, db := setupFormConcurrencyServices(t)
+	ctx := context.Background()
+
+	org, err := setupConcurrencyOrg(ctx, db, t)
+	require.NoError(t, err)
+	actorID := helpers.SeedUser(db, org.ID)
+
+	form, err := svc.CreateForm(ctx, formapp.CreateFormParams{
+		OrganizationID: org.ID,
+		Key:            "concurrent-fields",
+		Name:           "Concurrent Fields",
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	version, err := svc.CreateVersion(ctx, formapp.CreateVersionParams{
+		OrganizationID: org.ID,
+		FormID:         form.ID,
+		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	var successCount int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.AddField(ctx, formapp.AddFieldParams{
+				OrganizationID: org.ID,
+				FormID:         form.ID,
+				VersionID:      version.ID,
+				Key:            "duplicate_key",
+				Label:          "Duplicate",
+				Type:           formdomain.FieldTypeText,
+				ActorID:        actorID,
+			})
+			if err != nil {
+				t.Logf("AddField error: %v", err)
+			}
+			mu.Lock()
+			if err == nil {
+				successCount++
+			}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+
+	assert.LessOrEqual(t, successCount, 1,
+		"at most one concurrent field addition with the same key should succeed; got %d", successCount)
 }

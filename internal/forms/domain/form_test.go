@@ -178,6 +178,18 @@ func TestValidateField_PhoneWithPattern(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestValidateField_TextWithInvalidPattern(t *testing.T) {
+	validation := map[string]any{"pattern": `[invalid`}
+	err := ValidateField(FieldTypeText, "Text", true, nil, validation)
+	require.Error(t, err)
+}
+
+func TestValidateField_TextWithValidPattern(t *testing.T) {
+	validation := map[string]any{"pattern": `^[A-Z]{3}$`}
+	err := ValidateField(FieldTypeText, "Code", true, nil, validation)
+	assert.NoError(t, err)
+}
+
 func TestValidateFieldCheckbox_WithOptions(t *testing.T) {
 	opts := []FormOption{{Label: "A", Value: "a"}}
 	err := ValidateField(FieldTypeCheckbox, "Check", true, opts, nil)

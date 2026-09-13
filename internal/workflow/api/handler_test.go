@@ -33,7 +33,6 @@ type mockWorkflowService struct {
 	mockArchiveDef            func(ctx context.Context, tenantID, id, actorID uuid.UUID) error
 	mockGetDef                func(ctx context.Context, tenantID, id uuid.UUID) (*workflowdomain.WorkflowDefinition, error)
 	mockListDefs              func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*workflowdomain.WorkflowDefinition, int, error)
-	mockCreateInstance        func(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	mockCreateInstanceByDefID func(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	mockExecTransition        func(ctx context.Context, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 	mockExecTransitionTx      func(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
@@ -88,15 +87,6 @@ func (m *mockWorkflowService) FindLatestActiveByKey(ctx context.Context, tenantI
 		}
 	}
 	return nil, errors.New("not found")
-}
-func (m *mockWorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
-	if m.mockCreateInstance != nil {
-		return m.mockCreateInstance(ctx, tenantID, caseID, workflowDefKey, actorID)
-	}
-	return &workflowdomain.WorkflowInstance{ID: uuid.New(), TenantID: tenantID, CaseID: caseID}, nil
-}
-func (m *mockWorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
-	return m.CreateInstanceForCase(ctx, tenantID, caseID, workflowDefKey, actorID)
 }
 func (m *mockWorkflowService) CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	if m.mockCreateInstanceByDefID != nil {

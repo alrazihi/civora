@@ -16,10 +16,10 @@ import (
 )
 
 type Handler struct {
-	svc *application.FormService
+	svc FormService
 }
 
-func NewHandler(svc *application.FormService) *Handler {
+func NewHandler(svc FormService) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -575,7 +575,7 @@ func serializeFormField(f *domain.FormField) map[string]interface{} {
 
 func writeFormError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, application.ErrFormNotFound), errors.Is(err, domain.ErrFormNotFound), errors.Is(err, domain.ErrFormVersionNotFound), errors.Is(err, domain.ErrFormFieldNotFound):
+	case errors.Is(err, application.ErrFormNotFound), errors.Is(err, domain.ErrFormNotFound), errors.Is(err, application.ErrFormVersionNotFound), errors.Is(err, domain.ErrFormVersionNotFound), errors.Is(err, application.ErrFormFieldNotFound), errors.Is(err, domain.ErrFormFieldNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "resource not found")
 	case errors.Is(err, application.ErrFormInvalidInput), errors.Is(err, domain.ErrFormInvalidInput), errors.Is(err, domain.ErrFormFieldInvalid):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())

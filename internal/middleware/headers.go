@@ -20,7 +20,7 @@ func SecureHeaders(next http.Handler) http.Handler {
 }
 
 func BodySizeLimit() func(http.Handler) http.Handler {
-	const maxBodyBytes = 10 << 20
+	const maxBodyBytes = 1 << 20
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ContentLength > maxBodyBytes {

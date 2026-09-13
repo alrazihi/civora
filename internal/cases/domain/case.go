@@ -197,30 +197,3 @@ func IsValidStatus(status string) bool {
 func GenerateCaseNumber(t time.Time) string {
 	return fmt.Sprintf("CAS-%s-%08d-%s", t.Format("20060102"), t.Nanosecond()%100000000, uuid.NewString()[:8])
 }
-
-// WorkflowKeyForServiceType maps a Case.ServiceType to the authoritative
-// workflow definition key that governs its lifecycle. This is the single
-// place where service types are bound to workflow definitions, ensuring
-// service-type-aware workflows are selected consistently at case creation.
-func WorkflowKeyForServiceType(serviceType ServiceType) string {
-	switch serviceType {
-	case ServiceTypeEmergency:
-		return "emergency_assistance"
-	case ServiceTypeMedical:
-		return "medical_assistance"
-	case ServiceTypeFinancial:
-		return "financial_assistance"
-	case ServiceTypeFood:
-		return "food_assistance"
-	case ServiceTypeShelter:
-		return "shelter_assistance"
-	case ServiceTypeEducation:
-		return "education_assistance"
-	case ServiceTypeTransport:
-		return "transport_assistance"
-	case ServiceTypeGeneral:
-		return "general_assistance"
-	default:
-		return "general_assistance"
-	}
-}

@@ -201,7 +201,7 @@ func TestCreateCase_ValidRequest(t *testing.T) {
 	r := setupCaseRouter(svc)
 
 	token := generateTestJWT(t, "test-secret", userID.String(), orgID.String(), "admin")
-	body := `{"title":"Emergency Request","description":"Need help","service_type":"EMERGENCY","priority":"HIGH"}`
+	body := `{"title":"Emergency Request","description":"Need help","service_type":"EMERGENCY","priority":"HIGH","workflow_id":"` + uuid.New().String() + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/cases", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")

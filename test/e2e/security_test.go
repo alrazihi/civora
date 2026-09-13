@@ -82,6 +82,7 @@ func TestHandlerSecurity_CrossTenantRead(t *testing.T) {
 	ts := SetupTestServer(t)
 
 	org1 := ts.createOrg(t, "cross-tenant-1", "Cross Tenant Org 1")
+	org1WorkflowID := ts.defaultWorkflowID
 	org2 := ts.createOrg(t, "cross-tenant-2", "Cross Tenant Org 2")
 
 	ts.registerUser(t, org1, "user1@example.com", "User One", "password1234")
@@ -91,6 +92,7 @@ func TestHandlerSecurity_CrossTenantRead(t *testing.T) {
 		"title":        "Case in Org 1",
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
+		"workflow_id":  org1WorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 
@@ -121,6 +123,7 @@ func TestHandlerSecurity_AuditHashChain(t *testing.T) {
 		"title":        "Audit Chain Case",
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 

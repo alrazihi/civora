@@ -19,6 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var testDefaultWorkflowID = uuid.New()
+
 type mockPersonFinder struct {
 	persons map[uuid.UUID]*peopleDomain.Person
 }
@@ -429,16 +431,6 @@ func newMockWorkflowService(initialState string) *mockWorkflowService {
 	}
 }
 
-func (m *mockWorkflowService) CreateInstanceForCase(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
-	m.caseID = caseID
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: m.workflowDefID}, nil
-}
-
-func (m *mockWorkflowService) CreateInstanceForCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID, workflowDefKey string, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
-	m.caseID = caseID
-	return &workflowdomain.WorkflowInstance{ID: m.instanceID, TenantID: tenantID, CaseID: caseID, CurrentState: m.state, WorkflowDefID: m.workflowDefID}, nil
-}
-
 func (m *mockWorkflowService) CreateInstanceForCaseByDefID(ctx context.Context, tenantID, caseID uuid.UUID, workflowDefID uuid.UUID, actorID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
 	m.caseID = caseID
 	m.workflowDefID = workflowDefID
@@ -522,6 +514,7 @@ func TestCreateCase(t *testing.T) {
 		ServiceType:    domain.ServiceTypeEmergency,
 		Priority:       domain.PriorityHigh,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 
 	require.NoError(t, err)
@@ -561,6 +554,7 @@ func TestCaseLifecycle(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityHigh,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -611,6 +605,7 @@ func TestInvalidStateTransition(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -644,6 +639,7 @@ func TestReopenFromReview(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -689,6 +685,7 @@ func TestCasePersonTenantIsolation(t *testing.T) {
 		Priority:       domain.PriorityNormal,
 		PersonID:       &person.ID,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrPersonTenantViolation)
@@ -708,6 +705,7 @@ func TestCaseTenantIsolation(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    user,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -733,6 +731,7 @@ func TestAssignCase(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -765,6 +764,7 @@ func TestAssignCase_CrossTenantRejected(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -792,6 +792,7 @@ func TestListCases(t *testing.T) {
 			ServiceType:    domain.ServiceTypeGeneral,
 			Priority:       domain.PriorityNormal,
 			CreatedByID:    userID,
+			WorkflowID:     &testDefaultWorkflowID,
 		})
 		require.NoError(t, err)
 	}
@@ -835,6 +836,7 @@ func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, c)
@@ -855,6 +857,7 @@ func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    userID,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.Error(t, err, "should fail after exhausting retries")
 }
@@ -875,6 +878,7 @@ func TestOnTransition_SyncsCaseStatus(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -917,6 +921,7 @@ func TestOnTransition_CustomStateIsAccepted(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -955,6 +960,7 @@ func TestOnTransition_TenantIsolation(t *testing.T) {
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
 		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -1037,7 +1043,7 @@ func TestCreateCase_WithNilWorkflowID(t *testing.T) {
 	orgID := uuid.New()
 	userID := uuid.New()
 
-	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
 		ServiceType:    domain.ServiceTypeEmergency,
@@ -1045,11 +1051,8 @@ func TestCreateCase_WithNilWorkflowID(t *testing.T) {
 		WorkflowID:     nil,
 		CreatedByID:    userID,
 	})
-
-	require.NoError(t, err)
-	require.NotNil(t, c)
-	assert.Equal(t, domain.WorkflowKeyForServiceType(domain.ServiceTypeEmergency), c.WorkflowKey)
-	assert.Nil(t, c.WorkflowID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "workflow_id is required")
 }
 
 func TestCreateCase_WithZeroWorkflowIDRejected(t *testing.T) {
@@ -1069,7 +1072,7 @@ func TestCreateCase_WithZeroWorkflowIDRejected(t *testing.T) {
 		CreatedByID:    userID,
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid workflow ID")
+	assert.Contains(t, err.Error(), "workflow_id is required")
 }
 
 func TestChangeStatus_BlockedByIncompleteRequiredForms(t *testing.T) {
@@ -1095,11 +1098,12 @@ func TestChangeStatus_BlockedByIncompleteRequiredForms(t *testing.T) {
 		Title:          "Test Case",
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    userID,
 	})
 	require.NoError(t, err)
 
-	instance, _ := wf.CreateInstanceForCase(context.Background(), orgID, c.ID, "", userID)
+	instance, _ := wf.CreateInstanceForCaseByDefID(context.Background(), orgID, c.ID, workflowDefID, userID)
 	_ = instance
 
 	assignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(
@@ -1144,11 +1148,12 @@ func TestChangeStatus_AllowsTransitionWhenFormsComplete(t *testing.T) {
 		Title:          "Test Case",
 		ServiceType:    domain.ServiceTypeGeneral,
 		Priority:       domain.PriorityNormal,
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    userID,
 	})
 	require.NoError(t, err)
 
-	instance, _ := wf.CreateInstanceForCase(context.Background(), orgID, c.ID, "", userID)
+	instance, _ := wf.CreateInstanceForCaseByDefID(context.Background(), orgID, c.ID, workflowDefID, userID)
 	_ = instance
 
 	assignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(

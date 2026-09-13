@@ -30,7 +30,7 @@ func TestRegression_NewEmergencyAssistanceCaseStartsInInitialState(t *testing.T)
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -42,6 +42,7 @@ func TestRegression_NewEmergencyAssistanceCaseStartsInInitialState(t *testing.T)
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 
@@ -57,7 +58,7 @@ func TestRegression_NewCaseIsNotClosed(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -69,6 +70,7 @@ func TestRegression_NewCaseIsNotClosed(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 	assert.NotEqual(t, caseDomain.CaseStatusClosed, c.Status)
@@ -79,7 +81,7 @@ func TestRegression_ValidTransitionExposed(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -91,6 +93,7 @@ func TestRegression_ValidTransitionExposed(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 
@@ -117,7 +120,7 @@ func TestRegression_ExecutingTransitionUpdatesWorkflowState(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -129,6 +132,7 @@ func TestRegression_ExecutingTransitionUpdatesWorkflowState(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 
@@ -159,7 +163,7 @@ func TestRegression_CaseStatusAndWorkflowStateCannotContradict(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -171,6 +175,7 @@ func TestRegression_CaseStatusAndWorkflowStateCannotContradict(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 
@@ -208,7 +213,7 @@ func TestRegression_CompletedDemoCaseShowsClosed(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -220,6 +225,7 @@ func TestRegression_CompletedDemoCaseShowsClosed(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 
@@ -391,7 +397,7 @@ func TestRegression_GenericWorkflowStillWorks(t *testing.T) {
 		caseID, orgID, "GEN-001", "Generic Test", "", "NEW", "GENERAL", "NORMAL", actorID)
 	require.NoError(t, err)
 
-	instance, err := workflowSvc.CreateInstanceForCase(ctx, orgID, caseID, def.Key, uuid.Nil)
+	instance, err := workflowSvc.CreateInstanceForCaseByDefID(ctx, orgID, caseID, def.ID, uuid.Nil)
 	require.NoError(t, err)
 	assert.Equal(t, "START", instance.CurrentState)
 
@@ -429,7 +435,7 @@ func TestRegression_MedicalAssistanceUsesGenericWorkflow(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -441,6 +447,7 @@ func TestRegression_MedicalAssistanceUsesGenericWorkflow(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeMedical,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, caseDomain.CaseStatusNew, c.Status)
@@ -465,7 +472,7 @@ func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -477,6 +484,7 @@ func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 
@@ -508,38 +516,6 @@ func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
 	assert.NoError(t, err, "case status and workflow state must not contradict")
 }
 
-// TestRegression_ServiceTypeToWorkflowKeyMapping verifies that every declared
-// service type maps to a non-empty, stable workflow definition key. This is
-// the contract that binds service types to authoritative workflow definitions
-// at case creation time.
-func TestRegression_ServiceTypeToWorkflowKeyMapping(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping regression test")
-	}
-
-	mapping := map[caseDomain.ServiceType]string{
-		caseDomain.ServiceTypeEmergency: "emergency_assistance",
-		caseDomain.ServiceTypeMedical:   "medical_assistance",
-		caseDomain.ServiceTypeFinancial: "financial_assistance",
-		caseDomain.ServiceTypeFood:      "food_assistance",
-		caseDomain.ServiceTypeShelter:   "shelter_assistance",
-		caseDomain.ServiceTypeEducation: "education_assistance",
-		caseDomain.ServiceTypeTransport: "transport_assistance",
-		caseDomain.ServiceTypeGeneral:   "general_assistance",
-	}
-
-	for serviceType, expectedKey := range mapping {
-		got := caseDomain.WorkflowKeyForServiceType(serviceType)
-		assert.Equal(t, expectedKey, got,
-			"service type %s must map to workflow key %s", serviceType, expectedKey)
-	}
-
-	// Unknown service types must fall back to the generic workflow so that
-	// every case is bound to an authoritative workflow definition.
-	assert.Equal(t, "general_assistance", caseDomain.WorkflowKeyForServiceType("UNKNOWN"))
-	assert.Equal(t, "general_assistance", caseDomain.WorkflowKeyForServiceType(""))
-}
-
 // TestRegression_AuthoritativeWorkflowStateIsExposed verifies that the case
 // API exposes the authoritative workflow state alongside the denormalized
 // status field, and that the two stay in sync after a transition.
@@ -548,7 +524,7 @@ func TestRegression_AuthoritativeWorkflowStateIsExposed(t *testing.T) {
 		t.Skip("skipping regression test")
 	}
 
-	_, caseSvc, db, workflowOrgID := setupAppServices(t)
+	_, caseSvc, db, workflowOrgID, workflowDefID := setupAppServices(t)
 	ctx := context.Background()
 	helpers.SeedDefaultRoles(db, workflowOrgID)
 	actorID := helpers.SeedUser(db, workflowOrgID)
@@ -560,6 +536,7 @@ func TestRegression_AuthoritativeWorkflowStateIsExposed(t *testing.T) {
 		ServiceType:    caseDomain.ServiceTypeEmergency,
 		Priority:       caseDomain.PriorityNormal,
 		CreatedByID:    actorID,
+		WorkflowID:     &workflowDefID,
 	})
 	require.NoError(t, err)
 

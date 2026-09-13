@@ -14,6 +14,7 @@ func TestEvidenceSecurity_CrossTenantRead(t *testing.T) {
 	ts := SetupTestServer(t)
 
 	org1 := ts.createOrg(t, "ev-org-1", "Evidence Org 1")
+	org1WorkflowID := ts.defaultWorkflowID
 	org2 := ts.createOrg(t, "ev-org-2", "Evidence Org 2")
 
 	ts.registerUser(t, org1, "user1@example.com", "User One", "password1234")
@@ -23,6 +24,7 @@ func TestEvidenceSecurity_CrossTenantRead(t *testing.T) {
 		"title":        "Case in Org 1",
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
+		"workflow_id":  org1WorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 
@@ -64,6 +66,7 @@ func TestEvidenceSecurity_CrossCaseRead(t *testing.T) {
 		"title":        "Case A",
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 	var caseA struct {
@@ -77,6 +80,7 @@ func TestEvidenceSecurity_CrossCaseRead(t *testing.T) {
 		"title":        "Case B",
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 	var caseB struct {
@@ -137,6 +141,7 @@ func TestEvidenceSecurity_StorageReferenceNotLeaked(t *testing.T) {
 		"title":        "Evidence Leak Case",
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 	var caseResp struct {

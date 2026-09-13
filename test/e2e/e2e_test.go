@@ -69,9 +69,10 @@ import (
 )
 
 type TestServer struct {
-	srv             *server.Server
-	db              *sql.DB
-	workflowService *application.WorkflowService
+	srv               *server.Server
+	db                *sql.DB
+	workflowService   *application.WorkflowService
+	defaultWorkflowID uuid.UUID
 }
 
 func SetupTestServer(t *testing.T) *TestServer {
@@ -176,7 +177,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	)
 
 	orgID := helpers.SeedOrg(db.DB)
-	seedEmergencyAssistanceWorkflow(t, db.DB, workflowService, orgID)
+	defaultWorkflowID := seedEmergencyAssistanceWorkflow(t, db.DB, workflowService, orgID)
 
 	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowService)
 	formService := formsapp.NewFormService(formRepo, versionRepo, fieldRepo, auditService)
@@ -230,9 +231,10 @@ func SetupTestServer(t *testing.T) *TestServer {
 	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
 
 	return &TestServer{
-		srv:             srv,
-		db:              db.DB,
-		workflowService: workflowService,
+		srv:               srv,
+		db:                db.DB,
+		workflowService:   workflowService,
+		defaultWorkflowID: defaultWorkflowID,
 	}
 }
 
@@ -271,7 +273,7 @@ func (ts *TestServer) createOrg(t *testing.T, slug, name string) uuid.UUID {
 	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
 	orgID, _ := uuid.Parse(result.Data.ID)
-	seedEmergencyAssistanceWorkflow(t, ts.db, ts.workflowService, orgID)
+	ts.defaultWorkflowID = seedEmergencyAssistanceWorkflow(t, ts.db, ts.workflowService, orgID)
 	return orgID
 }
 
@@ -342,6 +344,7 @@ func (ts *TestServer) createCase(t *testing.T, orgID uuid.UUID, token, title, de
 		"service_type": serviceType,
 		"priority":     priority,
 		"person_id":    personID,
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 	var result struct {
@@ -493,6 +496,7 @@ func TestEmergencyAssistanceRequestLifecycle(t *testing.T) {
 		"description":  "Family of 4 needs emergency food assistance",
 		"service_type": "EMERGENCY",
 		"priority":     "HIGH",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code)
 
@@ -535,6 +539,7 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 	ts := SetupTestServer(t)
 
 	org1 := ts.createOrg(t, "org1", "Organization 1")
+	org1WorkflowID := ts.defaultWorkflowID
 	org2 := ts.createOrg(t, "org2", "Organization 2")
 
 	ts.registerUser(t, org1, "user1@example.com", "User One", "password1234")
@@ -563,6 +568,7 @@ func TestTenantIsolationAtAPI(t *testing.T) {
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
 		"person_id":    personID,
+		"workflow_id":  org1WorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 
@@ -692,6 +698,7 @@ func TestServiceRequestFullLifecycle(t *testing.T) {
 		"service_type": "SHELTER",
 		"priority":     "HIGH",
 		"person_id":    personID,
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 
@@ -911,6 +918,7 @@ func TestAuditTrailForServiceRequest(t *testing.T) {
 		"service_type": "GENERAL",
 		"priority":     "NORMAL",
 		"person_id":    personID,
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code)
 
@@ -982,6 +990,7 @@ func TestWorkflowInstanceCreatedWithCase(t *testing.T) {
 		"title":        "Workflow Instance Test",
 		"service_type": "EMERGENCY",
 		"priority":     "HIGH",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code, "response body: %s", resp.Body.String())
 
@@ -1024,6 +1033,7 @@ func TestWorkflowTransitionViaGenericAPI(t *testing.T) {
 		"title":        "Workflow Transition Test",
 		"service_type": "EMERGENCY",
 		"priority":     "HIGH",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code)
 
@@ -1083,6 +1093,7 @@ func TestWorkflowHistoryRecorded(t *testing.T) {
 		"title":        "Workflow History Test",
 		"service_type": "EMERGENCY",
 		"priority":     "HIGH",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code)
 
@@ -1125,6 +1136,7 @@ func TestWorkflowTerminalStateBlocksTransitions(t *testing.T) {
 		"title":        "Terminal State Test",
 		"service_type": "EMERGENCY",
 		"priority":     "HIGH",
+		"workflow_id":  ts.defaultWorkflowID.String(),
 	})
 	require.Equal(t, http.StatusCreated, resp.Code)
 

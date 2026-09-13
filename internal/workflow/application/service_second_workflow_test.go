@@ -372,7 +372,7 @@ func TestWorkflowEngine_SecondWorkflowWithoutEngineChanges(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create an instance for a case
-	instance, err := svc.CreateInstanceForCase(ctx, tenantID, caseID, "education_assistance", uuid.Nil)
+	instance, err := svc.CreateInstanceForCaseByDefID(ctx, tenantID, caseID, def.ID, uuid.Nil)
 	require.NoError(t, err)
 	assert.Equal(t, "APPLICATION", instance.CurrentState)
 
