@@ -14,8 +14,8 @@ const ORG_ID = 'org-test';
 
 const ADMIN_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJvcmdhbml6YXRpb25faWQiOiJvcmdlLXRlc3QiLCJyb2xlIjoiYWRtaW4ifQ.sig';
 
-// A fully-defined workflow. Its `key` (EMERGENCY) is mapped by
-// deriveServiceTypeForWorkflow to the EMERGENCY service domain.
+// A test workflow used by the case creation mocks. Its shape mirrors a real
+// workflow definition returned by the backend.
 const EMERGENCY_WORKFLOW = {
   id: 'wf-emergency-1',
   key: 'emergency_assistance',

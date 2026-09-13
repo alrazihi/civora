@@ -405,15 +405,6 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 }
 
 .badge.new { background: #eff6ff; color: #1e40af; }
-.badge.open { background: #fffbeb; color: #92400e; }
-.badge.in-review { background: #fdf2f8; color: #9d174d; }
-.badge.assessment { background: #eef2ff; color: #3730a3; }
-.badge.decision-pending { background: #faf5ff; color: #6b21a8; }
-.badge.approved { background: #ecfdf5; color: #065f46; }
-.badge.rejected { background: #fef2f2; color: #991b1b; }
-.badge.in-progress { background: #f0fdfa; color: #115e59; }
-.badge.follow-up { background: #fff7ed; color: #9a3412; }
-.badge.closed { background: #f1f5f9; color: #475569; }
 .badge.open { background: #fffbeb; color: #d97706; }
 .badge.in-review { background: #fdf2f8; color: #db2777; }
 .badge.assessment { background: #eef2ff; color: #6366f1; }
@@ -426,10 +417,6 @@ tbody tr:nth-child(5) { animation-delay: 0.1s; }
 .badge.planned { background: #eef2ff; color: #6366f1; }
 .badge.completed { background: #ecfdf5; color: #059669; }
 .badge.cancelled { background: #fef2f2; color: #dc2626; }
-
-.wf-status-draft { background: var(--warning-light); color: #92400e; }
-.wf-status-active { background: var(--success-light); color: #065f46; }
-.wf-status-archived { background: #e2e8f0; color: #475569; }
 
 /* Case status badges - distinct from workflow definition badges */
 .case-status { font-weight: 700; letter-spacing: 0.04em; }
@@ -1653,10 +1640,6 @@ code {
   .header h1 { font-size: 1.2rem; }
   .timeline { padding-left: 22px; }
   .timeline-item::before { left: -18px; width: 12px; height: 12px; }
-}
-
-/* ── Responsive ── */
-@media (max-width: 480px) {
   .auth-card {
     padding: 28px 20px;
   }

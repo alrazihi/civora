@@ -403,4 +403,184 @@ test.describe('Dynamic Form Renderer', () => {
     // Submit button should change to loading state then back
     await expect(page.locator('#form-container button[type="submit"]')).toBeEnabled();
   });
+
+  test('handles 409 conflict when form version has changed', async ({ page }) => {
+    await openDashboard(page);
+
+    const caseId = 'case-form-conflict';
+    page.route(routes2.workflowForms(caseId), async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      await route.fulfill({ json: { success: true, data: [SAMPLE_FORM_DEFINITION] } });
+    });
+    page.route(routes2.workflowFormSubmission(caseId), async (route, req) => {
+      if (req.method() !== 'POST') { await route.continue(); return; }
+      await route.fulfill({ status: 409, json: {
+        success: false,
+        error: { code: 'FORM_VERSION_MISMATCH', message: 'Form version has been updated. Please reload the form.' }
+      } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        id: caseId, case_number: 'CAS-008', title: 'Conflict Test',
+        status: 'IN_PROGRESS', service_type: 'GENERAL', priority: 'NORMAL', description: '',
+      } } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        instance: { id: 'inst-1', current_state: 'IN_PROGRESS' },
+        definition: { id: 'wf-1', states: [{ key: 'IN_PROGRESS' }], transitions: [] },
+      } } });
+    });
+    ['eligibilities', 'evidence', 'assessments', 'decisions', 'assistance', 'follow-ups'].forEach(section => {
+      page.route(regex(`organizations/${ORG_ID}/${section}/by-service-request/${caseId}`), async (route, req) => {
+        if (req.method() === 'GET') await route.fulfill({ json: { success: true, data: null } });
+        else await route.continue();
+      });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow/transitions$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: [] } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow/history`), async (route) => {
+      await route.fulfill({ json: { success: true, data: [] } });
+    });
+
+    await page.goto('/');
+    await page.evaluate(() => router.navigate('case', 'case-form-conflict'));
+
+    await expect(page.locator('#card-dynamic-form')).toBeVisible();
+
+    await page.fill('#form-field-full_name', 'Jane Doe');
+    await page.fill('#form-field-email', 'jane@example.com');
+    await page.fill('#form-field-household_size', '2');
+    await page.selectOption('#form-field-preferred_contact', 'email');
+    await page.check('#form-field-consent');
+    await page.click('#form-container button[type="submit"]');
+
+    // Should show error message about version conflict
+    await expect(page.locator('.form-message.error')).toBeVisible();
+    await expect(page.locator('.form-message.error')).toContainText(/version|conflict|updated/i);
+    // Submit button should be re-enabled
+    await expect(page.locator('#form-container button[type="submit"]')).toBeEnabled();
+  });
+
+  test('handles 400 validation errors with field-level messages', async ({ page }) => {
+    await openDashboard(page);
+
+    const caseId = 'case-form-400';
+    page.route(routes2.workflowForms(caseId), async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      await route.fulfill({ json: { success: true, data: [SAMPLE_FORM_DEFINITION] } });
+    });
+    page.route(routes2.workflowFormSubmission(caseId), async (route, req) => {
+      if (req.method() !== 'POST') { await route.continue(); return; }
+      await route.fulfill({ status: 400, json: {
+        success: false,
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Validation failed',
+          field_errors: { email: ['Email format is invalid'] }
+        }
+      } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        id: caseId, case_number: 'CAS-009', title: 'Validation Test',
+        status: 'IN_PROGRESS', service_type: 'GENERAL', priority: 'NORMAL', description: '',
+      } } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        instance: { id: 'inst-1', current_state: 'IN_PROGRESS' },
+        definition: { id: 'wf-1', states: [{ key: 'IN_PROGRESS' }], transitions: [] },
+      } } });
+    });
+    ['eligibilities', 'evidence', 'assessments', 'decisions', 'assistance', 'follow-ups'].forEach(section => {
+      page.route(regex(`organizations/${ORG_ID}/${section}/by-service-request/${caseId}`), async (route, req) => {
+        if (req.method() === 'GET') await route.fulfill({ json: { success: true, data: null } });
+        else await route.continue();
+      });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow/transitions$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: [] } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow/history`), async (route) => {
+      await route.fulfill({ json: { success: true, data: [] } });
+    });
+
+    await page.goto('/');
+    await page.evaluate(() => router.navigate('case', 'case-form-400'));
+
+    await expect(page.locator('#card-dynamic-form')).toBeVisible();
+
+    await page.fill('#form-field-full_name', 'Jane Doe');
+    await page.fill('#form-field-email', 'jane@example.com');
+    await page.fill('#form-field-household_size', '2');
+    await page.selectOption('#form-field-preferred_contact', 'email');
+    await page.check('#form-field-consent');
+    await page.click('#form-container button[type="submit"]');
+
+    // Should show both form-level and field-level validation errors from server
+    await expect(page.locator('.form-message.error')).toBeVisible();
+    await expect(page.locator('.form-message.error')).toContainText(/validation/i);
+    await expect(page.locator('.form-field[data-field-key="email"] .field-error')).toBeVisible();
+    await expect(page.locator('#form-container button[type="submit"]')).toBeEnabled();
+  });
+
+  test('handles 429 too many requests with rate limit message', async ({ page }) => {
+    await openDashboard(page);
+
+    const caseId = 'case-form-ratelimit';
+    page.route(routes2.workflowForms(caseId), async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      await route.fulfill({ json: { success: true, data: [SAMPLE_FORM_DEFINITION] } });
+    });
+    page.route(routes2.workflowFormSubmission(caseId), async (route, req) => {
+      if (req.method() !== 'POST') { await route.continue(); return; }
+      await route.fulfill({ status: 429, json: {
+        success: false,
+        error: { code: 'RATE_LIMITED', message: 'Too many requests. Please wait a moment and try again.' }
+      } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        id: caseId, case_number: 'CAS-010', title: 'Rate Limit Test',
+        status: 'IN_PROGRESS', service_type: 'GENERAL', priority: 'NORMAL', description: '',
+      } } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        instance: { id: 'inst-1', current_state: 'IN_PROGRESS' },
+        definition: { id: 'wf-1', states: [{ key: 'IN_PROGRESS' }], transitions: [] },
+      } } });
+    });
+    ['eligibilities', 'evidence', 'assessments', 'decisions', 'assistance', 'follow-ups'].forEach(section => {
+      page.route(regex(`organizations/${ORG_ID}/${section}/by-service-request/${caseId}`), async (route, req) => {
+        if (req.method() === 'GET') await route.fulfill({ json: { success: true, data: null } });
+        else await route.continue();
+      });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow/transitions$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: [] } });
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}/workflow/history`), async (route) => {
+      await route.fulfill({ json: { success: true, data: [] } });
+    });
+
+    await page.goto('/');
+    await page.evaluate(() => router.navigate('case', 'case-form-ratelimit'));
+
+    await expect(page.locator('#card-dynamic-form')).toBeVisible();
+
+    await page.fill('#form-field-full_name', 'Jane Doe');
+    await page.fill('#form-field-email', 'jane@example.com');
+    await page.fill('#form-field-household_size', '2');
+    await page.selectOption('#form-field-preferred_contact', 'email');
+    await page.check('#form-field-consent');
+    await page.click('#form-container button[type="submit"]');
+
+    // Should show rate limit error
+    await expect(page.locator('.form-message.error')).toBeVisible();
+    await expect(page.locator('.form-message.error')).toContainText(/too many|rate|wait|moment/i);
+    await expect(page.locator('#form-container button[type="submit"]')).toBeEnabled();
+  });
 });

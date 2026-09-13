@@ -291,4 +291,50 @@ test.describe('Case Workspace Integration', () => {
     // Should handle 403 gracefully - no forms shown, no crash
     await expect(page.locator('#card-dynamic-form')).toBeHidden();
   });
+
+  test('displays service banner generically without domain-specific icons', async ({ page }) => {
+    await openDashboard(page);
+    const caseId = 'case-generic-banner';
+    await setupCaseWorkspaceMocks(page, caseId, {
+      forms: [SAMPLE_FORM_DEFINITION],
+      workflowState: 'IN_PROGRESS',
+    });
+    page.route(regex(`organizations/${ORG_ID}/cases/${caseId}$`), async (route) => {
+      await route.fulfill({ json: { success: true, data: {
+        id: caseId, case_number: 'CAS-200', title: 'Generic Banner Case',
+        status: 'IN_PROGRESS', service_type: 'CUSTOM_SERVICE', priority: 'NORMAL', description: 'Test.',
+      } } });
+    });
+
+    await page.goto('/');
+    await page.evaluate(() => router.navigate('case', 'case-generic-banner'));
+
+    // Service banner should be visible with generic label
+    const banner = page.locator('#service-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Custom Service');
+    // Should NOT contain domain-specific emoji icons
+    await expect(banner).not.toContainText('🚨');
+    await expect(banner).not.toContainText('🏥');
+    await expect(banner).not.toContainText('💰');
+    await expect(banner).not.toContainText('📋');
+  });
+
+  test('displays form version number in the form renderer', async ({ page }) => {
+    await openDashboard(page);
+    const caseId = 'case-form-version';
+    const formWithVersion = { ...SAMPLE_FORM_DEFINITION, version: 3 };
+    await setupCaseWorkspaceMocks(page, caseId, {
+      forms: [formWithVersion],
+      workflowState: 'IN_PROGRESS',
+    });
+
+    await page.goto('/');
+    await page.evaluate(() => router.navigate('case', 'case-form-version'));
+
+    await expect(page.locator('#card-dynamic-form')).toBeVisible();
+    // Form version should be displayed
+    await expect(page.locator('.form-version')).toBeVisible();
+    await expect(page.locator('.form-version')).toContainText('Version 3');
+  });
 });

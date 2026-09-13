@@ -1,61 +1,15 @@
-const SERVICE_DOMAIN = {
-  EMERGENCY: {
-    label: 'Emergency Assistance',
-    color: '#dc2626',
-    icon: '🚨',
-    sections: {
-      eligibility: { title: 'Eligibility Check', hint: 'Verify immediate eligibility for emergency response.' },
-      evidence: { title: 'Evidence Collection', hint: 'Gather ID, referral, and situational evidence quickly.' },
-      assessment: { title: 'Needs Assessment', hint: 'Assess immediate needs (food, shelter, transport, safety).' },
-      decision: { title: 'Approval Decision', hint: 'Fast-track decision for emergency response.' },
-      assistance: { title: 'Emergency Assistance', hint: 'Deploy immediate assistance (food, shelter, transport, medical).' },
-      followup: { title: 'Follow-up', hint: 'Schedule follow-up to verify ongoing safety and needs.' }
-    },
-    assistanceTypes: ['FOOD', 'SHELTER', 'TRANSPORT', 'MEDICAL', 'FINANCIAL', 'OTHER']
-  },
-  MEDICAL: {
-    label: 'Medical Assistance',
-    color: '#2563eb',
-    icon: '🏥',
-    sections: {
-      eligibility: { title: 'Medical Eligibility', hint: 'Verify medical eligibility criteria.' },
-      evidence: { title: 'Medical Evidence', hint: 'Collect medical records, referrals, and diagnosis documents.' },
-      assessment: { title: 'Medical Assessment', hint: 'Assess medical needs, treatment plan, and urgency.' },
-      decision: { title: 'Treatment Decision', hint: 'Decision on medical assistance coverage.' },
-      assistance: { title: 'Medical Assistance', hint: 'Arrange medication, transport, treatment, and care.' },
-      followup: { title: 'Medical Follow-up', hint: 'Monitor treatment progress and recovery.' }
-    },
-    assistanceTypes: ['MEDICAL', 'TRANSPORT', 'FINANCIAL', 'FOOD', 'SHELTER', 'OTHER']
-  },
-  FINANCIAL: {
-    label: 'Financial Assistance',
-    color: '#059669',
-    icon: '💰',
-    sections: {
-      eligibility: { title: 'Financial Eligibility', hint: 'Verify financial eligibility and means testing.' },
-      evidence: { title: 'Financial Evidence', hint: 'Collect income statements, bank records, and expense documentation.' },
-      assessment: { title: 'Financial Assessment', hint: 'Assess financial need and recommended support level.' },
-      decision: { title: 'Financial Decision', hint: 'Decision on financial assistance approval.' },
-      assistance: { title: 'Financial Assistance', hint: 'Provide grants, vouchers, or direct payments.' },
-      followup: { title: 'Financial Follow-up', hint: 'Review ongoing financial circumstances.' }
-    },
-    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'TRANSPORT', 'OTHER']
-  },
-  GENERAL: {
-    label: 'General Assistance',
-    color: '#6366f1',
-    icon: '📋',
-    sections: {
-      eligibility: { title: 'Eligibility Check', hint: 'Verify eligibility for general assistance.' },
-      evidence: { title: 'Evidence Collection', hint: 'Gather supporting documentation.' },
-      assessment: { title: 'Assessment', hint: 'Assess needs and circumstances.' },
-      decision: { title: 'Decision', hint: 'Record approval or rejection decision.' },
-      assistance: { title: 'Assistance', hint: 'Provide approved assistance.' },
-      followup: { title: 'Follow-up', hint: 'Schedule follow-up review.' }
-    },
-    assistanceTypes: ['FINANCIAL', 'FOOD', 'SHELTER', 'MEDICAL', 'TRANSPORT', 'EDUCATION', 'OTHER']
-  }
+const SECTION_DEFAULTS = {
+  eligibility: { title: 'Eligibility' },
+  evidence: { title: 'Evidence' },
+  assessment: { title: 'Assessment' },
+  decision: { title: 'Decision' },
+  assistance: { title: 'Assistance' },
+  followup: { title: 'Follow-up' }
 };
+
+function getSectionTitle(name) {
+  return (SECTION_DEFAULTS[name] && SECTION_DEFAULTS[name].title) || name.charAt(0).toUpperCase() + name.slice(1);
+}
 
 function getTerminalStates(def) {
   if (!def || !Array.isArray(def.states)) return [];
@@ -112,30 +66,7 @@ const styleEl = document.createElement('style');
 styleEl.textContent = '';
 document.head.appendChild(styleEl);
 
-const SERVICE_TYPE_WORKFLOW_KEYS = {
-  EMERGENCY: 'emergency_assistance',
-  MEDICAL: 'medical_assistance',
-  FINANCIAL: 'financial_assistance',
-  FOOD: 'food_assistance',
-  SHELTER: 'shelter_assistance',
-  EDUCATION: 'education_assistance',
-  TRANSPORT: 'transport_assistance',
-  GENERAL: 'general_assistance'
-};
-
 const FALLBACK_TERMINAL_STATES = ['CLOSED', 'REJECTED'];
-
-function deriveServiceTypeForWorkflow(def) {
-  if (!def || def.status !== 'ACTIVE') return null;
-  const md = def.metadata || {};
-  if (typeof md.service_type === 'string' && SERVICE_DOMAIN[md.service_type]) {
-    return md.service_type;
-  }
-  for (const [serviceType, key] of Object.entries(SERVICE_TYPE_WORKFLOW_KEYS)) {
-    if (key === def.key) return serviceType;
-  }
-  return null;
-}
 
 function computeTerminalStateSet(defs) {
   const set = new Set(FALLBACK_TERMINAL_STATES);
@@ -143,12 +74,6 @@ function computeTerminalStateSet(defs) {
     .filter(d => Array.isArray(d.states))
     .forEach(d => d.states.forEach(s => { if (s.terminal) set.add(s.key); }));
   return set;
-}
-
-function getServiceDomain(serviceType) {
-  if (SERVICE_DOMAIN[serviceType]) return SERVICE_DOMAIN[serviceType];
-  if (SERVICE_DOMAIN.GENERAL) return SERVICE_DOMAIN.GENERAL;
-  return null;
 }
 
 const app = {
@@ -274,11 +199,9 @@ const app = {
       showToast('Select a workflow definition before creating a case', 'error');
       return;
     }
-    const serviceType = deriveServiceTypeForWorkflow(workflow) || 'GENERAL';
     const data = {
       title: document.getElementById('c-title').value.trim(),
       description: document.getElementById('c-desc').value.trim(),
-      service_type: serviceType,
       priority: document.getElementById('c-priority').value || 'NORMAL',
       person_id: document.getElementById('new-case-person-id').value || undefined,
       workflow_id: workflow.id,
@@ -637,18 +560,15 @@ const app = {
   },
 
   renderServiceBanner(serviceType) {
-    const domain = getServiceDomain(serviceType);
     const banner = document.getElementById('service-banner');
     if (!banner) return;
-    if (!domain) {
+    if (!serviceType) {
       banner.classList.add('hidden');
       return;
     }
     banner.classList.remove('hidden');
-    banner.innerHTML = `<span class="service-icon">${domain.icon}</span> <span class="service-label">${escapeHTML(domain.label)}</span>`;
-    banner.style.backgroundColor = domain.color + '15';
-    banner.style.color = domain.color;
-    banner.style.borderColor = domain.color + '40';
+    const label = serviceType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    banner.innerHTML = `<span class="service-label">${escapeHTML(label)}</span>`;
   },
 
   renderWorkflowProgress() {
@@ -758,9 +678,8 @@ const app = {
       const actionBtn = document.createElement('button');
       actionBtn.className = 'btn section-action-btn';
       actionBtn.type = 'button';
-      const sectionDomain = getServiceDomain(this.currentCase.service_type);
-      const title = sectionDomain?.sections?.[name]?.title || name.charAt(0).toUpperCase() + name.slice(1);
-      actionBtn.innerHTML = `<span class="icon" aria-hidden="true">+</span> Add ${title}`;
+      const title = getSectionTitle(name);
+      actionBtn.innerHTML = `<span class="icon" aria-hidden="true">+</span> Add ${escapeHTML(title)}`;
       actionBtn.style.marginBottom = '8px';
 
       if (!hasAvailableTransition) {
@@ -866,8 +785,6 @@ async loadSection(name, path) {
     try {
       const res = await api('GET', path);
       const data = res.data;
-      const domain = getServiceDomain(this.currentCase?.service_type);
-      const hint = domain?.sections[name]?.hint;
       const isTerminal = isCaseTerminal(this.currentCase?.status, this.currentWorkflow, this._terminalStates);
       const ts = this.buildSectionTransitionMap(this._cachedTransitions || []);
       const rel = ts[name] || [];
@@ -881,8 +798,7 @@ async loadSection(name, path) {
       } else if (!isTerminal) {
         statusLabel = '<span class="badge" style="background:#fef3c7;color:#92400e;margin-bottom:6px">Not applicable</span> ';
       }
-      let hintHTML = hint ? `<p class="section-hint">${escapeHTML(hint)}</p>` : '';
-      hintHTML = statusLabel + hintHTML;
+      let hintHTML = statusLabel;
 
       if (!data) {
         // Determine appropriate empty state message
@@ -1107,39 +1023,7 @@ async loadSection(name, path) {
   showEvidenceForm() { this.showModal('evidence-modal'); },
   showAssessmentForm() { this.showModal('assessment-modal'); },
   showDecisionForm() { this.showModal('decision-modal'); },
-  showAssistanceForm() { this.loadStaffOptions().then(() => { this.filterAssistanceTypes(); this.showModal('assistance-modal'); }); },
-
-  filterAssistanceTypes() {
-    const select = document.getElementById('asst-type');
-    if (!select || !this.currentCase) return;
-    const domain = getServiceDomain(this.currentCase.service_type);
-    const preferred = domain ? domain.assistanceTypes : null;
-    if (!select._originalOptions) {
-      select._originalOptions = Array.from(select.options).map(o => ({ value: o.value, text: o.textContent }));
-    }
-    const original = select._originalOptions;
-    select.innerHTML = '';
-    const seen = new Set();
-    const sorted = preferred ? [...preferred] : original.map(o => o.value);
-    for (const val of sorted) {
-      if (!seen.has(val)) {
-        seen.add(val);
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        select.appendChild(opt);
-      }
-    }
-    for (const o of original) {
-      if (!seen.has(o.value)) {
-        seen.add(o.value);
-        const opt = document.createElement('option');
-        opt.value = o.value;
-        opt.textContent = o.text;
-        select.appendChild(opt);
-      }
-    }
-  },
+  showAssistanceForm() { this.loadStaffOptions().then(() => { this.showModal('assistance-modal'); }); },
   showFollowUpForm() { this.showModal('followup-modal'); },
 
   showModal(id) {
@@ -2304,14 +2188,11 @@ async loadSection(name, path) {
         // Conflict — version mismatch or concurrent modification
         const errData = err.data || {};
         if (errData.error?.code === 'FORM_VERSION_MISMATCH') {
-          showMessage('error', 'The form has been updated since you started. Please refresh and resubmit your responses.');
-          await this.openFormForCase(formDef);
+          showMessage('error', 'The form has been updated since you started. Please refresh the page and resubmit.');
         } else if (errData.error?.code === 'CONCURRENT_MODIFICATION') {
-          showMessage('error', 'The form was modified by another user. Please review the changes and resubmit.');
-          await this.openFormForCase(formDef);
+          showMessage('error', 'The form was modified by another user. Please refresh and review the changes.');
         } else {
-          showMessage('error', 'Unable to submit: the form no longer matches the expected version. Please reload and try again.');
-          await this.openFormForCase(formDef);
+          showMessage('error', 'Unable to submit: the form no longer matches the expected version. Please refresh and try again.');
         }
       } else if (err.status === 400) {
         // Validation errors
