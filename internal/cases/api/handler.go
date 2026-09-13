@@ -61,9 +61,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Post("/{caseId}/assign", h.AssignCase)
 			r.Get("/{caseId}/forms", h.GetCaseForms)
 			r.Get("/{caseId}/form-submissions", h.ListSubmissions)
-			r.Get("/{caseId}/workflow/requirements", h.GetWorkflowRequirements)
-			r.Get("/{caseId}/workflow/forms", h.GetCaseForms)
-			r.Get("/{caseId}/workflow/form-submissions", h.GetCaseFormSubmissions)
+			// The /workflow/forms, /workflow/requirements and
+			// /workflow/form-submissions variants are registered on the workflow
+			// module's /cases/{caseId}/workflow subrouter (see
+			// workflowapi.Handler.SetCaseFormRoutes); registering them here would
+			// be shadowed by that longer-matching mount and return a bare 404.
 		})
 		r.Post("/{caseId}/form-submissions", h.SubmitForm)
 		r.Post("/{caseId}/form/submission", h.SubmitFormByKey)

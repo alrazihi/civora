@@ -125,7 +125,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 
 	_, err = db.DB.Exec(`
 		TRUNCATE TABLE
-			form_submissions, workflow_form_assignments,
+			form_submissions, workflow_state_form_assignments,
 			form_fields, form_versions, forms,
 			follow_ups, assistance, decisions, assessments,
 			evidence, eligibilities, people,
@@ -206,6 +206,12 @@ func SetupTestServer(t *testing.T) *TestServer {
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	formHandler := formsapi.NewHandler(formService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
+
+	workflowHandler.SetCaseFormRoutes(workflowapi.CaseFormRoutes{
+		Forms:           caseHandler.GetCaseForms,
+		Requirements:    caseHandler.GetWorkflowRequirements,
+		FormSubmissions: caseHandler.GetCaseFormSubmissions,
+	})
 
 	srv := server.New(cfg, db.DB)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)

@@ -341,3 +341,173 @@ func TestFormSubmission_MultipleFormsBatchQueries(t *testing.T) {
 	assert.Len(t, reqs.MissingRequired, 2)
 	assert.False(t, reqs.CanProceed)
 }
+
+// TestWorkflowTransition_GenericPath_EnforcesRequiredForms locks in the fix for
+// the enforcement bypass: the generic workflow transition path
+// (workflowSvc.ExecuteTransition, invoked by
+// POST /cases/{id}/workflow/transitions/{key}) previously advanced state
+// WITHOUT checking required forms — only the case-status endpoint did. The
+// CaseService.OnTransition observer now enforces the requirement inside the
+// transition transaction for every path, so advancement cannot bypass forms
+// and does not depend on the frontend disabling buttons.
+func TestWorkflowTransition_GenericPath_EnforcesRequiredForms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	caseSvc, formSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
+	ctx := context.Background()
+	actorID := helpers.SeedUser(db, orgID)
+	helpers.SeedDefaultRoles(db, orgID)
+
+	workflowDef := seedWorkflowWithAssessmentState(t, db, workflowSvc, orgID, actorID)
+	_, version := seedPublishedFormWithFields(t, formSvc, orgID, actorID)
+
+	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Generic Transition Enforcement",
+		ServiceType:    casedomain.ServiceTypeGeneral,
+		Priority:       casedomain.PriorityNormal,
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	// Pin a required form to the initial state (NEW): leaving NEW must be
+	// blocked until it is submitted.
+	assignmentRepo := assignmentinfra.NewPostgresWorkflowStateFormAssignmentRepository(db)
+	assignment, err := assignmentdomain.NewWorkflowStateFormAssignment(
+		orgID, workflowDef.ID, version.FormID, version.ID, actorID,
+		"NEW", true, 0,
+	)
+	require.NoError(t, err)
+	require.NoError(t, assignmentRepo.Save(ctx, assignment))
+
+	instance, err := workflowSvc.GetInstanceByCaseID(ctx, orgID, c.ID)
+	require.NoError(t, err)
+
+	// Generic transition with the required form unsubmitted MUST be rejected.
+	_, err = workflowSvc.ExecuteTransition(ctx, workflowapp.ExecuteTransitionParams{
+		TenantID:      orgID,
+		InstanceID:    instance.ID,
+		TransitionKey: "open",
+		ActorID:       actorID,
+		ActorRole:     "admin",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, caseapp.ErrRequiredFormsIncomplete)
+
+	// The transition must have rolled back: state unchanged.
+	reloaded, err := workflowSvc.GetInstanceByCaseID(ctx, orgID, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "NEW", reloaded.CurrentState)
+
+	// Submit the required form (case is still at NEW, assignment is on NEW).
+	_, err = caseSvc.SubmitForm(ctx, orgID, c.ID, actorID, version.ID, map[string]interface{}{"name": "John", "notes": "ok"})
+	require.NoError(t, err)
+
+	// The identical generic transition MUST now succeed.
+	_, err = workflowSvc.ExecuteTransition(ctx, workflowapp.ExecuteTransitionParams{
+		TenantID:      orgID,
+		InstanceID:    instance.ID,
+		TransitionKey: "open",
+		ActorID:       actorID,
+		ActorRole:     "admin",
+	})
+	require.NoError(t, err)
+
+	reloaded2, err := workflowSvc.GetInstanceByCaseID(ctx, orgID, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "OPEN", reloaded2.CurrentState)
+}
+
+// TestFormSubmission_EnforcesSnakeCaseNumericValidation locks in the fix for
+// the validation-key mismatch: the forms domain validator accepts both
+// snake_case (min_value) and camelCase (minValue) at definition time and
+// stores them verbatim, but submission-time validation previously read only
+// camelCase as float64. A field validly configured with min_value therefore had
+// its minimum silently unenforced. household_size=0 (below min_value 1) must be
+// rejected — the exact Phase 5 product requirement.
+func TestFormSubmission_EnforcesSnakeCaseNumericValidation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	db := helpers.TestDB(t)
+	helpers.TruncateTables(t, db)
+
+	caseSvc, formSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
+	ctx := context.Background()
+	actorID := helpers.SeedUser(db, orgID)
+	helpers.SeedDefaultRoles(db, orgID)
+
+	workflowDef := seedWorkflowWithAssessmentState(t, db, workflowSvc, orgID, actorID)
+
+	form, err := formSvc.CreateForm(ctx, formapp.CreateFormParams{
+		OrganizationID: orgID,
+		Key:            "household-" + uuid.New().String()[:8],
+		Name:           "Household Assessment",
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	version, err := formSvc.CreateVersion(ctx, formapp.CreateVersionParams{
+		OrganizationID: orgID,
+		FormID:         form.ID,
+		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	_, err = formSvc.AddField(ctx, formapp.AddFieldParams{
+		OrganizationID: orgID,
+		FormID:         form.ID,
+		VersionID:      version.ID,
+		Key:            "household_size",
+		Label:          "Household Size",
+		Type:           formdomain.FieldTypeNumber,
+		Required:       true,
+		Validation:     map[string]any{"min_value": 1},
+		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	_, err = formSvc.PublishVersion(ctx, formapp.PublishVersionParams{
+		OrganizationID: orgID,
+		VersionID:      version.ID,
+		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Snake Case Numeric Validation",
+		ServiceType:    casedomain.ServiceTypeGeneral,
+		Priority:       casedomain.PriorityNormal,
+		CreatedByID:    actorID,
+	})
+	require.NoError(t, err)
+
+	assignmentRepo := assignmentinfra.NewPostgresWorkflowStateFormAssignmentRepository(db)
+	assignment, err := assignmentdomain.NewWorkflowStateFormAssignment(
+		orgID, workflowDef.ID, form.ID, version.ID, actorID,
+		"NEW", true, 0,
+	)
+	require.NoError(t, err)
+	require.NoError(t, assignmentRepo.Save(ctx, assignment))
+
+	// household_size = 0 violates min_value 1 and MUST be rejected.
+	_, err = caseSvc.SubmitForm(ctx, orgID, c.ID, actorID, version.ID, map[string]interface{}{"household_size": float64(0)})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, caseapp.ErrFieldValidationFailed)
+
+	// No submission was persisted for the rejected attempt.
+	reqs, err := caseSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, reqs.SubmittedCount)
+
+	// A value satisfying min_value is accepted.
+	_, err = caseSvc.SubmitForm(ctx, orgID, c.ID, actorID, version.ID, map[string]interface{}{"household_size": float64(4)})
+	require.NoError(t, err)
+}

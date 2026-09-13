@@ -207,6 +207,15 @@ func main() {
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
 
+	// The /cases/{caseId}/workflow/forms|requirements|form-submissions endpoints
+	// are implemented by the cases module but must be served from the workflow
+	// subrouter, whose longer mount path otherwise shadows them (bare 404).
+	workflowHandler.SetCaseFormRoutes(workflowapi.CaseFormRoutes{
+		Forms:           caseHandler.GetCaseForms,
+		Requirements:    caseHandler.GetWorkflowRequirements,
+		FormSubmissions: caseHandler.GetCaseFormSubmissions,
+	})
+
 	srv := server.New(cfg, db.DB)
 	identityHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)

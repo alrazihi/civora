@@ -259,19 +259,19 @@ func serializeAssignment(a *domain.WorkflowStateFormAssignment) map[string]inter
 
 func writeAssignmentError(w http.ResponseWriter, err error) {
 	switch {
-	case err == domain.ErrAssignmentNotFound:
+	case errors.Is(err, domain.ErrAssignmentNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "assignment not found")
 	case errors.Is(err, application.ErrWorkflowNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow definition not found")
-	case err == application.ErrAssignmentAlreadyExists:
+	case errors.Is(err, application.ErrAssignmentAlreadyExists):
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "assignment already exists for this state and form version")
-	case err == application.ErrInvalidWorkflowState:
+	case errors.Is(err, application.ErrInvalidWorkflowState):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow state key")
-	case err == application.ErrInvalidFormVersion:
+	case errors.Is(err, application.ErrInvalidFormVersion):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid form version (not found or not published)")
-	case err == application.ErrFormArchived:
+	case errors.Is(err, application.ErrFormArchived):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form is archived and cannot be assigned")
-	case err == application.ErrDuplicateDisplayOrder:
+	case errors.Is(err, application.ErrDuplicateDisplayOrder):
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "display order already in use for this state")
 	case errors.Is(err, domain.ErrTenantMismatch):
 		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "tenant mismatch")

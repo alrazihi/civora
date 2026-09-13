@@ -8,6 +8,14 @@ import (
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 var phoneRegex = regexp.MustCompile(`^[+\d\s\-().]{7,25}$`)
 
+// IsValidEmail reports whether s matches the canonical email pattern used for
+// form field validation. Exported so submission-time validation in other
+// modules enforces the identical contract instead of a weaker ad-hoc check.
+func IsValidEmail(s string) bool { return emailRegex.MatchString(s) }
+
+// IsValidPhone reports whether s matches the canonical phone pattern.
+func IsValidPhone(s string) bool { return phoneRegex.MatchString(s) }
+
 func ValidateFieldValidation(fieldType FieldType, validation map[string]any) error {
 	if validation == nil {
 		return nil

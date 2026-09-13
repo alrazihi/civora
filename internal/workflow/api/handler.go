@@ -18,11 +18,31 @@ import (
 )
 
 type Handler struct {
-	svc WorkflowService
+	svc            WorkflowService
+	caseFormRoutes *CaseFormRoutes
 }
 
 func NewHandler(svc WorkflowService) *Handler {
 	return &Handler{svc: svc}
+}
+
+// CaseFormRoutes carries the case-scoped dynamic-form endpoints that live under
+// the /cases/{caseId}/workflow prefix. They are implemented by the cases module
+// but must be registered on this handler's subrouter: chi resolves the longest
+// matching mount, so this /workflow subrouter shadows any /workflow/* route the
+// cases module registers on its own /cases subrouter. Registering them here
+// keeps the OpenAPI-documented paths reachable instead of returning a bare 404.
+type CaseFormRoutes struct {
+	Forms           http.HandlerFunc
+	Requirements    http.HandlerFunc
+	FormSubmissions http.HandlerFunc
+}
+
+// SetCaseFormRoutes wires the cases module's workflow-scoped form handlers so
+// they are served from the subrouter that actually wins route resolution. It
+// must be called before RegisterRoutes.
+func (h *Handler) SetCaseFormRoutes(routes CaseFormRoutes) {
+	h.caseFormRoutes = &routes
 }
 
 type WorkflowService interface {
@@ -76,6 +96,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Get("/transitions", h.GetValidTransitions)
 			r.Post("/transitions/{transitionKey}", h.ExecuteTransition)
 			r.Get("/history", h.GetWorkflowHistory)
+			if h.caseFormRoutes != nil {
+				r.Get("/forms", h.caseFormRoutes.Forms)
+				r.Get("/requirements", h.caseFormRoutes.Requirements)
+				r.Get("/form-submissions", h.caseFormRoutes.FormSubmissions)
+			}
 		})
 	})
 }
@@ -640,6 +665,8 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "transition not permitted")
 	case errors.Is(err, domain.ErrUnauthorizedTransition{}):
 		shared.WriteError(w, http.StatusForbidden, shared.CodeForbidden, "transition not permitted")
+	case errors.Is(err, shared.ErrRequiredFormsIncomplete):
+		shared.WriteError(w, http.StatusConflict, shared.CodeRequiredFormsIncomplete, "required forms are incomplete")
 	case errors.Is(err, domain.ErrConcurrentModification{}):
 		shared.WriteError(w, http.StatusConflict, shared.CodeStateTransition, "workflow state changed concurrently; retry the transition")
 	case errors.Is(err, domain.ErrWorkflowInstanceExists{}):

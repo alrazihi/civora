@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"regexp"
 	"time"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -40,7 +40,10 @@ var (
 	ErrFieldValidationFailed    = errors.New("field validation failed")
 	ErrOptionValidationFailed   = errors.New("option validation failed")
 	ErrInvalidSubmissionData    = errors.New("invalid submission data")
-	ErrRequiredFormsIncomplete  = errors.New("required forms are incomplete")
+	// ErrRequiredFormsIncomplete aliases the shared sentinel so the workflow
+	// API can match the same error identity (cases -> workflow would otherwise
+	// be an import cycle). Same message, same errors.Is behavior.
+	ErrRequiredFormsIncomplete = shared.ErrRequiredFormsIncomplete
 )
 
 // WorkflowTransitionExecutor abstracts the workflow engine for the case service.
@@ -574,6 +577,16 @@ func (s *CaseService) OnTransition(ctx context.Context, tx *sql.Tx, instance *wo
 	if instance == nil {
 		return nil
 	}
+	// Enforce required-form completion for the state being left. This is the
+	// single authoritative enforcement point: the observer runs inside the
+	// transition transaction for EVERY path (both the case-status endpoint and
+	// the generic workflow transition endpoint), so a workflow cannot advance
+	// past a state whose required forms are unsubmitted regardless of which API
+	// the client calls. A failure here rolls the transition back atomically and
+	// must not depend on the frontend disabling buttons.
+	if err := s.checkRequiredFormsCompleteInTx(ctx, tx, instance.TenantID, instance.CaseID, instance.WorkflowDefID, transition.FromState); err != nil {
+		return err
+	}
 	c, err := s.repo.FindByIDTx(ctx, tx, instance.TenantID, instance.CaseID)
 	if err != nil {
 		return err
@@ -832,6 +845,7 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 				Resource:       "form_submission",
 				ResourceID:     shared.StrPtr(submission.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"case_id":         caseID.String(),
 					"form_id":         lockedForm.ID.String(),
@@ -1286,14 +1300,8 @@ func validateFieldValue(field *formdomain.FormField, value interface{}) error {
 		return nil
 	}
 
-	minLength := 0
-	maxLength := 0
-	if ml, ok := field.Validation["minLength"].(float64); ok {
-		minLength = int(ml)
-	}
-	if ml, ok := field.Validation["maxLength"].(float64); ok {
-		maxLength = int(ml)
-	}
+	minLength, _ := validationNumber(field.Validation, "minLength", "min_length")
+	maxLength, _ := validationNumber(field.Validation, "maxLength", "max_length")
 
 	switch field.Type {
 	case formdomain.FieldTypeText, formdomain.FieldTypeTextarea, formdomain.FieldTypeEmail, formdomain.FieldTypePhone:
@@ -1301,15 +1309,26 @@ func validateFieldValue(field *formdomain.FormField, value interface{}) error {
 		if !ok {
 			return fmt.Errorf("%w: field %q expected string", ErrFieldValidationFailed, field.Key)
 		}
-		if minLength > 0 && len(strVal) < minLength {
+		if minLength > 0 && len(strVal) < int(minLength) {
 			return fmt.Errorf("%w: field %q is too short", ErrFieldValidationFailed, field.Key)
 		}
-		if maxLength > 0 && len(strVal) > maxLength {
+		if maxLength > 0 && len(strVal) > int(maxLength) {
 			return fmt.Errorf("%w: field %q is too long", ErrFieldValidationFailed, field.Key)
 		}
-		if field.Type == formdomain.FieldTypeEmail {
-			if !strings.Contains(strVal, "@") || !strings.Contains(strVal, ".") {
+		switch field.Type {
+		case formdomain.FieldTypeEmail:
+			if !formdomain.IsValidEmail(strVal) {
 				return fmt.Errorf("%w: field %q is not a valid email", ErrFieldValidationFailed, field.Key)
+			}
+			if err := validatePatternConstraint(field, strVal); err != nil {
+				return err
+			}
+		case formdomain.FieldTypePhone:
+			if !formdomain.IsValidPhone(strVal) {
+				return fmt.Errorf("%w: field %q is not a valid phone number", ErrFieldValidationFailed, field.Key)
+			}
+			if err := validatePatternConstraint(field, strVal); err != nil {
+				return err
 			}
 		}
 
@@ -1318,16 +1337,29 @@ func validateFieldValue(field *formdomain.FormField, value interface{}) error {
 		if err != nil {
 			return fmt.Errorf("%w: field %q expected number", ErrFieldValidationFailed, field.Key)
 		}
-		if minVal, ok := field.Validation["minValue"].(float64); ok && numVal < minVal {
+		if minVal, ok := validationNumber(field.Validation, "minValue", "min_value"); ok && numVal < minVal {
 			return fmt.Errorf("%w: field %q is below minimum", ErrFieldValidationFailed, field.Key)
 		}
-		if maxVal, ok := field.Validation["maxValue"].(float64); ok && numVal > maxVal {
+		if maxVal, ok := validationNumber(field.Validation, "maxValue", "max_value"); ok && numVal > maxVal {
 			return fmt.Errorf("%w: field %q is above maximum", ErrFieldValidationFailed, field.Key)
 		}
 
-	case formdomain.FieldTypeDate, formdomain.FieldTypeDatetime:
-		if _, ok := value.(string); !ok {
+	case formdomain.FieldTypeDate:
+		strVal, ok := value.(string)
+		if !ok {
 			return fmt.Errorf("%w: field %q expected date string", ErrFieldValidationFailed, field.Key)
+		}
+		if _, err := time.Parse("2006-01-02", strVal); err != nil {
+			return fmt.Errorf("%w: field %q is not a valid date (expected YYYY-MM-DD)", ErrFieldValidationFailed, field.Key)
+		}
+
+	case formdomain.FieldTypeDatetime:
+		strVal, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("%w: field %q expected datetime string", ErrFieldValidationFailed, field.Key)
+		}
+		if !isValidDatetime(strVal) {
+			return fmt.Errorf("%w: field %q is not a valid datetime", ErrFieldValidationFailed, field.Key)
 		}
 
 	case formdomain.FieldTypeBoolean:
@@ -1392,4 +1424,60 @@ func getFloat(value interface{}) (float64, error) {
 	default:
 		return 0, fmt.Errorf("cannot convert %T to float64", value)
 	}
+}
+
+// validationNumber reads a numeric validation constraint, accepting both the
+// camelCase and snake_case key spellings that the forms domain validator
+// permits at definition time, and the numeric types getFloat supports
+// (float64, int, int64, json.Number). It returns ok=false when the constraint
+// is absent or non-numeric so a malformed config never silently enforces a
+// wrong bound. Keeping this in sync with forms/domain validation is what makes
+// a constraint configured as e.g. min_value actually enforced at submission.
+func validationNumber(v map[string]interface{}, keys ...string) (float64, bool) {
+	for _, k := range keys {
+		if raw, exists := v[k]; exists {
+			if f, err := getFloat(raw); err == nil {
+				return f, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// validatePatternConstraint enforces an optional custom regex configured via
+// the `pattern` validation key on email/phone fields. The forms domain
+// validator already verified the pattern compiles at definition time, so a
+// pattern that fails to compile here is ignored rather than rejecting the
+// submission outright.
+func validatePatternConstraint(field *formdomain.FormField, strVal string) error {
+	pattern, ok := field.Validation["pattern"].(string)
+	if !ok || pattern == "" {
+		return nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil
+	}
+	if !re.MatchString(strVal) {
+		return fmt.Errorf("%w: field %q does not match the required pattern", ErrFieldValidationFailed, field.Key)
+	}
+	return nil
+}
+
+// isValidDatetime accepts RFC3339 and the common HTML datetime-local layouts so
+// values produced by <input type="datetime-local"> validate correctly while
+// garbage such as "not-a-date" is rejected.
+func isValidDatetime(s string) bool {
+	for _, layout := range []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+	} {
+		if _, err := time.Parse(layout, s); err == nil {
+			return true
+		}
+	}
+	return false
 }

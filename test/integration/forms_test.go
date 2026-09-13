@@ -403,23 +403,23 @@ func TestForm_AuditEvents(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = svc.CreateVersion(ctx, formapp.CreateVersionParams{
+	newVersion, err := svc.CreateVersion(ctx, formapp.CreateVersionParams{
 		OrganizationID: orgID,
 		FormID:         form.ID,
 		ActorID:        actorID,
-	})
-	require.NoError(t, err)
-
-	version, err := svc.GetActiveVersion(ctx, formapp.GetActiveVersionParams{
-		OrganizationID: orgID,
-		FormID:         form.ID,
 	})
 	require.NoError(t, err)
 
 	_, err = svc.PublishVersion(ctx, formapp.PublishVersionParams{
 		OrganizationID: orgID,
-		VersionID:      version.ID,
+		VersionID:      newVersion.ID,
 		ActorID:        actorID,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GetActiveVersion(ctx, formapp.GetActiveVersionParams{
+		OrganizationID: orgID,
+		FormID:         form.ID,
 	})
 	require.NoError(t, err)
 

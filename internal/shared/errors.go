@@ -1,8 +1,19 @@
 package shared
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type ErrorCode string
+
+// ErrRequiredFormsIncomplete is a cross-cutting sentinel returned when a
+// workflow transition is blocked because a required form for the state being
+// left has no submission. It lives in shared so the cases module (which
+// enforces it inside the transition transaction) and the workflow API (which
+// maps it to HTTP 409) reference the same error identity without creating an
+// import cycle between cases and workflow.
+var ErrRequiredFormsIncomplete = errors.New("required forms are incomplete")
 
 const (
 	CodeInvalidInput            ErrorCode = "INVALID_INPUT"
