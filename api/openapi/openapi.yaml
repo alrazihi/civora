@@ -1276,6 +1276,86 @@ components:
         metadata:
           type: object
           nullable: true
+    WorkflowStateFormAssignment:
+      type: object
+      required:
+      - id
+      - tenant_id
+      - workflow_definition_id
+      - workflow_state_key
+      - form_id
+      - form_version_id
+      - required
+      - display_order
+      - active
+      - created_by
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        tenant_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        workflow_definition_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        workflow_state_key:
+          type: string
+        form_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_version_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        required:
+          type: boolean
+        display_order:
+          type: integer
+        active:
+          type: boolean
+        created_by:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateFormAssignmentRequest:
+      type: object
+      required:
+      - form_id
+      - form_version_id
+      - workflow_state_key
+      properties:
+        form_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        form_version_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        workflow_state_key:
+          type: string
+        required:
+          type: boolean
+          default: true
+        display_order:
+          type: integer
+          default: 0
+        active:
+          type: boolean
+          default: true
     Form:
       type: object
       required:
@@ -1402,6 +1482,7 @@ components:
           maxLength: 200
         type:
           type: string
+          description: The field type. Immutable after creation; cannot be changed via update.
           enum:
           - text
           - textarea
@@ -1482,17 +1563,6 @@ components:
         label:
           type: string
           maxLength: 200
-        type:
-          type: string
-          enum:
-          - text
-          - textarea
-          - number
-          - select
-          - multiselect
-          - date
-          - boolean
-          - file
         required:
           type: boolean
         order:
@@ -2771,6 +2841,279 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/workflows/{workflowId}/form-assignments:
+    get:
+      operationId: listFormAssignments
+      tags:
+      - Workflows
+      summary: List form assignments for a workflow
+      description: Retrieves all form assignments for a workflow definition. Admin
+        and staff roles can read; admin role required for writes.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: List of form assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowStateFormAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createFormAssignment
+      tags:
+      - Workflows
+      summary: Assign a form to a workflow state
+      description: Creates a new form assignment binding a form version to a workflow
+        state. Requires admin role.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFormAssignmentRequest'
+      responses:
+        '201':
+          description: Form assignment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowStateFormAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Assignment already exists for this state and form version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /organizations/{orgId}/workflows/{workflowId}/form-assignments/{assignmentId}:
+    get:
+      operationId: getFormAssignment
+      tags:
+      - Workflows
+      summary: Get a form assignment
+      description: Retrieves a specific form assignment. Admin and staff roles can
+        read.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: assignmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Form assignment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowStateFormAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateFormAssignment
+      tags:
+      - Workflows
+      summary: Update a form assignment
+      description: Updates a form assignment. Requires admin role.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: assignmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                required:
+                  type: boolean
+                display_order:
+                  type: integer
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Form assignment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowStateFormAssignment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteFormAssignment
+      tags:
+      - Workflows
+      summary: Remove a form assignment
+      description: Deletes a form assignment. Requires admin role.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: assignmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '204':
+          description: Assignment deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/workflows/{workflowId}/form-assignments/state/{stateKey}:
+    get:
+      operationId: getFormAssignmentsForState
+      tags:
+      - Workflows
+      summary: Get form assignments for a specific state
+      description: Retrieves form assignments for a specific workflow state key.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: stateKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: List of form assignments for the state
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowStateFormAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/cases/{caseId}/workflow:
     get:
       operationId: getCaseWorkflow
@@ -2806,6 +3149,186 @@ paths:
                     $ref: '#/components/schemas/WorkflowInstance'
                   definition:
                     $ref: '#/components/schemas/WorkflowDefinition'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/cases/{caseId}/workflow/forms:
+    get:
+      operationId: getCaseWorkflowForms
+      tags:
+      - Cases
+      summary: Get forms required for case workflow state
+      description: Retrieves forms assigned to the case's current workflow state.
+        Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Workflow state key to filter forms by
+      responses:
+        '200':
+          description: List of available forms for the case workflow state
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaseFormAvailability'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/cases/{caseId}/workflow/form-submissions:
+    get:
+      operationId: getCaseFormSubmissions
+      tags:
+      - Cases
+      summary: List form submissions for case workflow
+      description: Lists all form submissions for a case. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: state
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Workflow state key to filter submissions by
+      responses:
+        '200':
+          description: Form submissions keyed by form key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/FormSubmission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/cases/{caseId}/form/submission:
+    post:
+      operationId: submitFormByKey
+      tags:
+      - Cases
+      summary: Submit a form by key
+      description: Submits form data for a case by form key. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitFormRequest'
+      responses:
+        '201':
+          description: Form submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormSubmission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Form already submitted or not assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /organizations/{orgId}/cases/{caseId}/form/{formKey}/submission:
+    get:
+      operationId: getFormSubmissionByKey
+      tags:
+      - Cases
+      summary: Get form submission by key
+      description: Retrieves a specific form submission by form key. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: formKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Form submission details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormSubmission'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

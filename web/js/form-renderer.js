@@ -70,29 +70,18 @@
 
     switch (field.type) {
       case 'number':
-        if (isNaN(Number(fv))) {
-          errors.push(v.number_message || `${field.label || field.key} must be a number.`);
-        } else {
-          const num = Number(fv);
-          if (v.minimum !== undefined && num < v.minimum) {
-            errors.push(v.minimum_message || `${field.label || field.key} must be at least ${v.minimum}.`);
-          }
-          if (v.maximum !== undefined && num > v.maximum) {
-            errors.push(v.maximum_message || `${field.label || field.key} cannot exceed ${v.maximum}.`);
-          }
-        }
-        break;
-
       case 'decimal':
         if (isNaN(Number(fv))) {
           errors.push(v.number_message || `${field.label || field.key} must be a number.`);
         } else {
           const num = Number(fv);
-          if (v.minimum !== undefined && num < v.minimum) {
-            errors.push(v.minimum_message || `${field.label || field.key} must be at least ${v.minimum}.`);
+          const minVal = v.minValue !== undefined ? v.minValue : (v.minimum !== undefined ? v.minimum : v.min);
+          const maxVal = v.maxValue !== undefined ? v.maxValue : (v.maximum !== undefined ? v.maximum : v.max);
+          if (minVal !== undefined && num < minVal) {
+            errors.push(v.minimum_message || v.minValue_message || `${field.label || field.key} must be at least ${minVal}.`);
           }
-          if (v.maximum !== undefined && num > v.maximum) {
-            errors.push(v.maximum_message || `${field.label || field.key} cannot exceed ${v.maximum}.`);
+          if (maxVal !== undefined && num > maxVal) {
+            errors.push(v.maximum_message || v.maxValue_message || `${field.label || field.key} cannot exceed ${maxVal}.`);
           }
         }
         break;
@@ -116,11 +105,13 @@
         break;
     }
 
-    if (v.min_length !== undefined && fv.length < v.min_length) {
-      errors.push(v.min_length_message || `${field.label || field.key} must be at least ${v.min_length} characters.`);
+    const minLength = v.minLength !== undefined ? v.minLength : v.min_length;
+    const maxLength = v.maxLength !== undefined ? v.maxLength : v.max_length;
+    if (minLength !== undefined && fv.length < minLength) {
+      errors.push(v.minLength_message || v.min_length_message || `${field.label || field.key} must be at least ${minLength} characters.`);
     }
-    if (v.max_length !== undefined && fv.length > v.max_length) {
-      errors.push(v.max_length_message || `${field.label || field.key} cannot exceed ${v.max_length} characters.`);
+    if (maxLength !== undefined && fv.length > maxLength) {
+      errors.push(v.maxLength_message || v.max_length_message || `${field.label || field.key} cannot exceed ${maxLength} characters.`);
     }
     if (v.pattern) {
       try {
@@ -143,7 +134,7 @@
    */
   function renderField(field, formState) {
     const fieldDef = field || {};
-    const type = fieldDef.type || 'text';
+    const type = String(fieldDef.type || 'text').toLowerCase();
     const key = fieldDef.key || '';
     const label = fieldDef.label || key;
     const required = !!fieldDef.required;

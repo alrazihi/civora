@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1382,6 +1383,12 @@ func getFloat(value interface{}) (float64, error) {
 		return float64(v), nil
 	case int64:
 		return float64(v), nil
+	case json.Number:
+		f, err := v.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("cannot convert json.Number to float64: %w", err)
+		}
+		return f, nil
 	default:
 		return 0, fmt.Errorf("cannot convert %T to float64", value)
 	}

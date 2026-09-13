@@ -11,6 +11,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
 	"github.com/alrazihi/civora/internal/forms/domain"
+	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	assignmentdomain "github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
@@ -152,6 +153,7 @@ func (s *WorkflowStateFormAssignmentService) CreateAssignment(ctx context.Contex
 				Resource:       "workflow_form_assignment",
 				ResourceID:     shared.StrPtr(assignment.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"workflow_definition_id": params.WorkflowDefinitionID.String(),
 					"workflow_state_key":     params.WorkflowStateKey,
@@ -232,6 +234,7 @@ func (s *WorkflowStateFormAssignmentService) UpdateAssignment(ctx context.Contex
 				Resource:       "workflow_form_assignment",
 				ResourceID:     shared.StrPtr(assignment.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"workflow_definition_id": assignment.WorkflowDefinitionID.String(),
 					"workflow_state_key":     assignment.WorkflowStateKey,
@@ -274,6 +277,7 @@ func (s *WorkflowStateFormAssignmentService) DeleteAssignment(ctx context.Contex
 				Resource:       "workflow_form_assignment",
 				ResourceID:     shared.StrPtr(assignment.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"workflow_definition_id": assignment.WorkflowDefinitionID.String(),
 					"workflow_state_key":     assignment.WorkflowStateKey,

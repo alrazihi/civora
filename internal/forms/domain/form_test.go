@@ -251,11 +251,13 @@ func TestValidateFieldKey(t *testing.T) {
 	assert.NoError(t, ValidateFieldKey("valid_key"))
 	assert.Error(t, ValidateFieldKey(""))
 	assert.Error(t, ValidateFieldKey(string(make([]byte, 101))))
+	assert.Error(t, ValidateFieldKey("InvalidKey"))
 }
 
 func TestValidateFormKey(t *testing.T) {
 	assert.NoError(t, ValidateFormKey("valid-key"))
 	assert.Error(t, ValidateFormKey(""))
+	assert.Error(t, ValidateFormKey("InvalidKey"))
 }
 
 func TestValidateFormName(t *testing.T) {

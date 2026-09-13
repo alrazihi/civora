@@ -12,6 +12,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
 	"github.com/alrazihi/civora/internal/forms/domain"
+	intmid "github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 )
 
@@ -96,6 +97,7 @@ func (s *FormService) CreateForm(ctx context.Context, params CreateFormParams) (
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(form.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"key":  form.Key,
 					"name": form.Name,
@@ -161,6 +163,7 @@ func (s *FormService) UpdateForm(ctx context.Context, params UpdateFormParams) (
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(form.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 			}); err != nil {
 				return fmt.Errorf("failed to record audit event: %w", err)
 			}
@@ -212,6 +215,7 @@ func (s *FormService) CreateVersion(ctx context.Context, params CreateVersionPar
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(form.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"version": version.Version,
 				},
@@ -288,6 +292,7 @@ func (s *FormService) PublishVersion(ctx context.Context, params PublishVersionP
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(form.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"version": version.Version,
 				},
@@ -343,6 +348,7 @@ func (s *FormService) ArchiveForm(ctx context.Context, params ArchiveFormParams)
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(form.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 			}); err != nil {
 				return fmt.Errorf("failed to record audit event: %w", err)
 			}
@@ -476,6 +482,7 @@ func (s *FormService) AddField(ctx context.Context, params AddFieldParams) (*dom
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(form.ID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"field_key":  field.Key,
 					"field_type": field.Type,
@@ -566,6 +573,7 @@ func (s *FormService) UpdateField(ctx context.Context, params UpdateFieldParams)
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(field.FormID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"field_key":  field.Key,
 					"field_type": field.Type,
@@ -620,6 +628,7 @@ func (s *FormService) DeleteField(ctx context.Context, params DeleteFieldParams)
 				Resource:       "form",
 				ResourceID:     shared.StrPtr(field.FormID.String()),
 				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
 				Metadata: map[string]interface{}{
 					"field_key": field.Key,
 				},
@@ -645,15 +654,11 @@ type GetActiveVersionParams struct {
 
 func (s *FormService) GetActiveVersion(ctx context.Context, params GetActiveVersionParams) (*domain.FormVersion, error) {
 	version, err := s.versionRepo.FindActiveVersion(ctx, params.OrganizationID, params.FormID)
-	if err != nil && !errors.Is(err, domain.ErrFormVersionNotFound) {
+	if err != nil {
 		return nil, fmt.Errorf("failed to find active version: %w", err)
 	}
-
 	if version == nil {
-		version, err = s.versionRepo.FindLatest(ctx, params.OrganizationID, params.FormID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrFormVersionNotFound, err)
-		}
+		return nil, ErrFormVersionNotFound
 	}
 	return version, nil
 }

@@ -2042,12 +2042,12 @@ async loadSection(name, path) {
           return;
         }
 
-       // Fetch submission status for each form
-       try {
-         this.formSubmissions = await FormAPI.getCaseFormSubmissions(caseId, currentState) || {};
-       } catch (e) {
-         this.formSubmissions = {};
-       }
+        // Fetch submission status for each form
+        try {
+          this.formSubmissions = await FormAPI.getCaseFormSubmissions(caseId, currentState) || {};
+        } catch (e) {
+          this.formSubmissions = {};
+        }
 
        // Render the form list with status badges
        if (listContainer) {
@@ -2514,16 +2514,16 @@ async loadSection(name, path) {
       if (assignmentsContainer) {
         assignmentsContainer.innerHTML = '<p class="text-muted">Loading assignments…</p>';
         try {
-          const assignments = await FormAPI.getFormAssignments(form.id);
+           const assignments = await FormAPI.getFormAssignmentsByForm(form.id);
           if (assignments.length) {
             assignmentsContainer.innerHTML = assignments.map(a => `
               <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
                 <div>
                   <strong>${escapeHTML(a.workflow_name || a.workflow_key || '')}</strong>
-                  <span class="text-muted" style="font-size:0.85rem"> → State: ${escapeHTML(a.state_key)}</span>
+                   <span class="text-muted" style="font-size:0.85rem"> → State: ${escapeHTML(a.workflow_state_key || a.state_key || '')}</span>
                   ${a.required ? '<span class="badge" style="font-size:0.7rem">Required</span>' : ''}
                 </div>
-                <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${form.id}', '${a.id}')">Remove</button>
+                <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${a.workflow_id}', '${a.id}')">Remove</button>
               </div>
             `).join('');
           } else {
@@ -2544,10 +2544,10 @@ async loadSection(name, path) {
   fieldValidationSummary(v) {
     if (!v) return '<span class="text-muted">None</span>';
     const parts = [];
-    if (v.minimum !== undefined) parts.push(`min: ${v.minimum}`);
-    if (v.maximum !== undefined) parts.push(`max: ${v.maximum}`);
-    if (v.min_length !== undefined) parts.push(`minLen: ${v.min_length}`);
-    if (v.max_length !== undefined) parts.push(`maxLen: ${v.max_length}`);
+    if (v.minValue !== undefined) parts.push(`min: ${v.minValue}`);
+    if (v.maxValue !== undefined) parts.push(`max: ${v.maxValue}`);
+    if (v.minLength !== undefined) parts.push(`minLen: ${v.minLength}`);
+    if (v.maxLength !== undefined) parts.push(`maxLen: ${v.maxLength}`);
     if (v.pattern) parts.push('pattern');
     return parts.length ? parts.join(', ') : '<span class="text-muted">None</span>';
   },
@@ -3065,27 +3065,38 @@ async loadSection(name, path) {
       return;
     }
 
+    const formId = this.assignCurrentFormId;
+    if (!formId) {
+      showToast('No form selected', 'error');
+      return;
+    }
+
     try {
-      await FormAPI.assignFormToWorkflowState(this.assignCurrentFormId, {
-        workflow_id: workflowId,
+      const versionRes = await FormAPI.getActiveFormVersion(formId);
+      const formVersionId = versionRes?.id;
+      if (!formVersionId) {
+        showToast('Form has no published version to assign', 'error');
+        return;
+      }
+
+      await FormAPI.assignFormToWorkflowState(formId, formVersionId, workflowId, {
         state_key: stateKey,
         required: required,
       });
       showToast('Form assigned to workflow state', 'success');
       this.cancelAssignModal();
-      // Refresh detail view
       if (this.formCurrentId) this.showFormDetail(this.formCurrentId);
     } catch (err) {
       showToast(`Failed to assign form: ${escapeHTML(err.message)}`, 'error');
     }
   },
 
-  async removeFormAssignment(formId, workflowId) {
+  async removeFormAssignment(workflowId, assignmentId) {
     if (!confirm('Remove this form assignment?')) return;
     try {
-      await FormAPI.removeFormAssignment(formId, workflowId);
+      await FormAPI.removeFormAssignment(workflowId, assignmentId);
       showToast('Assignment removed', 'success');
-      this.showFormDetail(formId);
+      this.showFormDetail(this.formCurrentId);
     } catch (err) {
       showToast(`Failed to remove assignment: ${escapeHTML(err.message)}`, 'error');
     }

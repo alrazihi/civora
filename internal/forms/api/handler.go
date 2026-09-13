@@ -41,18 +41,28 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/forms", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
-		r.Post("/", h.CreateForm)
-		r.Get("/", h.ListForms)
-		r.Get("/{formId}", h.GetForm)
-		r.Put("/{formId}", h.UpdateForm)
-		r.Post("/{formId}/versions", h.CreateVersion)
-		r.Post("/{formId}/versions/{versionId}/publish", h.PublishVersion)
-		r.Post("/{formId}/archive", h.ArchiveForm)
-		r.Get("/{formId}/active-version", h.GetActiveVersion)
-		r.Route("/{formId}/fields", func(r chi.Router) {
-			r.Post("/", h.AddField)
-			r.Put("/{fieldId}", h.UpdateField)
-			r.Delete("/{fieldId}", h.DeleteField)
+
+		// Read-only endpoints: admin and staff can access
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Get("/", h.ListForms)
+			r.Get("/{formId}", h.GetForm)
+			r.Get("/{formId}/active-version", h.GetActiveVersion)
+		})
+
+		// Write endpoints: admin only
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin"))
+			r.Post("/", h.CreateForm)
+			r.Put("/{formId}", h.UpdateForm)
+			r.Post("/{formId}/versions", h.CreateVersion)
+			r.Post("/{formId}/versions/{versionId}/publish", h.PublishVersion)
+			r.Post("/{formId}/archive", h.ArchiveForm)
+			r.Route("/{formId}/fields", func(r chi.Router) {
+				r.Post("/", h.AddField)
+				r.Put("/{fieldId}", h.UpdateField)
+				r.Delete("/{fieldId}", h.DeleteField)
+			})
 		})
 	})
 }

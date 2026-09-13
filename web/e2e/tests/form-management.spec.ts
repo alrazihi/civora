@@ -7,6 +7,7 @@ import {
   SAMPLE_FORM_TEMPLATE,
   SAMPLE_WORKFLOWS,
   setupFormMockRoutes,
+  ADMIN_TOKEN,
 } from './helpers';
 
 test.describe('Form Management', () => {
@@ -181,7 +182,10 @@ test.describe('Form Management', () => {
   });
 
   test('shows Forms nav button for admin users', async ({ page }) => {
-    // The beforeEach already sets an admin JWT token
+    await page.addInitScript(`
+      localStorage.setItem('civora_token', '${ADMIN_TOKEN}');
+      localStorage.setItem('civora_org_id', 'org-test');
+    `);
     await page.goto('/');
     await expect(page).toHaveURL(/#dashboard/);
     await expect(page.locator('#view-dashboard')).toBeVisible();

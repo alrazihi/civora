@@ -82,7 +82,7 @@ function currentUserIsAdmin() {
  *   HTTP 403 → user is not authorised to view the form.
  */
 async function getRequiredForm(caseId) {
-  const res = await api('GET', `/organizations/${orgId}/cases/${caseId}/workflow/form`);
+  const res = await api('GET', `/organizations/${orgId}/cases/${caseId}/workflow/forms`);
   return res.data || null;
 }
 
@@ -186,6 +186,17 @@ async function deleteForm(formId) {
 }
 
 /**
+ * Get the active (published) version of a form.
+ * Falls back to the latest version if no published version exists.
+ * @param {string} formId
+ * @returns {Promise<object>}
+ */
+async function getActiveFormVersion(formId) {
+  const res = await api('GET', `/organizations/${orgId}/forms/${formId}/active-version`);
+  return res.data || null;
+}
+
+/**
  * List form submissions for a case and form key.
  * @param {string} caseId
  * @param {string} formKey
@@ -240,28 +251,77 @@ async function getCaseFormSubmission(caseId, formKey) {
 
 /**
  * Assign a form to a workflow state.
- * @param {string} formId
- * @param {object} assignment - { workflow_id, state_key, required, display_order }
+ * @param {string} formId - The form ID (sent in body for backend validation).
+ * @param {string} formVersionId - The form version ID to assign.
+ * @param {string} workflowId - The workflow definition ID.
+ * @param {object} assignment - { state_key, required, display_order, active }
  * @returns {Promise<object>}
  */
-async function assignFormToWorkflowState(formId, assignment) {
-  const res = await api('POST', `/organizations/${orgId}/forms/${formId}/assignments`, assignment);
+async function assignFormToWorkflowState(formId, formVersionId, workflowId, assignment) {
+  const body = {
+    form_id: formId,
+    form_version_id: formVersionId,
+    workflow_state_key: assignment.state_key,
+    required: assignment.required,
+    display_order: assignment.display_order || 0,
+    active: assignment.active !== undefined ? assignment.active : true,
+  };
+  const res = await api('POST', `/organizations/${orgId}/workflows/${workflowId}/form-assignments`, body);
   return res.data || null;
 }
 
-async function getFormAssignments(formId) {
-  const res = await api('GET', `/organizations/${orgId}/forms/${formId}/assignments`);
+/**
+ * List form assignments for a workflow.
+ * @param {string} workflowId
+ * @returns {Promise<object[]>}
+ */
+async function getFormAssignments(workflowId) {
+  const res = await api('GET', `/organizations/${orgId}/workflows/${workflowId}/form-assignments`);
   return (res.data || []).filter(Boolean);
 }
 
-async function removeFormAssignment(formId, assignmentId) {
-  await api('DELETE', `/organizations/${orgId}/forms/${formId}/assignments/${assignmentId}`);
+/**
+ * Fetch all assignments across all workflows for a specific form.
+ * The backend has no single endpoint for this, so we load all workflows
+ * and aggregate their assignments, filtering for the target form.
+ * @param {string} formId
+ * @returns {Promise<object[]>}
+ */
+async function getFormAssignmentsByForm(formId) {
+  try {
+    const wfRes = await api('GET', `/organizations/${orgId}/workflows`);
+    const workflows = wfRes.data || [];
+    const allAssignments = [];
+    for (const wf of workflows) {
+      try {
+        const assignments = await getFormAssignments(wf.id);
+        for (const a of assignments) {
+          if (a.form_id === formId) {
+            allAssignments.push({ ...a, workflow_id: wf.id, workflow_name: wf.name, workflow_key: wf.key });
+          }
+        }
+      } catch (e) {
+        // Skip workflows we can't read assignments for
+      }
+    }
+    return allAssignments;
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Remove a form assignment from a workflow state.
+ * @param {string} workflowId
+ * @param {string} assignmentId
+ */
+async function removeFormAssignment(workflowId, assignmentId) {
+  await api('DELETE', `/organizations/${orgId}/workflows/${workflowId}/form-assignments/${assignmentId}`);
 }
 
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment };
 } else {
-  // Browser global
-  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, removeFormAssignment };
+  window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment };
 }

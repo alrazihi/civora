@@ -37,6 +37,10 @@ import (
 	followupapi "github.com/alrazihi/civora/internal/followup/api"
 	followupapp "github.com/alrazihi/civora/internal/followup/application"
 	followuppostgres "github.com/alrazihi/civora/internal/followup/infrastructure/postgres"
+	submissioninfra "github.com/alrazihi/civora/internal/form_submission/infrastructure/postgres"
+	formsapi "github.com/alrazihi/civora/internal/forms/api"
+	formsapp "github.com/alrazihi/civora/internal/forms/application"
+	formspostgres "github.com/alrazihi/civora/internal/forms/infrastructure/postgres"
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
@@ -53,6 +57,9 @@ import (
 	"github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
+	assignmentapi "github.com/alrazihi/civora/internal/workflow_form_assignment/api"
+	assignmentapp "github.com/alrazihi/civora/internal/workflow_form_assignment/application"
+	assignmentinfra "github.com/alrazihi/civora/internal/workflow_form_assignment/infrastructure/postgres"
 	"github.com/alrazihi/civora/migrations"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
@@ -118,6 +125,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 
 	_, err = db.DB.Exec(`
 		TRUNCATE TABLE
+			form_submissions, workflow_form_assignments,
+			form_fields, form_versions, forms,
 			follow_ups, assistance, decisions, assessments,
 			evidence, eligibilities, people,
 			workflow_transition_history,
@@ -142,6 +151,11 @@ func SetupTestServer(t *testing.T) *TestServer {
 	decisionRepo := decisionspostgres.NewPostgresDecisionRepository(db.DB)
 	assistanceRepo := assistancepostgres.NewPostgresAssistanceRepository(db.DB)
 	followUpRepo := followuppostgres.NewPostgresFollowUpRepository(db.DB)
+	formRepo := formspostgres.NewPostgresFormRepository(db.DB)
+	versionRepo := formspostgres.NewPostgresFormVersionRepository(db.DB)
+	fieldRepo := formspostgres.NewPostgresFormFieldRepository(db.DB)
+	assignmentRepo := assignmentinfra.NewPostgresWorkflowStateFormAssignmentRepository(db.DB)
+	submissionRepo := submissioninfra.NewPostgresFormSubmissionRepository(db.DB)
 
 	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
@@ -165,6 +179,9 @@ func SetupTestServer(t *testing.T) *TestServer {
 	seedEmergencyAssistanceWorkflow(t, db.DB, workflowService, orgID)
 
 	caseService := caseapp.NewCaseService(caseRepo, personRepo, domain.NewOrganizationUserChecker(userRepo), auditService, auditRepo, workflowService)
+	formService := formsapp.NewFormService(formRepo, versionRepo, fieldRepo, auditService)
+	assignmentService := assignmentapp.NewWorkflowStateFormAssignmentService(workflowDefRepo, workflowStateRepo, formRepo, versionRepo, assignmentRepo, auditService)
+	caseService.SetFormRepos(workflowDefRepo, workflowInstanceRepo, formRepo, versionRepo, fieldRepo, assignmentRepo, submissionRepo)
 	personService := peoplapp.NewPersonService(personRepo, auditService)
 	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
@@ -187,6 +204,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 	followUpHandler := followupapi.NewHandler(followUpService)
 	auditHandler := auditapi.NewHandler(auditService)
 	workflowHandler := workflowapi.NewHandler(workflowService)
+	formHandler := formsapi.NewHandler(formService)
+	assignmentHandler := assignmentapi.NewHandler(assignmentService)
 
 	srv := server.New(cfg, db.DB)
 	orgHandler.RegisterRoutes(srv.Router(), authMiddleware)
@@ -201,6 +220,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	formHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
 
 	return &TestServer{
 		srv:             srv,

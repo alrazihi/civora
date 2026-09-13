@@ -64,7 +64,7 @@ test.describe('Case Workspace Integration', () => {
     await expect(page.locator('#form-submission-status')).toContainText('Not Started');
   })
 
-  test('shows form status as submitted when form has submission', async ({ page }) => {
+  test('shows form status as submitted when form has submission', async ({ page }) =>{
     await openDashboard(page);
     const caseId = 'case-workspace-3';
     await setupCaseWorkspaceMocks(page, caseId, {

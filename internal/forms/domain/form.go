@@ -197,8 +197,8 @@ func ValidateFormKey(key string) error {
 	if len(key) > maxFormKeyName {
 		return fmt.Errorf("%w: key exceeds maximum length of %d characters", ErrFormInvalidInput, maxFormKeyName)
 	}
-	if !strings.EqualFold(key, strings.ToUpper(key)) {
-		// allow mixed but strip control chars
+	if strings.ToLower(key) != key {
+		return fmt.Errorf("%w: key must be lowercase", ErrFormInvalidInput)
 	}
 	if strings.ContainsFunc(key, unicode.IsControl) {
 		return fmt.Errorf("%w: key must not contain control characters", ErrFormInvalidInput)
@@ -229,6 +229,9 @@ func ValidateFieldKey(key string) error {
 	}
 	if len(key) > maxFieldKey {
 		return fmt.Errorf("%w: key exceeds maximum length of %d characters", ErrFormFieldInvalid, maxFieldKey)
+	}
+	if strings.ToLower(key) != key {
+		return fmt.Errorf("%w: key must be lowercase", ErrFormFieldInvalid)
 	}
 	if strings.ContainsFunc(key, unicode.IsControl) {
 		return fmt.Errorf("%w: key must not contain control characters", ErrFormFieldInvalid)

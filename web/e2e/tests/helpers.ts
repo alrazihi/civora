@@ -117,7 +117,7 @@ const SAMPLE_FORM_DEFINITION = {
       type: 'text',
       required: true,
       placeholder: 'Jane Doe',
-      validation: { min_length: 2, max_length: 100 },
+      validation: { minLength: 2, maxLength: 100 },
     },
     {
       key: 'email',
@@ -130,14 +130,14 @@ const SAMPLE_FORM_DEFINITION = {
       label: 'Household Size',
       type: 'number',
       required: true,
-      validation: { minimum: 1, maximum: 50, minimum_message: 'Household size must be at least 1.', maximum_message: 'Household size cannot exceed 50.' },
+      validation: { minValue: 1, maxValue: 50, minValue_message: 'Household size must be at least 1.', maxValue_message: 'Household size cannot exceed 50.' },
     },
     {
       key: 'income',
       label: 'Annual Income',
       type: 'decimal',
       required: false,
-      validation: { minimum: 0 },
+      validation: { minValue: 0 },
     },
     {
       key: 'preferred_contact',
@@ -271,7 +271,7 @@ const SAMPLE_FORM_TEMPLATE = {
       required: true,
       description: 'Applicant full name',
       placeholder: 'Jane Doe',
-      validation: { min_length: 2, max_length: 100 },
+      validation: { minLength: 2, maxLength: 100 },
     },
     {
       key: 'email',
@@ -324,6 +324,17 @@ function setupFormMockRoutes(page: Page, routeConfig: {
   });
 
   // Get/update/delete specific form
+  page.route(regex(`organizations/${ORG_ID}/forms/[^/]+/active-version`), async (route, req) => {
+    if (req.method() === 'GET') {
+      const formId = req.url().split('/').slice(-2)[0];
+      const form = cfg.get?.[formId] || SAMPLE_FORM_TEMPLATE;
+      await route.fulfill({ json: { success: true, data: { id: form.version_id || 'ver-1', form_id: form.id, version: form.version || 1, status: 'PUBLISHED' } } });
+    } else {
+      route.continue();
+    }
+  });
+
+  // Get/update/delete specific form
   page.route(regex(`organizations/${ORG_ID}/forms/[^/]+$`), async (route, req) => {
     if (req.method() === 'GET') {
       await route.fulfill({ json: { success: true, data: cfg.get?.[req.url().split('/').pop()] || SAMPLE_FORM_TEMPLATE } });
@@ -336,12 +347,20 @@ function setupFormMockRoutes(page: Page, routeConfig: {
     }
   });
 
-  // Form assignments
-  page.route(regex(`organizations/${ORG_ID}/forms/[^/]+/assignments`), async (route, req) => {
+  // Form assignments (workflow-scoped)
+  page.route(regex(`organizations/${ORG_ID}/workflows/[^/]+/form-assignments`), async (route, req) => {
     if (req.method() === 'GET') {
-      await route.fulfill({ json: { success: true, data: cfg.assignments || [] } });
+      const assignments = (cfg.assignments || []).map(a => ({
+        id: a.id,
+        form_id: a.form_id || 'form-mgmt-1',
+        workflow_state_key: a.state_key || a.workflow_state_key,
+        required: a.required,
+        display_order: a.display_order || 0,
+        active: a.active !== undefined ? a.active : true,
+      }));
+      await route.fulfill({ json: { success: true, data: assignments } });
     } else if (req.method() === 'POST') {
-      await route.fulfill({ json: { success: true, data: { id: 'assign-1', form_id: 'form-mgmt-1' } } });
+      await route.fulfill({ json: { success: true, data: { id: 'assign-1', form_id: 'form-mgmt-1', workflow_state_key: 'IN_REVIEW', required: true } } });
     } else if (req.method() === 'DELETE') {
       await route.fulfill({ json: { success: true, data: null } });
     } else {
@@ -351,7 +370,7 @@ function setupFormMockRoutes(page: Page, routeConfig: {
 
   // Workflows list (for assignment)
   if (routeConfig.workflows) {
-    page.route(regex(`organizations/${ORG_ID}/workflows`), async (route, req) => {
+    page.route(regex(`organizations/${ORG_ID}/workflows(?:$|\\?)`), async (route, req) => {
       if (req.method() === 'GET') {
         const wfList = routeConfig.workflows || SAMPLE_WORKFLOWS;
         const url = req.url();
@@ -374,6 +393,7 @@ function setupFormMockRoutes(page: Page, routeConfig: {
 // Export everything for use in category-specific spec files
 export {
   ORG_ID,
+  ADMIN_TOKEN,
   EMERGENCY_WORKFLOW,
   PERSON,
   regex,

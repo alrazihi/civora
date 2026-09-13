@@ -12,7 +12,6 @@ import (
 	casedomain "github.com/alrazihi/civora/internal/cases/domain"
 	caseinfra "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
-	submissionapp "github.com/alrazihi/civora/internal/form_submission/application"
 	submissioninfra "github.com/alrazihi/civora/internal/form_submission/infrastructure/postgres"
 	formapp "github.com/alrazihi/civora/internal/forms/application"
 	formdomain "github.com/alrazihi/civora/internal/forms/domain"
@@ -31,7 +30,6 @@ import (
 func setupFormSubmissionServices(t *testing.T, db *sql.DB) (
 	*caseapp.CaseService,
 	*formapp.FormService,
-	*submissionapp.CaseFormService,
 	*workflowapp.WorkflowService,
 	uuid.UUID,
 ) {
@@ -61,19 +59,7 @@ func setupFormSubmissionServices(t *testing.T, db *sql.DB) (
 
 	caseSvc.SetFormRepos(defRepo, instanceRepo, formRepo, versionRepo, fieldRepo, assignmentRepo, submissionRepo)
 
-	formSubmissionSvc := submissionapp.NewCaseFormService(
-		caseRepo,
-		defRepo,
-		instanceRepo,
-		formRepo,
-		versionRepo,
-		fieldRepo,
-		assignmentRepo,
-		submissionRepo,
-		auditService,
-	)
-
-	return caseSvc, formSvc, formSubmissionSvc, workflowSvc, orgID
+	return caseSvc, formSvc, workflowSvc, orgID
 }
 
 func seedWorkflowWithAssessmentState(t *testing.T, db *sql.DB, workflowSvc *workflowapp.WorkflowService, orgID, actorID uuid.UUID) *workflowdomain.WorkflowDefinition {
@@ -170,7 +156,7 @@ func TestFormSubmission_GetCaseFormsBatchQueries(t *testing.T) {
 	db := helpers.TestDB(t)
 	helpers.TruncateTables(t, db)
 
-	caseSvc, formSvc, formSubmissionSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
+	caseSvc, formSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
 	ctx := context.Background()
 	actorID := helpers.SeedUser(db, orgID)
 	helpers.SeedDefaultRoles(db, orgID)
@@ -211,17 +197,14 @@ func TestFormSubmission_GetCaseFormsBatchQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, assignmentRepo.Save(ctx, assignment))
 
-	forms, err := formSubmissionSvc.GetCaseForms(ctx, submissionapp.GetCaseFormsParams{
-		TenantID: orgID,
-		CaseID:   c.ID,
-	})
+	forms, err := caseSvc.GetCaseForms(ctx, orgID, c.ID)
 	require.NoError(t, err)
 	require.Len(t, forms, 1)
 	assert.Equal(t, version.ID, forms[0].FormVersionID)
 	assert.Equal(t, "Batch Form", forms[0].FormName)
 	assert.Len(t, forms[0].Fields, 2)
 
-	reqs, err := formSubmissionSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
+	reqs, err := caseSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, reqs.TotalRequired)
 	assert.Equal(t, 0, reqs.SubmittedCount)
@@ -237,7 +220,7 @@ func TestFormSubmission_GetWorkflowRequirementsWithSubmission(t *testing.T) {
 	db := helpers.TestDB(t)
 	helpers.TruncateTables(t, db)
 
-	caseSvc, formSvc, formSubmissionSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
+	caseSvc, formSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
 	ctx := context.Background()
 	actorID := helpers.SeedUser(db, orgID)
 	helpers.SeedDefaultRoles(db, orgID)
@@ -278,16 +261,10 @@ func TestFormSubmission_GetWorkflowRequirementsWithSubmission(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, assignmentRepo.Save(ctx, assignment))
 
-	_, err = formSubmissionSvc.SubmitForm(ctx, submissionapp.SubmitFormParams{
-		TenantID:      orgID,
-		CaseID:        c.ID,
-		FormVersionID: version.ID,
-		SubmittedBy:   actorID,
-		Data:          map[string]interface{}{"name": "John", "notes": "test"},
-	})
+	_, err = caseSvc.SubmitForm(ctx, orgID, c.ID, actorID, version.ID, map[string]interface{}{"name": "John", "notes": "test"})
 	require.NoError(t, err)
 
-	reqs, err := formSubmissionSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
+	reqs, err := caseSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, reqs.TotalRequired)
 	assert.Equal(t, 1, reqs.SubmittedCount)
@@ -304,7 +281,7 @@ func TestFormSubmission_MultipleFormsBatchQueries(t *testing.T) {
 	db := helpers.TestDB(t)
 	helpers.TruncateTables(t, db)
 
-	caseSvc, formSvc, formSubmissionSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
+	caseSvc, formSvc, workflowSvc, orgID := setupFormSubmissionServices(t, db)
 	ctx := context.Background()
 	actorID := helpers.SeedUser(db, orgID)
 	helpers.SeedDefaultRoles(db, orgID)
@@ -353,14 +330,11 @@ func TestFormSubmission_MultipleFormsBatchQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, assignmentRepo.SaveTx(ctx, nil, assignment2))
 
-	forms, err := formSubmissionSvc.GetCaseForms(ctx, submissionapp.GetCaseFormsParams{
-		TenantID: orgID,
-		CaseID:   c.ID,
-	})
+	forms, err := caseSvc.GetCaseForms(ctx, orgID, c.ID)
 	require.NoError(t, err)
 	require.Len(t, forms, 2)
 
-	reqs, err := formSubmissionSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
+	reqs, err := caseSvc.GetWorkflowRequirements(ctx, orgID, c.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 2, reqs.TotalRequired)
 	assert.Equal(t, 0, reqs.SubmittedCount)
