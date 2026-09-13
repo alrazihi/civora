@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/alrazihi/civora/internal/forms/domain"
@@ -188,6 +189,9 @@ func (r *PostgresFormRepository) scanForm(row interface{ Scan(dest ...any) error
 		&f.ID, &f.OrganizationID, &f.Key, &f.Name, &f.Description,
 		&status, &f.CreatedByID, &f.CreatedAt, &f.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrFormNotFound
+		}
 		return nil, fmt.Errorf("failed to scan form: %w", err)
 	}
 	f.Status = domain.FormStatus(status)
@@ -201,6 +205,9 @@ func (r *PostgresFormRepository) scanFormFromRows(rows *sql.Rows) (*domain.Form,
 		&f.ID, &f.OrganizationID, &f.Key, &f.Name, &f.Description,
 		&status, &f.CreatedByID, &f.CreatedAt, &f.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrFormNotFound
+		}
 		return nil, fmt.Errorf("failed to scan form: %w", err)
 	}
 	f.Status = domain.FormStatus(status)

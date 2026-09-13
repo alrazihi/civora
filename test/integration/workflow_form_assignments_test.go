@@ -48,7 +48,7 @@ func setupAssignmentServices(t *testing.T, db *sql.DB) (
 	formSvc := formapp.NewFormService(formRepo, formVersionRepo, formFieldRepo, auditService)
 
 	assignmentRepo := assignmentpostgres.NewPostgresWorkflowStateFormAssignmentRepository(db)
-	assignmentSvc := assignmentapp.NewWorkflowStateFormAssignmentService(defRepo, formRepo, formVersionRepo, assignmentRepo, auditService)
+	assignmentSvc := assignmentapp.NewWorkflowStateFormAssignmentService(defRepo, stateRepo, formRepo, formVersionRepo, assignmentRepo, auditService)
 
 	return assignmentSvc, orgID, workflowSvc, formSvc
 }

@@ -29,6 +29,7 @@ var (
 
 type WorkflowStateFormAssignmentService struct {
 	defRepo         workflowdomain.WorkflowDefinitionRepository
+	stateRepo       workflowdomain.WorkflowStateRepository
 	formRepo        domain.FormRepository
 	formVersionRepo domain.FormVersionRepository
 	assignmentRepo  assignmentdomain.WorkflowStateFormAssignmentRepository
@@ -37,6 +38,7 @@ type WorkflowStateFormAssignmentService struct {
 
 func NewWorkflowStateFormAssignmentService(
 	defRepo workflowdomain.WorkflowDefinitionRepository,
+	stateRepo workflowdomain.WorkflowStateRepository,
 	formRepo domain.FormRepository,
 	formVersionRepo domain.FormVersionRepository,
 	assignmentRepo assignmentdomain.WorkflowStateFormAssignmentRepository,
@@ -44,6 +46,7 @@ func NewWorkflowStateFormAssignmentService(
 ) *WorkflowStateFormAssignmentService {
 	return &WorkflowStateFormAssignmentService{
 		defRepo:         defRepo,
+		stateRepo:       stateRepo,
 		formRepo:        formRepo,
 		formVersionRepo: formVersionRepo,
 		assignmentRepo:  assignmentRepo,
@@ -72,6 +75,12 @@ func (s *WorkflowStateFormAssignmentService) CreateAssignment(ctx context.Contex
 	if err != nil {
 		return nil, ErrWorkflowNotFound
 	}
+
+	states, err := s.stateRepo.FindByDefinitionID(ctx, params.TenantID, params.WorkflowDefinitionID)
+	if err != nil {
+		return nil, ErrInvalidWorkflowState
+	}
+	workflowDef.States = states
 
 	if !stateExistsInWorkflow(workflowDef, params.WorkflowStateKey) {
 		return nil, ErrInvalidWorkflowState
@@ -172,6 +181,7 @@ type UpdateAssignmentParams struct {
 	Required     *bool
 	DisplayOrder *int
 	Active       *bool
+	ActorID      uuid.UUID
 }
 
 func (s *WorkflowStateFormAssignmentService) UpdateAssignment(ctx context.Context, params UpdateAssignmentParams) (*assignmentdomain.WorkflowStateFormAssignment, error) {
@@ -217,7 +227,7 @@ func (s *WorkflowStateFormAssignmentService) UpdateAssignment(ctx context.Contex
 		if s.auditor != nil {
 			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: params.TenantID,
-				ActorID:        nil,
+				ActorID:        &params.ActorID,
 				Action:         "workflow_form_assignment.updated",
 				Resource:       "workflow_form_assignment",
 				ResourceID:     shared.StrPtr(assignment.ID.String()),

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/alrazihi/civora/internal/workflow_form_assignment/application"
 	"github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
@@ -22,17 +23,17 @@ func NewHandler(svc *application.WorkflowStateFormAssignmentService) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
 	r.Route("/api/v1/organizations/{orgId}/workflows/{workflowId}/form-assignments", func(r chi.Router) {
-		r.Use(authMiddleware)
+		r.Use(authMiddleware, middleware.RequireSameTenant)
 
 		r.Group(func(r chi.Router) {
-			r.Use(requireAnyRole("admin", "staff"))
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Get("/", h.ListAssignments)
 			r.Get("/state/{stateKey}", h.GetAssignmentsForState)
 			r.Get("/{assignmentId}", h.GetAssignment)
 		})
 
 		r.Group(func(r chi.Router) {
-			r.Use(requireAnyRole("admin"))
+			r.Use(middleware.RequireAnyRole("admin"))
 			r.Post("/", h.CreateAssignment)
 			r.Put("/{assignmentId}", h.UpdateAssignment)
 			r.Delete("/{assignmentId}", h.DeleteAssignment)
@@ -42,13 +43,21 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 
 func (h *Handler) CreateAssignment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := getOrgID(r)
+	orgID, err := getOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	workflowID, err := uuid.Parse(chi.URLParam(r, "workflowId"))
 	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
 		return
 	}
-	actorID := getUserID(r)
+	actorID, err := uuid.Parse(middleware.GetUserID(r))
+	if err != nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "invalid user ID")
+		return
+	}
 
 	var req CreateAssignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -77,7 +86,11 @@ func (h *Handler) CreateAssignment(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetAssignment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := getOrgID(r)
+	orgID, err := getOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	assignmentID, err := uuid.Parse(chi.URLParam(r, "assignmentId"))
 	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid assignment ID")
@@ -95,7 +108,11 @@ func (h *Handler) GetAssignment(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := getOrgID(r)
+	orgID, err := getOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	workflowID, err := uuid.Parse(chi.URLParam(r, "workflowId"))
 	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
@@ -117,7 +134,11 @@ func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetAssignmentsForState(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := getOrgID(r)
+	orgID, err := getOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	workflowID, err := uuid.Parse(chi.URLParam(r, "workflowId"))
 	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
@@ -140,10 +161,19 @@ func (h *Handler) GetAssignmentsForState(w http.ResponseWriter, r *http.Request)
 
 func (h *Handler) UpdateAssignment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := getOrgID(r)
+	orgID, err := getOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	assignmentID, err := uuid.Parse(chi.URLParam(r, "assignmentId"))
 	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid assignment ID")
+		return
+	}
+	actorID, err := uuid.Parse(middleware.GetUserID(r))
+	if err != nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "invalid user ID")
 		return
 	}
 
@@ -159,6 +189,7 @@ func (h *Handler) UpdateAssignment(w http.ResponseWriter, r *http.Request) {
 		Required:     req.Required,
 		DisplayOrder: req.DisplayOrder,
 		Active:       req.Active,
+		ActorID:      actorID,
 	})
 	if err != nil {
 		writeAssignmentError(w, err)
@@ -170,13 +201,21 @@ func (h *Handler) UpdateAssignment(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteAssignment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := getOrgID(r)
+	orgID, err := getOrgID(r)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	assignmentID, err := uuid.Parse(chi.URLParam(r, "assignmentId"))
 	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid assignment ID")
 		return
 	}
-	actorID := getUserID(r)
+	actorID, err := uuid.Parse(middleware.GetUserID(r))
+	if err != nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "invalid user ID")
+		return
+	}
 
 	if err := h.svc.DeleteAssignment(ctx, orgID, assignmentID, actorID); err != nil {
 		writeAssignmentError(w, err)
@@ -241,29 +280,7 @@ func writeAssignmentError(w http.ResponseWriter, err error) {
 	}
 }
 
-func getOrgID(r *http.Request) uuid.UUID {
+func getOrgID(r *http.Request) (uuid.UUID, error) {
 	orgIDStr := chi.URLParam(r, "orgId")
-	orgID, _ := uuid.Parse(orgIDStr)
-	return orgID
-}
-
-func getUserID(r *http.Request) uuid.UUID {
-	userIDStr := chi.URLParam(r, "userId")
-	if userIDStr == "" {
-		userIDStr = r.Header.Get("X-User-ID")
-	}
-	userID, _ := uuid.Parse(userIDStr)
-	return userID
-}
-
-func requireAnyRole(roles ...string) func(http.Handler) http.Handler {
-	allowed := make(map[string]bool, len(roles))
-	for _, role := range roles {
-		allowed[role] = true
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r)
-		})
-	}
+	return uuid.Parse(orgIDStr)
 }

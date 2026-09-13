@@ -28,7 +28,7 @@ func (r *PostgresWorkflowStateFormAssignmentRepository) SaveTx(ctx context.Conte
 			(id, tenant_id, workflow_definition_id, workflow_state_key, form_id, form_version_id, required, display_order, active, created_by, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
-	_, err := tx.ExecContext(ctx, query,
+	_, err := r.exec(ctx, tx, query,
 		assignment.ID,
 		assignment.TenantID,
 		assignment.WorkflowDefinitionID,
@@ -98,8 +98,8 @@ func (r *PostgresWorkflowStateFormAssignmentRepository) FindByWorkflowAndStateFo
 		SELECT id, tenant_id, workflow_definition_id, workflow_state_key, form_id, form_version_id, required, display_order, active, created_by, created_at, updated_at
 		FROM workflow_state_form_assignments
 		WHERE tenant_id = $1 AND workflow_definition_id = $2 AND workflow_state_key = $3
-		FOR UPDATE
 		ORDER BY display_order ASC
+		FOR UPDATE
 	`
 	rows, err := r.query(ctx, tx, query, tenantID, workflowDefID, stateKey)
 	if err != nil {
@@ -158,7 +158,7 @@ func (r *PostgresWorkflowStateFormAssignmentRepository) UpdateTx(ctx context.Con
 		SET required = $3, display_order = $4, active = $5, updated_at = $6
 		WHERE tenant_id = $1 AND id = $2
 	`
-	_, err := tx.ExecContext(ctx, query,
+	_, err := r.exec(ctx, tx, query,
 		assignment.TenantID,
 		assignment.ID,
 		assignment.Required,
@@ -200,6 +200,13 @@ func (r *PostgresWorkflowStateFormAssignmentRepository) DeleteByWorkflowAndState
 
 func (r *PostgresWorkflowStateFormAssignmentRepository) DeleteByWorkflowAndState(ctx context.Context, tenantID, workflowDefID uuid.UUID, stateKey string) error {
 	return r.DeleteByWorkflowAndStateTx(ctx, nil, tenantID, workflowDefID, stateKey)
+}
+
+func (r *PostgresWorkflowStateFormAssignmentRepository) exec(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (sql.Result, error) {
+	if tx != nil {
+		return tx.ExecContext(ctx, query, args...)
+	}
+	return r.db.ExecContext(ctx, query, args...)
 }
 
 func (r *PostgresWorkflowStateFormAssignmentRepository) queryRow(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) *sql.Row {

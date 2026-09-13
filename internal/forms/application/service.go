@@ -129,8 +129,8 @@ func (s *FormService) UpdateForm(ctx context.Context, params UpdateFormParams) (
 		return nil, fmt.Errorf("%w: %v", ErrFormNotFound, err)
 	}
 
-	if form.Status != domain.FormStatusDraft {
-		return nil, fmt.Errorf("%w: cannot update non-draft form", ErrFormInvalidStatus)
+	if form.Status == domain.FormStatusArchived {
+		return nil, fmt.Errorf("%w: form is already archived", ErrFormInvalidStatus)
 	}
 
 	if params.Name != "" {
@@ -247,20 +247,20 @@ func (s *FormService) PublishVersion(ctx context.Context, params PublishVersionP
 		return nil, fmt.Errorf("%w: %v", ErrFormNotFound, err)
 	}
 
-	fields, err := s.fieldRepo.FindByVersion(ctx, params.OrganizationID, version.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find fields: %w", err)
-	}
-	if len(fields) == 0 {
-		return nil, fmt.Errorf("%w: cannot publish version with no fields", ErrFormInvalidInput)
-	}
-
 	if version.Status != domain.FormVersionStatusDraft {
 		return nil, fmt.Errorf("%w: only draft versions can be published", ErrFormVersionStatus)
 	}
 
 	if err := domain.ValidateVersionStatusTransition(version.Status, domain.FormVersionStatusPublished); err != nil {
 		return nil, err
+	}
+
+	activeVersion, err := s.versionRepo.FindActiveVersion(ctx, params.OrganizationID, version.FormID)
+	if err != nil && !errors.Is(err, domain.ErrFormVersionNotFound) {
+		return nil, fmt.Errorf("failed to check active version: %w", err)
+	}
+	if activeVersion != nil && activeVersion.Version > version.Version {
+		return nil, fmt.Errorf("%w: cannot publish older version when a newer version is already published", ErrFormVersionStatus)
 	}
 
 	version.Status = domain.FormVersionStatusPublished
@@ -318,8 +318,8 @@ func (s *FormService) ArchiveForm(ctx context.Context, params ArchiveFormParams)
 		return nil, fmt.Errorf("%w: %v", ErrFormNotFound, err)
 	}
 
-	if form.Status != domain.FormStatusActive {
-		return nil, fmt.Errorf("%w: only active forms can be archived", ErrFormInvalidStatus)
+	if form.Status == domain.FormStatusArchived {
+		return nil, fmt.Errorf("%w: form is already archived", ErrFormInvalidStatus)
 	}
 
 	if err := domain.ValidateFormStatusTransition(form.Status, domain.FormStatusArchived); err != nil {
@@ -368,6 +368,20 @@ func (s *FormService) GetForm(ctx context.Context, params GetFormParams) (*domai
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFormNotFound, err)
 	}
+
+	versions, err := s.versionRepo.ListByFormID(ctx, params.OrganizationID, params.FormID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list versions: %w", err)
+	}
+
+	for _, v := range versions {
+		v.Fields, err = s.fieldRepo.FindByVersion(ctx, params.OrganizationID, v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list fields: %w", err)
+		}
+		form.Versions = append(form.Versions, v)
+	}
+
 	return form, nil
 }
 
@@ -434,6 +448,16 @@ func (s *FormService) AddField(ctx context.Context, params AddFieldParams) (*dom
 
 	if err := domain.ValidateField(params.Type, params.Label, params.Required, params.Options, params.Validation); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFormFieldInvalid, err)
+	}
+
+	existingFields, err := s.fieldRepo.FindByVersion(ctx, params.OrganizationID, params.VersionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing fields: %w", err)
+	}
+	for _, f := range existingFields {
+		if f.Key == params.Key {
+			return nil, fmt.Errorf("%w: key %s", ErrFormFieldDuplicate, params.Key)
+		}
 	}
 
 	field := domain.NewFormField(params.FormID, params.VersionID, params.OrganizationID, params.Key, params.Label, params.Type, params.Required, params.Description, params.Placeholder, params.DefaultValue, params.Validation, params.Options, params.Order)
@@ -621,8 +645,15 @@ type GetActiveVersionParams struct {
 
 func (s *FormService) GetActiveVersion(ctx context.Context, params GetActiveVersionParams) (*domain.FormVersion, error) {
 	version, err := s.versionRepo.FindActiveVersion(ctx, params.OrganizationID, params.FormID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrFormVersionNotFound, err)
+	if err != nil && !errors.Is(err, domain.ErrFormVersionNotFound) {
+		return nil, fmt.Errorf("failed to find active version: %w", err)
+	}
+
+	if version == nil {
+		version, err = s.versionRepo.FindLatest(ctx, params.OrganizationID, params.FormID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrFormVersionNotFound, err)
+		}
 	}
 	return version, nil
 }

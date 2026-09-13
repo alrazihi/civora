@@ -264,10 +264,27 @@ func (s *CaseFormService) SubmitForm(ctx context.Context, params SubmitFormParam
 		return nil, ErrWorkflowInstanceNotFound
 	}
 
+	// Resolve form ID from form version before creating submission
+	version, err := s.formVersionRepo.FindByID(ctx, params.TenantID, params.FormVersionID)
+	if err != nil {
+		return nil, ErrFormNotPublished
+	}
+	if version.Status != formdomain.FormVersionStatusPublished {
+		return nil, ErrFormNotPublished
+	}
+
+	lockedForm, err := s.formRepo.FindByID(ctx, params.TenantID, version.FormID)
+	if err != nil {
+		return nil, ErrFormArchived
+	}
+	if lockedForm.Status == formdomain.FormStatusArchived {
+		return nil, ErrFormArchived
+	}
+
 	submission, err := submissiondomain.NewFormSubmission(
 		params.TenantID,
 		params.CaseID,
-		uuid.Nil,
+		lockedForm.ID,
 		params.FormVersionID,
 		params.SubmittedBy,
 		params.Data,
@@ -294,8 +311,6 @@ func (s *CaseFormService) SubmitForm(ctx context.Context, params SubmitFormParam
 		if lockedForm.Status == formdomain.FormStatusArchived {
 			return ErrFormArchived
 		}
-
-		submission.FormID = lockedForm.ID
 
 		lockedAssignments, err := s.assignmentRepo.FindByWorkflowAndStateForUpdateTx(ctx, tx, params.TenantID, instance.WorkflowDefID, instance.CurrentState)
 		if err != nil {

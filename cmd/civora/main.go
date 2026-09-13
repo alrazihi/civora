@@ -124,6 +124,7 @@ func main() {
 
 	assignmentService := assignmentapp.NewWorkflowStateFormAssignmentService(
 		workflowDefRepo,
+		workflowStateRepo,
 		formRepo,
 		formVersionRepo,
 		workflowAssignmentRepo,

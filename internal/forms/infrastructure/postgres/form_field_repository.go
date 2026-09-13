@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/alrazihi/civora/internal/forms/domain"
@@ -95,8 +96,8 @@ func (r *PostgresFormFieldRepository) FindByVersionForUpdateTx(ctx context.Conte
 		SELECT id, form_id, form_version_id, organization_id, key, label, type, required, description, placeholder, default_value, validation, options_json, "order", created_at, updated_at
 		FROM form_fields
 		WHERE form_version_id = $1 AND organization_id = $2
-		FOR UPDATE
 		ORDER BY "order" ASC, id ASC
+		FOR UPDATE
 	`
 	rows, err := r.query(ctx, tx, query, versionID, orgID)
 	if err != nil {
@@ -261,6 +262,9 @@ func (r *PostgresFormFieldRepository) scanField(row interface{ Scan(dest ...any)
 		&f.Placeholder, &defaultValue, &validationJSON, &optionsJSON,
 		&f.Order, &f.CreatedAt, &f.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrFormFieldNotFound
+		}
 		return nil, fmt.Errorf("failed to scan field: %w", err)
 	}
 	if defaultValue.Valid {
@@ -292,6 +296,9 @@ func (r *PostgresFormFieldRepository) scanFieldFromRows(rows *sql.Rows) (*domain
 		&f.Placeholder, &defaultValue, &validationJSON, &optionsJSON,
 		&f.Order, &f.CreatedAt, &f.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrFormFieldNotFound
+		}
 		return nil, fmt.Errorf("failed to scan field: %w", err)
 	}
 	if defaultValue.Valid {

@@ -15,22 +15,52 @@ func ValidateFieldValidation(fieldType FieldType, validation map[string]any) err
 
 	switch fieldType {
 	case FieldTypeText, FieldTypeTextarea:
-		return validateLengthFieldValidation(validation)
+		if err := validateLengthFieldValidation(validation); err != nil {
+			return err
+		}
 	case FieldTypeNumber, FieldTypeDecimal:
-		return validateNumericFieldValidation(validation)
+		if err := validateNumericFieldValidation(validation); err != nil {
+			return err
+		}
 	case FieldTypeDate, FieldTypeDatetime:
-		return validateDateFormatValidation(validation)
+		if err := validateDateFormatValidation(validation); err != nil {
+			return err
+		}
 	case FieldTypeEmail:
-		return validateEmailFieldValidation(validation)
+		if err := validateEmailFieldValidation(validation); err != nil {
+			return err
+		}
 	case FieldTypePhone:
-		return validatePhoneFieldValidation(validation)
+		if err := validatePhoneFieldValidation(validation); err != nil {
+			return err
+		}
 	case FieldTypeSelect, FieldTypeMultiSelect, FieldTypeRadio, FieldTypeCheckbox:
 		return nil
 	case FieldTypeBoolean:
 		return nil
 	default:
-		return fmt.Errorf("unknown field type: %s", fieldType)
+		return fmt.Errorf("%w: unknown field type: %s", ErrFormFieldTypeInvalid, fieldType)
 	}
+
+	return validateCommonFieldValidation(validation)
+}
+
+func validateCommonFieldValidation(v map[string]any) error {
+	for _, key := range []string{"min_length", "max_length", "minLength", "maxLength"} {
+		if val, ok := v[key]; ok {
+			if _, ok := getFloat(v, key); !ok {
+				return fmt.Errorf("%w: %s must be a number, got %T", ErrFormFieldInvalid, key, val)
+			}
+		}
+	}
+	for _, key := range []string{"min_value", "max_value", "minValue", "maxValue"} {
+		if val, ok := v[key]; ok {
+			if _, ok := getFloat(v, key); !ok {
+				return fmt.Errorf("%w: %s must be a number, got %T", ErrFormFieldInvalid, key, val)
+			}
+		}
+	}
+	return nil
 }
 
 func getFloat(v map[string]any, key string) (float64, bool) {
@@ -40,49 +70,69 @@ func getFloat(v map[string]any, key string) (float64, bool) {
 			return f, true
 		case int:
 			return float64(f), true
+		case int64:
+			return float64(f), true
+		default:
+			return 0, false
 		}
 	}
 	return 0, false
 }
 
 func validateLengthFieldValidation(v map[string]any) error {
-	if min, ok := getFloat(v, "min_length"); ok {
-		if min < 0 || min > 1000000 {
-			return fmt.Errorf("min_length must be between 0 and 1000000")
-		}
-	}
-	if max, ok := getFloat(v, "max_length"); ok {
-		if max < 0 || max > 1000000 {
-			return fmt.Errorf("max_length must be between 0 and 1000000")
-		}
-	}
-	if min, ok := getFloat(v, "min_length"); ok {
-		if max, ok := getFloat(v, "max_length"); ok {
-			if min > max {
-				return fmt.Errorf("min_length cannot exceed max_length")
+	for _, minKey := range []string{"min_length", "minLength"} {
+		if val, hasMin := v[minKey]; hasMin {
+			f, ok := getFloat(v, minKey)
+			if !ok {
+				return fmt.Errorf("%s must be a number, got %T", minKey, val)
+			}
+			if f < 0 || f > 1000000 {
+				return fmt.Errorf("%s must be between 0 and 1000000", minKey)
 			}
 		}
+	}
+	for _, maxKey := range []string{"max_length", "maxLength"} {
+		if val, hasMax := v[maxKey]; hasMax {
+			f, ok := getFloat(v, maxKey)
+			if !ok {
+				return fmt.Errorf("%s must be a number, got %T", maxKey, val)
+			}
+			if f < 0 || f > 1000000 {
+				return fmt.Errorf("%s must be between 0 and 1000000", maxKey)
+			}
+		}
+	}
+	minVal, hasMin := getFloat(v, "min_length")
+	if !hasMin {
+		minVal, hasMin = getFloat(v, "minLength")
+	}
+	maxVal, hasMax := getFloat(v, "max_length")
+	if !hasMax {
+		maxVal, hasMax = getFloat(v, "maxLength")
+	}
+	if hasMin && hasMax && minVal > maxVal {
+		return fmt.Errorf("min_length cannot exceed max_length")
 	}
 	return nil
 }
 
 func validateNumericFieldValidation(v map[string]any) error {
-	if min, ok := getFloat(v, "min_value"); ok {
-		if !isFinite(min) {
-			return fmt.Errorf("min_value must be a finite number")
-		}
+	minVal, hasMin := getFloat(v, "min_value")
+	if !hasMin {
+		minVal, hasMin = getFloat(v, "minValue")
 	}
-	if max, ok := getFloat(v, "max_value"); ok {
-		if !isFinite(max) {
-			return fmt.Errorf("max_value must be a finite number")
-		}
+	maxVal, hasMax := getFloat(v, "max_value")
+	if !hasMax {
+		maxVal, hasMax = getFloat(v, "maxValue")
 	}
-	if min, ok := getFloat(v, "min_value"); ok {
-		if max, ok := getFloat(v, "max_value"); ok {
-			if min > max {
-				return fmt.Errorf("min_value cannot exceed max_value")
-			}
-		}
+	if hasMin && !isFinite(minVal) {
+		return fmt.Errorf("min_value must be a finite number")
+	}
+	if hasMax && !isFinite(maxVal) {
+		return fmt.Errorf("max_value must be a finite number")
+	}
+	if hasMin && hasMax && minVal > maxVal {
+		return fmt.Errorf("min_value cannot exceed max_value")
 	}
 	return nil
 }

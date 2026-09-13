@@ -289,7 +289,7 @@ func TestForm_VersionLifecycle(t *testing.T) {
 		ActorID:        actorID,
 	})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "invalid version status")
+	assert.ErrorContains(t, err, "cannot publish older version")
 }
 
 func TestForm_InvalidFieldType(t *testing.T) {
@@ -481,8 +481,8 @@ func TestForm_ValidationErrorMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, formdomain.FieldTypeSelect, field.Type)
 	assert.Equal(t, options, field.Options)
-	assert.Equal(t, int64(1), field.Validation["minValue"])
-	assert.Equal(t, int64(10), field.Validation["maxValue"])
+	assert.Equal(t, 1, field.Validation["minValue"])
+	assert.Equal(t, 10, field.Validation["maxValue"])
 
 	_, err = svc.AddField(ctx, formapp.AddFieldParams{
 		OrganizationID: orgID,
@@ -498,7 +498,7 @@ func TestForm_ValidationErrorMetadata(t *testing.T) {
 		ActorID: actorID,
 	})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "invalid input")
+	assert.ErrorContains(t, err, "invalid field input")
 }
 
 func TestForm_TransactionRollbackOnInvalidVersion(t *testing.T) {

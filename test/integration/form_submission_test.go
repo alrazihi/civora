@@ -80,23 +80,25 @@ func seedWorkflowWithAssessmentState(t *testing.T, db *sql.DB, workflowSvc *work
 	t.Helper()
 	now := time.Now().UTC()
 	states := []workflowdomain.WorkflowState{
-		{ID: uuid.New(), TenantID: orgID, Key: "OPEN", Name: "Open", Terminal: false, DisplayOrder: 0, CreatedAt: now},
-		{ID: uuid.New(), TenantID: orgID, Key: "ASSESSMENT", Name: "Assessment", Terminal: false, DisplayOrder: 1, CreatedAt: now},
-		{ID: uuid.New(), TenantID: orgID, Key: "DECISION", Name: "Decision", Terminal: true, DisplayOrder: 2, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "NEW", Name: "New", Terminal: false, DisplayOrder: 0, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "OPEN", Name: "Open", Terminal: false, DisplayOrder: 1, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "ASSESSMENT", Name: "Assessment", Terminal: false, DisplayOrder: 2, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "DECISION", Name: "Decision", Terminal: true, DisplayOrder: 3, CreatedAt: now},
 	}
 	transitions := []workflowdomain.WorkflowTransition{
-		{ID: uuid.New(), TenantID: orgID, Key: "open", Name: "Open", FromState: "OPEN", ToState: "ASSESSMENT", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "open", Name: "Open", FromState: "NEW", ToState: "OPEN", Active: true, CreatedAt: now},
+		{ID: uuid.New(), TenantID: orgID, Key: "assess", Name: "Assess", FromState: "OPEN", ToState: "ASSESSMENT", Active: true, CreatedAt: now},
 		{ID: uuid.New(), TenantID: orgID, Key: "decide", Name: "Decide", FromState: "ASSESSMENT", ToState: "DECISION", Active: true, CreatedAt: now},
 	}
 
 	def, err := workflowSvc.CreateWorkflowDefinition(context.Background(), workflowapp.CreateWorkflowDefinitionParams{
 		TenantID:     orgID,
 		ActorID:      actorID,
-		Key:          "batch-test-" + uuid.New().String()[:8],
-		Name:         "Batch Test Workflow",
+		Key:          "general_assistance",
+		Name:         "General Assistance Workflow",
 		Description:  "Test",
 		Version:      1,
-		InitialState: "OPEN",
+		InitialState: "NEW",
 		States:       states,
 		Transitions:  transitions,
 		Metadata:     map[string]interface{}{},
@@ -207,7 +209,7 @@ func TestFormSubmission_GetCaseFormsBatchQueries(t *testing.T) {
 		"ASSESSMENT", true, 0,
 	)
 	require.NoError(t, err)
-	require.NoError(t, assignmentRepo.SaveTx(ctx, nil, assignment))
+	require.NoError(t, assignmentRepo.Save(ctx, assignment))
 
 	forms, err := formSubmissionSvc.GetCaseForms(ctx, submissionapp.GetCaseFormsParams{
 		TenantID: orgID,
@@ -274,7 +276,7 @@ func TestFormSubmission_GetWorkflowRequirementsWithSubmission(t *testing.T) {
 		"ASSESSMENT", true, 0,
 	)
 	require.NoError(t, err)
-	require.NoError(t, assignmentRepo.SaveTx(ctx, nil, assignment))
+	require.NoError(t, assignmentRepo.Save(ctx, assignment))
 
 	_, err = formSubmissionSvc.SubmitForm(ctx, submissionapp.SubmitFormParams{
 		TenantID:      orgID,

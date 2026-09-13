@@ -25,7 +25,8 @@ CREATE TABLE form_versions (
     status          TEXT NOT NULL DEFAULT 'DRAFT',
     created_by      UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    published_at    TIMESTAMPTZ,
+     published_at    TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (form_id, version),
     CONSTRAINT valid_version_status CHECK (
         status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')

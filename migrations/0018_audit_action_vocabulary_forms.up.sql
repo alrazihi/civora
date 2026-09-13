@@ -1,0 +1,63 @@
+-- v0.4 dynamic forms: add form, field, workflow assignment, and
+-- additional workflow audit actions to the audit vocabulary.
+ALTER TABLE audit.audit_events
+    DROP CONSTRAINT IF EXISTS valid_audit_action;
+
+ALTER TABLE audit.audit_events
+    ADD CONSTRAINT valid_audit_action CHECK (
+        action IN (
+            'organization.created',
+            'organization.updated',
+            'auth.register',
+            'auth.login',
+            'auth.login_failed',
+            'auth.success',
+            'auth.failed',
+            'user.created',
+            'user.updated',
+            'role.created',
+            'role.updated',
+            'case.created',
+            'case.status_changed',
+            'case.transition',
+            'case.assigned',
+            'case.closed',
+            'workflow.definition_created',
+            'workflow.definition_updated',
+            'workflow.definition_activated',
+            'workflow.definition_archived',
+            'workflow.definition_deleted',
+            'workflow.instance_created',
+            'workflow.transition',
+            'person.created',
+            'person.updated',
+            'person.status_updated',
+            'eligibility.created',
+            'eligibility.assessed',
+            'eligibility.result_updated',
+            'assessment.created',
+            'assessment.completed',
+            'decision.created',
+            'decision.made',
+            'assistance.created',
+            'assistance.status_changed',
+            'follow_up.scheduled',
+            'follow_up.completed',
+            'evidence.added',
+            'evidence.deleted',
+            'form.created',
+            'form.updated',
+            'form.version_created',
+            'form.published',
+            'form.archived',
+            'form.submitted',
+            'field.created',
+            'field.updated',
+            'field.deleted',
+            'workflow_form_assignment.created',
+            'workflow_form_assignment.updated',
+            'workflow_form_assignment.deleted',
+            'audit.purged',
+            'audit.verified'
+        )
+    );

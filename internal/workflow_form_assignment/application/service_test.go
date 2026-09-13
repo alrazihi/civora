@@ -85,6 +85,35 @@ func (m *mockWorkflowDefRepo) UpdateStatusTx(ctx context.Context, tx *sql.Tx, te
 	return nil
 }
 
+type mockWorkflowStateRepo struct {
+	states map[uuid.UUID][]workflowdomain.WorkflowState
+}
+
+func newMockWorkflowStateRepo() *mockWorkflowStateRepo {
+	return &mockWorkflowStateRepo{states: make(map[uuid.UUID][]workflowdomain.WorkflowState)}
+}
+
+func (m *mockWorkflowStateRepo) DB() *sql.DB { return nil }
+func (m *mockWorkflowStateRepo) SaveBatch(ctx context.Context, states []workflowdomain.WorkflowState) error {
+	return nil
+}
+func (m *mockWorkflowStateRepo) SaveBatchTx(ctx context.Context, tx *sql.Tx, states []workflowdomain.WorkflowState) error {
+	return nil
+}
+func (m *mockWorkflowStateRepo) FindByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) ([]workflowdomain.WorkflowState, error) {
+	if s, ok := m.states[defID]; ok {
+		return s, nil
+	}
+	return nil, nil
+}
+func (m *mockWorkflowStateRepo) DeleteBatchByDefinitionID(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID) error {
+	delete(m.states, defID)
+	return nil
+}
+func (m *mockWorkflowStateRepo) DeleteBatchByDefinitionIDTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, defID uuid.UUID) error {
+	return m.DeleteBatchByDefinitionID(ctx, tenantID, defID)
+}
+
 type mockFormRepo struct {
 	forms map[uuid.UUID]*domain.Form
 }
@@ -297,6 +326,7 @@ func TestCreateAssignment_Success(t *testing.T) {
 	formRepo := newMockFormRepo()
 	versionRepo := newMockFormVersionRepo()
 	assignmentRepo := newMockAssignmentRepo()
+	stateRepo := newMockWorkflowStateRepo()
 	auditor := &mockAuditor{}
 
 	workflowDef := &workflowdomain.WorkflowDefinition{
@@ -304,12 +334,13 @@ func TestCreateAssignment_Success(t *testing.T) {
 		TenantID: orgID,
 		Key:      "test-workflow",
 		Name:     "Test Workflow",
-		States: []workflowdomain.WorkflowState{
-			{Key: "OPEN", Name: "Open"},
-			{Key: "ASSESSMENT", Name: "Assessment"},
-		},
 	}
 	defRepo.defs[workflowDefID] = workflowDef
+
+	stateRepo.states[workflowDefID] = []workflowdomain.WorkflowState{
+		{Key: "OPEN", Name: "Open"},
+		{Key: "ASSESSMENT", Name: "Assessment"},
+	}
 
 	form := &domain.Form{
 		ID:             formID,
@@ -329,7 +360,7 @@ func TestCreateAssignment_Success(t *testing.T) {
 	}
 	versionRepo.versions[formVersionID] = version
 
-	svc := NewWorkflowStateFormAssignmentService(defRepo, formRepo, versionRepo, assignmentRepo, auditor)
+	svc := NewWorkflowStateFormAssignmentService(defRepo, stateRepo, formRepo, versionRepo, assignmentRepo, auditor)
 
 	assignment, err := svc.CreateAssignment(context.Background(), CreateAssignmentParams{
 		TenantID:             orgID,
@@ -351,7 +382,7 @@ func TestCreateAssignment_Success(t *testing.T) {
 }
 
 func TestCreateAssignment_InvalidState(t *testing.T) {
-	svc := NewWorkflowStateFormAssignmentService(newMockWorkflowDefRepo(), newMockFormRepo(), newMockFormVersionRepo(), newMockAssignmentRepo(), &mockAuditor{})
+	svc := NewWorkflowStateFormAssignmentService(newMockWorkflowDefRepo(), newMockWorkflowStateRepo(), newMockFormRepo(), newMockFormVersionRepo(), newMockAssignmentRepo(), &mockAuditor{})
 
 	_, err := svc.CreateAssignment(context.Background(), CreateAssignmentParams{
 		TenantID:             uuid.New(),
@@ -379,6 +410,7 @@ func TestCreateAssignment_DuplicateAssignment(t *testing.T) {
 	formRepo := newMockFormRepo()
 	versionRepo := newMockFormVersionRepo()
 	assignmentRepo := newMockAssignmentRepo()
+	stateRepo := newMockWorkflowStateRepo()
 	auditor := &mockAuditor{}
 
 	workflowDef := &workflowdomain.WorkflowDefinition{
@@ -386,11 +418,12 @@ func TestCreateAssignment_DuplicateAssignment(t *testing.T) {
 		TenantID: orgID,
 		Key:      "test-workflow",
 		Name:     "Test Workflow",
-		States: []workflowdomain.WorkflowState{
-			{Key: "ASSESSMENT", Name: "Assessment"},
-		},
 	}
 	defRepo.defs[workflowDefID] = workflowDef
+
+	stateRepo.states[workflowDefID] = []workflowdomain.WorkflowState{
+		{Key: "ASSESSMENT", Name: "Assessment"},
+	}
 
 	form := &domain.Form{ID: formID, OrganizationID: orgID, Key: "test-form", Name: "Test Form", Status: domain.FormStatusActive}
 	formRepo.forms[formID] = form
@@ -401,7 +434,7 @@ func TestCreateAssignment_DuplicateAssignment(t *testing.T) {
 	existingAssignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(orgID, workflowDefID, formID, formVersionID, actorID, "ASSESSMENT", true, 0)
 	assignmentRepo.assignments[existingAssignment.ID] = existingAssignment
 
-	svc := NewWorkflowStateFormAssignmentService(defRepo, formRepo, versionRepo, assignmentRepo, auditor)
+	svc := NewWorkflowStateFormAssignmentService(defRepo, stateRepo, formRepo, versionRepo, assignmentRepo, auditor)
 
 	_, err := svc.CreateAssignment(context.Background(), CreateAssignmentParams{
 		TenantID:             orgID,
@@ -429,17 +462,19 @@ func TestCreateAssignment_FormNotPublished(t *testing.T) {
 	formRepo := newMockFormRepo()
 	versionRepo := newMockFormVersionRepo()
 	assignmentRepo := newMockAssignmentRepo()
+	stateRepo := newMockWorkflowStateRepo()
 
 	workflowDef := &workflowdomain.WorkflowDefinition{
 		ID:       workflowDefID,
 		TenantID: orgID,
 		Key:      "test-workflow",
 		Name:     "Test Workflow",
-		States: []workflowdomain.WorkflowState{
-			{Key: "ASSESSMENT", Name: "Assessment"},
-		},
 	}
 	defRepo.defs[workflowDefID] = workflowDef
+
+	stateRepo.states[workflowDefID] = []workflowdomain.WorkflowState{
+		{Key: "ASSESSMENT", Name: "Assessment"},
+	}
 
 	form := &domain.Form{ID: formID, OrganizationID: orgID, Key: "test-form", Name: "Test Form", Status: domain.FormStatusActive}
 	formRepo.forms[formID] = form
@@ -447,7 +482,7 @@ func TestCreateAssignment_FormNotPublished(t *testing.T) {
 	version := &domain.FormVersion{ID: formVersionID, FormID: formID, OrganizationID: orgID, Version: 1, Status: domain.FormVersionStatusDraft}
 	versionRepo.versions[formVersionID] = version
 
-	svc := NewWorkflowStateFormAssignmentService(defRepo, formRepo, versionRepo, assignmentRepo, nil)
+	svc := NewWorkflowStateFormAssignmentService(defRepo, stateRepo, formRepo, versionRepo, assignmentRepo, nil)
 
 	_, err := svc.CreateAssignment(context.Background(), CreateAssignmentParams{
 		TenantID:             orgID,
@@ -475,17 +510,19 @@ func TestCreateAssignment_FormArchived(t *testing.T) {
 	formRepo := newMockFormRepo()
 	versionRepo := newMockFormVersionRepo()
 	assignmentRepo := newMockAssignmentRepo()
+	stateRepo := newMockWorkflowStateRepo()
 
 	workflowDef := &workflowdomain.WorkflowDefinition{
 		ID:       workflowDefID,
 		TenantID: orgID,
 		Key:      "test-workflow",
 		Name:     "Test Workflow",
-		States: []workflowdomain.WorkflowState{
-			{Key: "ASSESSMENT", Name: "Assessment"},
-		},
 	}
 	defRepo.defs[workflowDefID] = workflowDef
+
+	stateRepo.states[workflowDefID] = []workflowdomain.WorkflowState{
+		{Key: "ASSESSMENT", Name: "Assessment"},
+	}
 
 	form := &domain.Form{ID: formID, OrganizationID: orgID, Key: "test-form", Name: "Test Form", Status: domain.FormStatusArchived}
 	formRepo.forms[formID] = form
@@ -493,7 +530,7 @@ func TestCreateAssignment_FormArchived(t *testing.T) {
 	version := &domain.FormVersion{ID: formVersionID, FormID: formID, OrganizationID: orgID, Version: 1, Status: domain.FormVersionStatusPublished}
 	versionRepo.versions[formVersionID] = version
 
-	svc := NewWorkflowStateFormAssignmentService(defRepo, formRepo, versionRepo, assignmentRepo, nil)
+	svc := NewWorkflowStateFormAssignmentService(defRepo, stateRepo, formRepo, versionRepo, assignmentRepo, nil)
 
 	_, err := svc.CreateAssignment(context.Background(), CreateAssignmentParams{
 		TenantID:             orgID,
@@ -526,7 +563,7 @@ func TestUpdateAssignment_Success(t *testing.T) {
 	assignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(orgID, workflowDefID, formID, formVersionID, actorID, "OPEN", true, 0)
 	assignmentRepo.assignments[assignment.ID] = assignment
 
-	svc := NewWorkflowStateFormAssignmentService(defRepo, formRepo, versionRepo, assignmentRepo, auditor)
+	svc := NewWorkflowStateFormAssignmentService(defRepo, newMockWorkflowStateRepo(), formRepo, versionRepo, assignmentRepo, auditor)
 
 	updated, err := svc.UpdateAssignment(context.Background(), UpdateAssignmentParams{
 		TenantID:     orgID,
@@ -552,7 +589,7 @@ func TestDeleteAssignment_Success(t *testing.T) {
 	assignment, _ := assignmentdomain.NewWorkflowStateFormAssignment(orgID, workflowDefID, formID, formVersionID, actorID, "OPEN", true, 0)
 	assignmentRepo.assignments[assignment.ID] = assignment
 
-	svc := NewWorkflowStateFormAssignmentService(newMockWorkflowDefRepo(), newMockFormRepo(), newMockFormVersionRepo(), assignmentRepo, auditor)
+	svc := NewWorkflowStateFormAssignmentService(newMockWorkflowDefRepo(), newMockWorkflowStateRepo(), newMockFormRepo(), newMockFormVersionRepo(), assignmentRepo, auditor)
 
 	err := svc.DeleteAssignment(context.Background(), orgID, assignment.ID, actorID)
 	require.NoError(t, err)
@@ -577,7 +614,7 @@ func TestListAssignmentsByWorkflow_Success(t *testing.T) {
 	}
 	defRepo.defs[workflowDefID] = workflowDef
 
-	svc := NewWorkflowStateFormAssignmentService(defRepo, newMockFormRepo(), newMockFormVersionRepo(), assignmentRepo, nil)
+	svc := NewWorkflowStateFormAssignmentService(defRepo, newMockWorkflowStateRepo(), newMockFormRepo(), newMockFormVersionRepo(), assignmentRepo, nil)
 
 	assignments, err := svc.ListAssignmentsByWorkflow(context.Background(), orgID, workflowDefID)
 	require.NoError(t, err)

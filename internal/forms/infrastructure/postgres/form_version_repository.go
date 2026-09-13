@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,6 +31,10 @@ func (r *PostgresFormVersionRepository) save(ctx context.Context, tx *sql.Tx, ve
 	query := `
 		INSERT INTO form_versions (id, form_id, organization_id, version, status, created_by, created_at, published_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (id) DO UPDATE
+		SET status = EXCLUDED.status,
+			published_at = EXCLUDED.published_at,
+			updated_at = EXCLUDED.updated_at
 	`
 	publishedAt := time.Time{}
 	if version.PublishedAt != nil {
@@ -184,6 +189,9 @@ func (r *PostgresFormVersionRepository) scanVersion(row interface{ Scan(dest ...
 		&v.ID, &v.FormID, &v.OrganizationID, &v.Version, &status,
 		&v.CreatedByID, &v.CreatedAt, &publishedAt, &v.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrFormVersionNotFound
+		}
 		return nil, fmt.Errorf("failed to scan version: %w", err)
 	}
 	v.Status = domain.FormVersionStatus(status)
@@ -201,6 +209,9 @@ func (r *PostgresFormVersionRepository) scanVersionFromRows(rows *sql.Rows) (*do
 		&v.ID, &v.FormID, &v.OrganizationID, &v.Version, &status,
 		&v.CreatedByID, &v.CreatedAt, &publishedAt, &v.UpdatedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrFormVersionNotFound
+		}
 		return nil, fmt.Errorf("failed to scan version: %w", err)
 	}
 	v.Status = domain.FormVersionStatus(status)

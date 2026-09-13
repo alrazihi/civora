@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -206,9 +207,7 @@ func (r *PostgresFormSubmissionRepository) scanSubmission(row interface{ Scan(..
 	s.SubmittedAt = submittedAt.UTC()
 	s.UpdatedAt = updatedAt.UTC()
 	if data.Valid && data.String != "" {
-		s.Data = map[string]interface{}{}
-		// JSON parsing would happen here in production
-		_ = data.String
+		_ = json.Unmarshal([]byte(data.String), &s.Data)
 	}
 	return &s, nil
 }
@@ -239,8 +238,7 @@ func (r *PostgresFormSubmissionRepository) scanSubmissionFromRows(rows *sql.Rows
 	s.SubmittedAt = submittedAt.UTC()
 	s.UpdatedAt = updatedAt.UTC()
 	if data.Valid && data.String != "" {
-		s.Data = map[string]interface{}{}
-		_ = data.String
+		_ = json.Unmarshal([]byte(data.String), &s.Data)
 	}
 	return &s, nil
 }
