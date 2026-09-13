@@ -1,0 +1,11 @@
+{
+  "version_id": "3737f180-34e6-4643-bfc0-71647a141a6e",
+  "key": "income_level",
+  "label": "Monthly Income",
+  "type": "DECIMAL",
+  "required": true,
+  "description": "Total monthly household income",
+  "placeholder": "Enter amount",
+  "validation": {"min": 0, "max": 100000},
+  "order": 2
+}

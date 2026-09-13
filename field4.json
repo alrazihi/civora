@@ -1,0 +1,14 @@
+{
+  "version_id": "3737f180-34e6-4643-bfc0-71647a141a6e",
+  "key": "urgency",
+  "label": "Urgency Level",
+  "type": "RADIO",
+  "required": true,
+  "description": "How urgent is this request?",
+  "options": [
+    {"label": "Immediate (within 24 hours)", "value": "immediate"},
+    {"label": "Urgent (within 72 hours)", "value": "urgent"},
+    {"label": "Standard (within 1 week)", "value": "standard"}
+  ],
+  "order": 4
+}

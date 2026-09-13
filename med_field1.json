@@ -1,0 +1,10 @@
+{
+  "version_id": "399906c6-9e6a-4e5d-9fab-748c771d915f",
+  "key": "patient_name",
+  "label": "Patient Name",
+  "type": "TEXT",
+  "required": true,
+  "description": "Full name of patient",
+  "placeholder": "Enter patient name",
+  "order": 1
+}

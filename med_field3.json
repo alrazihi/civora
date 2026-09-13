@@ -1,0 +1,11 @@
+{
+  "version_id": "399906c6-9e6a-4e5d-9fab-748c771d915f",
+  "key": "estimated_cost",
+  "label": "Estimated Treatment Cost",
+  "type": "DECIMAL",
+  "required": true,
+  "description": "Estimated cost of treatment",
+  "placeholder": "Enter estimated cost",
+  "validation": {"min": 0, "max": 1000000},
+  "order": 3
+}

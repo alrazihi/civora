@@ -9,6 +9,7 @@ import (
 
 	"github.com/alrazihi/civora/internal/cases/application"
 	"github.com/alrazihi/civora/internal/cases/domain"
+	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	"github.com/alrazihi/civora/internal/middleware"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
@@ -654,23 +655,25 @@ func (h *Handler) GetWorkflowRequirements(w http.ResponseWriter, r *http.Request
 
 func writeCaseFormError(w http.ResponseWriter, err error) {
 	switch {
-	case err == application.ErrCaseNotFound:
+	case errors.Is(err, application.ErrCaseNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "case not found")
-	case err == application.ErrWorkflowInstanceNotFound:
+	case errors.Is(err, application.ErrWorkflowInstanceNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "workflow instance not found")
-	case err == application.ErrFormNotAssigned:
+	case errors.Is(err, application.ErrFormNotAssigned):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form is not assigned to the current workflow state")
-	case err == application.ErrFormNotPublished:
+	case errors.Is(err, application.ErrFormNotPublished):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form version is not published")
-	case err == application.ErrFormArchived:
+	case errors.Is(err, application.ErrFormArchived):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "form is archived")
-	case err == application.ErrSubmissionExists:
+	case errors.Is(err, application.ErrSubmissionExists):
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, "submission already exists for this case and form version")
-	case err == application.ErrUnknownFields:
+	case errors.Is(err, submissiondomain.ErrSubmissionNotFound):
+		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "submission not found")
+	case errors.Is(err, application.ErrUnknownFields):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "submission contains unknown fields")
-	case err == application.ErrFieldValidationFailed:
+	case errors.Is(err, application.ErrFieldValidationFailed):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "field validation failed")
-	case err == application.ErrOptionValidationFailed:
+	case errors.Is(err, application.ErrOptionValidationFailed):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "option validation failed")
 	case errors.Is(err, application.ErrRequiredFormsIncomplete):
 		shared.WriteError(w, http.StatusConflict, shared.CodeRequiredFormsIncomplete, "required forms are incomplete")

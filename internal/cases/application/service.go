@@ -171,11 +171,11 @@ type GetCaseFormsParams struct {
 }
 
 type SubmitFormParams struct {
-	TenantID      uuid.UUID
-	CaseID        uuid.UUID
-	FormVersionID uuid.UUID
-	SubmittedBy   uuid.UUID
-	Data          map[string]interface{}
+	TenantID      uuid.UUID              `json:"-"`
+	CaseID        uuid.UUID              `json:"-"`
+	FormVersionID uuid.UUID              `json:"form_version_id"`
+	SubmittedBy   uuid.UUID              `json:"-"`
+	Data          map[string]interface{} `json:"data"`
 }
 
 func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (*domain.Case, error) {
@@ -756,29 +756,8 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 		return nil, err
 	}
 
-	submission, err := submissiondomain.NewFormSubmission(
-		orgID,
-		caseID,
-		uuid.Nil,
-		formVersionID,
-		submittedBy,
-		data,
-		submissiondomain.SubmissionStatusSubmitted,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create submission: %w", err)
-	}
-
 	var savedSubmission *submissiondomain.FormSubmission
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		lockedForm, err := s.formRepo.FindByIDForUpdateTx(ctx, tx, orgID, formVersionID)
-		if err != nil {
-			return ErrFormNotPublished
-		}
-		if lockedForm.Status == formdomain.FormStatusArchived {
-			return ErrFormArchived
-		}
-
 		lockedVersion, err := s.formVersionRepo.FindByIDForUpdateTx(ctx, tx, orgID, formVersionID)
 		if err != nil {
 			return ErrFormNotPublished
@@ -787,7 +766,26 @@ func (s *CaseService) SubmitForm(ctx context.Context, orgID, caseID, submittedBy
 			return ErrFormNotPublished
 		}
 
-		submission.FormID = lockedForm.ID
+		lockedForm, err := s.formRepo.FindByIDForUpdateTx(ctx, tx, orgID, lockedVersion.FormID)
+		if err != nil {
+			return ErrFormNotPublished
+		}
+		if lockedForm.Status == formdomain.FormStatusArchived {
+			return ErrFormArchived
+		}
+
+		submission, err := submissiondomain.NewFormSubmission(
+			orgID,
+			caseID,
+			lockedVersion.FormID,
+			formVersionID,
+			submittedBy,
+			data,
+			submissiondomain.SubmissionStatusSubmitted,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create submission: %w", err)
+		}
 
 		lockedAssignments, err := s.assignmentRepo.FindByWorkflowAndStateForUpdateTx(ctx, tx, orgID, instance.WorkflowDefID, instance.CurrentState)
 		if err != nil {

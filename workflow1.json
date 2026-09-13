@@ -1,0 +1,97 @@
+{
+  "key": "emergency-assistance-workflow",
+  "name": "Emergency Assistance Workflow",
+  "description": "Workflow for processing emergency assistance requests",
+  "version": 1,
+  "initial_state": "intake",
+  "states": [
+    {
+      "key": "intake",
+      "name": "Intake",
+      "description": "Initial intake and screening",
+      "category": "start",
+      "terminal": false,
+      "display_order": 1,
+      "responsible_role": "staff"
+    },
+    {
+      "key": "assessment",
+      "name": "Assessment",
+      "description": "Detailed assessment of needs",
+      "category": "processing",
+      "terminal": false,
+      "display_order": 2,
+      "responsible_role": "staff"
+    },
+    {
+      "key": "review",
+      "name": "Review",
+      "description": "Supervisor review and decision",
+      "category": "review",
+      "terminal": false,
+      "display_order": 3,
+      "responsible_role": "admin"
+    },
+    {
+      "key": "approved",
+      "name": "Approved",
+      "description": "Assistance approved",
+      "category": "end",
+      "terminal": true,
+      "display_order": 4,
+      "responsible_role": "admin"
+    },
+    {
+      "key": "denied",
+      "name": "Denied",
+      "description": "Assistance denied",
+      "category": "end",
+      "terminal": true,
+      "display_order": 5,
+      "responsible_role": "admin"
+    }
+  ],
+  "transitions": [
+    {
+      "key": "submit_assessment",
+      "name": "Submit for Assessment",
+      "from_state": "intake",
+      "to_state": "assessment",
+      "description": "Submit intake for detailed assessment",
+      "conditions": [],
+      "allowed_roles": ["staff", "admin"],
+      "active": true
+    },
+    {
+      "key": "submit_review",
+      "name": "Submit for Review",
+      "from_state": "assessment",
+      "to_state": "review",
+      "description": "Submit assessment for supervisor review",
+      "conditions": [],
+      "allowed_roles": ["staff", "admin"],
+      "active": true
+    },
+    {
+      "key": "approve",
+      "name": "Approve",
+      "from_state": "review",
+      "to_state": "approved",
+      "description": "Approve the assistance request",
+      "conditions": [],
+      "allowed_roles": ["admin"],
+      "active": true
+    },
+    {
+      "key": "deny",
+      "name": "Deny",
+      "from_state": "review",
+      "to_state": "denied",
+      "description": "Deny the assistance request",
+      "conditions": [],
+      "allowed_roles": ["admin"],
+      "active": true
+    }
+  ],
+  "metadata": {}
+}

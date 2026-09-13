@@ -1,0 +1,17 @@
+{
+  "version_id": "3737f180-34e6-4643-bfc0-71647a141a6e",
+  "key": "assistance_type",
+  "label": "Type of Assistance Needed",
+  "type": "SELECT",
+  "required": true,
+  "description": "Select the type of emergency assistance",
+  "placeholder": "Select type",
+  "options": [
+    {"label": "Food", "value": "food"},
+    {"label": "Shelter", "value": "shelter"},
+    {"label": "Medical", "value": "medical"},
+    {"label": "Utilities", "value": "utilities"},
+    {"label": "Other", "value": "other"}
+  ],
+  "order": 3
+}

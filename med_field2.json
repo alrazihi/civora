@@ -1,0 +1,10 @@
+{
+  "version_id": "399906c6-9e6a-4e5d-9fab-748c771d915f",
+  "key": "medical_condition",
+  "label": "Medical Condition",
+  "type": "TEXTAREA",
+  "required": true,
+  "description": "Description of medical condition",
+  "placeholder": "Describe the condition",
+  "order": 2
+}

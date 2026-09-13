@@ -1,0 +1,9 @@
+{
+  "version_id": "399906c6-9e6a-4e5d-9fab-748c771d915f",
+  "key": "has_insurance",
+  "label": "Has Insurance",
+  "type": "BOOLEAN",
+  "required": true,
+  "description": "Does the patient have insurance?",
+  "order": 4
+}

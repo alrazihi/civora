@@ -1,0 +1,10 @@
+{
+  "form_version_id": "399906c6-9e6a-4e5d-9fab-748c771d915f",
+  "data": {
+    "patient_name": "John Doe",
+    "medical_condition": "Diabetes type 2 with complications",
+    "estimated_cost": 5000.00,
+    "has_insurance": false,
+    "invalid_field": "should not be allowed"
+  }
+}
