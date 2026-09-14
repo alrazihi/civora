@@ -261,6 +261,24 @@ func (r *PostgresRuleSetRepository) UpdateTx(ctx context.Context, tx *sql.Tx, rs
 	return nil
 }
 
+// UpdateStatusTx transitions a rule set's status only if it currently has the
+// expected status. Returning errRuleSetNotFound on zero rows makes status
+// transitions safe under concurrency (no TOCTOU between the read and write),
+// enforcing immutable active/published rule sets.
+func (r *PostgresRuleSetRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, from, to rulesdomain.RuleSetStatus) error {
+	result, err := r.exec(ctx, tx,
+		`UPDATE rules.rule_sets SET status = $1, updated_at = now() WHERE organization_id = $2 AND id = $3 AND status = $4`,
+		to, orgID, id, from,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update rule set status: %w", err)
+	}
+	if result == 0 {
+		return rulesdomain.ErrRuleSetNotFound
+	}
+	return nil
+}
+
 func (r *PostgresRuleSetRepository) DeleteTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) error {
 	query := "DELETE FROM rules.rule_sets WHERE organization_id = $1 AND id = $2"
 	result, err := r.exec(ctx, tx, query, orgID, id)

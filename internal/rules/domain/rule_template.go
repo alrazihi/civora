@@ -17,17 +17,17 @@ const (
 )
 
 type RuleTemplate struct {
-	ID          uuid.UUID
-	Scope       RuleTemplateScope
+	ID             uuid.UUID
+	Scope          RuleTemplateScope
 	OrganizationID *uuid.UUID
-	Key         string
-	Name        string
-	Description string
-	Category    string
-	Rule        Rule
-	CreatedBy   uuid.UUID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Key            string
+	Name           string
+	Description    string
+	Category       string
+	Rule           Rule
+	CreatedBy      uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 const (
@@ -125,4 +125,3 @@ func UnmarshalRuleTemplateRule(data []byte) (Rule, error) {
 	}
 	return rule, nil
 }
-

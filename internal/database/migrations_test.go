@@ -41,6 +41,21 @@ func TestSplitSQL(t *testing.T) {
 			in:   "SELECT 1;   \n  \n",
 			want: []string{"SELECT 1"},
 		},
+		{
+			name: "semicolon inside line comment is ignored",
+			in:   "-- comment with a semicolon;\nCREATE TABLE foo (id UUID);",
+			want: []string{"CREATE TABLE foo (id UUID)"},
+		},
+		{
+			name: "block comments are skipped",
+			in:   "/* multi\nline comment; */ CREATE TABLE bar (id UUID);",
+			want: []string{"CREATE TABLE bar (id UUID)"},
+		},
+		{
+			name: "escaped quote inside string literal is preserved",
+			in:   "SELECT 'it''s a test' AS foo; SELECT 2;",
+			want: []string{"SELECT 'it''s a test' AS foo", "SELECT 2"},
+		},
 	}
 
 	for _, tt := range tests {

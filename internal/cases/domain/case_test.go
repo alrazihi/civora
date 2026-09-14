@@ -93,6 +93,31 @@ func TestNewCase_InputValidation(t *testing.T) {
 	})
 }
 
+func TestServiceTypeValidation(t *testing.T) {
+	t.Run("known types are valid", func(t *testing.T) {
+		for st := range validServiceTypes {
+			assert.True(t, st.IsValid(), "service type %q should be valid", st)
+			require.NoError(t, ValidateServiceType(st))
+		}
+	})
+
+	t.Run("empty is invalid", func(t *testing.T) {
+		assert.False(t, ServiceType("").IsValid())
+		assert.ErrorIs(t, ValidateServiceType(""), ErrCaseInvalidInput)
+	})
+
+	t.Run("unknown type is invalid", func(t *testing.T) {
+		assert.False(t, ServiceType("CUSTOM").IsValid())
+		err := ValidateServiceType("CUSTOM")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrCaseInvalidInput)
+	})
+
+	t.Run("case sensitivity", func(t *testing.T) {
+		assert.False(t, ServiceType("general").IsValid())
+	})
+}
+
 func TestGenerateCaseNumber_Unique(t *testing.T) {
 	now := time.Now().UTC()
 	numbers := make(map[string]bool)

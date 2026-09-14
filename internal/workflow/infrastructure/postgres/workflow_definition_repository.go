@@ -129,6 +129,22 @@ func (r *PostgresWorkflowDefinitionRepository) FindLatestActiveByKeyTx(ctx conte
 	return r.scanDefinition(tx.QueryRowContext(ctx, query, tenantID, key))
 }
 
+// FindByServiceType returns the latest ACTIVE workflow definition whose
+// metadata.service_type matches the given value. This enables configurable,
+// database-driven resolution of the workflow to bind when case creation does
+// not explicitly supply a workflow_id, replacing any hardcoded service-type ->
+// workflow-key mapping.
+func (r *PostgresWorkflowDefinitionRepository) FindByServiceType(ctx context.Context, tenantID uuid.UUID, serviceType string) (*domain.WorkflowDefinition, error) {
+	query := `
+		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at
+		FROM workflow_definitions
+		WHERE organization_id = $1 AND status = 'ACTIVE' AND (metadata->>'service_type') = $2
+		ORDER BY version DESC
+		LIMIT 1
+	`
+	return r.scanDefinition(r.db.QueryRowContext(ctx, query, tenantID, serviceType))
+}
+
 func (r *PostgresWorkflowDefinitionRepository) ListByOrganization(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.WorkflowDefinition, int, error) {
 	query := `
 		SELECT id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at

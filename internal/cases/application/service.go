@@ -196,6 +196,10 @@ type SubmitFormParams struct {
 }
 
 func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (*domain.Case, error) {
+	if err := domain.ValidateServiceType(params.ServiceType); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseInvalidInput, err)
+	}
+
 	if params.Title == "" {
 		return nil, fmt.Errorf("%w: title is required", ErrCaseInvalidInput)
 	}
@@ -210,15 +214,25 @@ func (s *CaseService) CreateCase(ctx context.Context, params CreateCaseParams) (
 		}
 	}
 
+	workflowID := params.WorkflowID
+	if (workflowID == nil || *workflowID == uuid.Nil) && s.workflowDefRepo != nil {
+		def, err := s.workflowDefRepo.FindByServiceType(ctx, params.OrganizationID, string(params.ServiceType))
+		if err != nil {
+			return nil, fmt.Errorf("%w: no active workflow for service_type %q: %v", ErrWorkflowNotAvailable, params.ServiceType, err)
+		}
+		workflowID = &def.ID
+	}
+
+	if workflowID == nil || *workflowID == uuid.Nil {
+		return nil, fmt.Errorf("%w: workflow_id is required", ErrCaseInvalidInput)
+	}
+
 	c, err := domain.NewCase(params.OrganizationID, params.CreatedByID, params.Title, params.Description, params.ServiceType, params.Priority, params.PersonID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCaseInvalidInput, err)
 	}
 
-	if params.WorkflowID == nil || *params.WorkflowID == uuid.Nil {
-		return nil, fmt.Errorf("%w: workflow_id is required", ErrCaseInvalidInput)
-	}
-	c.WorkflowID = params.WorkflowID
+	c.WorkflowID = workflowID
 
 	const maxRetries = 3
 	var result *domain.Case

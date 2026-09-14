@@ -213,6 +213,9 @@ func main() {
 	rulesService := rulesapp.NewRuleSetService(ruleSetRepo, evalRepo, ruleTemplateRepo, formService, auditService)
 	rulesHandler := rulesapi.NewHandler(rulesService)
 
+	rulesAssignmentService := rulesapp.NewRuleAssignmentService(ruleAssignmentRepo, ruleSetRepo, auditService)
+	rulesAssignmentHandler := rulesapi.NewAssignmentHandler(rulesAssignmentService)
+
 	ruleIntegration := rulesapp.NewCaseRuleIntegrationService(ruleSetRepo, evalRepo, caseRepo, workflowInstanceRepo, ruleAssignmentRepo, submissionpostgres.NewPostgresFormSubmissionRepository(db.DB), auditService)
 	caseService.SetRuleIntegration(ruleIntegration)
 
@@ -243,6 +246,7 @@ func main() {
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	formHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	rulesHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	rulesAssignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)

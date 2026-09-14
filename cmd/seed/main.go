@@ -584,10 +584,10 @@ func createEducationRuleSet(ctx context.Context, db *sql.DB, orgID, adminID, stu
 			"created_at": time.Now().UTC(),
 		},
 		{
-			"id":         uuid.New(),
-			"priority":   3,
-			"outcome":    "ELIGIBLE",
-			"active":     true,
+			"id":       uuid.New(),
+			"priority": 3,
+			"outcome":  "ELIGIBLE",
+			"active":   true,
 			"conditions": map[string]interface{}{"all": []map[string]interface{}{
 				{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "ENROLLED"},
 				{"field": "form.student_assessment.gpa", "operator": "gte", "value": 2.5},
@@ -596,10 +596,10 @@ func createEducationRuleSet(ctx context.Context, db *sql.DB, orgID, adminID, stu
 			"created_at": time.Now().UTC(),
 		},
 		{
-			"id":         uuid.New(),
-			"priority":   4,
-			"outcome":    "REQUIRES_REVIEW",
-			"active":     true,
+			"id":       uuid.New(),
+			"priority": 4,
+			"outcome":  "REQUIRES_REVIEW",
+			"active":   true,
 			"conditions": map[string]interface{}{"all": []map[string]interface{}{
 				{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "ENROLLED"},
 				{"field": "form.student_assessment.gpa", "operator": "gte", "value": 2.0},
@@ -608,10 +608,10 @@ func createEducationRuleSet(ctx context.Context, db *sql.DB, orgID, adminID, stu
 			"created_at": time.Now().UTC(),
 		},
 		{
-			"id":         uuid.New(),
-			"priority":   5,
-			"outcome":    "INELIGIBLE",
-			"active":     true,
+			"id":       uuid.New(),
+			"priority": 5,
+			"outcome":  "INELIGIBLE",
+			"active":   true,
 			"conditions": map[string]interface{}{"all": []map[string]interface{}{
 				{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "ENROLLED"},
 			}},

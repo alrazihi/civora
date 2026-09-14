@@ -52,6 +52,9 @@ func (s *stubDefRepo) FindLatestActiveByKey(ctx context.Context, tenantID uuid.U
 func (s *stubDefRepo) FindLatestActiveByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
 	return s.FindLatestActiveByKey(ctx, tenantID, key)
 }
+func (s *stubDefRepo) FindByServiceType(ctx context.Context, tenantID uuid.UUID, serviceType string) (*domain.WorkflowDefinition, error) {
+	return nil, sql.ErrNoRows
+}
 func (s *stubDefRepo) FindByKey(ctx context.Context, tenantID uuid.UUID, key string) (*domain.WorkflowDefinition, error) {
 	for _, d := range s.defs {
 		if d.TenantID == tenantID && d.Key == key {

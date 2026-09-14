@@ -16,25 +16,25 @@ import (
 )
 
 var (
-	ErrRuleSetNotFound        = errors.New("rule set not found")
-	ErrRuleSetInvalid         = errors.New("rule set is invalid")
-	ErrRuleSetNotDraft        = errors.New("rule set is not a draft")
-	ErrRuleSetNotPublished    = errors.New("rule set is not published")
-	ErrRuleSetArchived        = errors.New("rule set is archived")
-	ErrRuleSetKeyExists       = errors.New("rule set key already exists")
-	ErrRuleSetVersionExists   = errors.New("rule set version already exists")
-	ErrInvalidOutcome         = errors.New("invalid outcome")
-	ErrDuplicatePriority      = errors.New("duplicate rule priority")
-	ErrEvaluationNotFound     = errors.New("evaluation not found")
-	ErrInvalidTrigger         = errors.New("invalid trigger")
-	ErrInvalidFactPath        = errors.New("invalid fact path")
-	ErrMaxRulesExceeded       = errors.New("maximum number of rules exceeded")
-	ErrInvalidCondition       = errors.New("invalid condition")
-	ErrUserNotFound           = errors.New("user not found")
-	ErrRuleTemplateNotFound   = errors.New("rule template not found")
-	ErrRuleTemplateInvalid    = errors.New("rule template is invalid")
-	ErrRuleTemplateKeyExists  = errors.New("rule template key already exists")
-	ErrMaxTemplatesExceeded   = errors.New("maximum number of rule templates exceeded")
+	ErrRuleSetNotFound       = errors.New("rule set not found")
+	ErrRuleSetInvalid        = errors.New("rule set is invalid")
+	ErrRuleSetNotDraft       = errors.New("rule set is not a draft")
+	ErrRuleSetNotPublished   = errors.New("rule set is not published")
+	ErrRuleSetArchived       = errors.New("rule set is archived")
+	ErrRuleSetKeyExists      = errors.New("rule set key already exists")
+	ErrRuleSetVersionExists  = errors.New("rule set version already exists")
+	ErrInvalidOutcome        = errors.New("invalid outcome")
+	ErrDuplicatePriority     = errors.New("duplicate rule priority")
+	ErrEvaluationNotFound    = errors.New("evaluation not found")
+	ErrInvalidTrigger        = errors.New("invalid trigger")
+	ErrInvalidFactPath       = errors.New("invalid fact path")
+	ErrMaxRulesExceeded      = errors.New("maximum number of rules exceeded")
+	ErrInvalidCondition      = errors.New("invalid condition")
+	ErrUserNotFound          = errors.New("user not found")
+	ErrRuleTemplateNotFound  = errors.New("rule template not found")
+	ErrRuleTemplateInvalid   = errors.New("rule template is invalid")
+	ErrRuleTemplateKeyExists = errors.New("rule template key already exists")
+	ErrMaxTemplatesExceeded  = errors.New("maximum number of rule templates exceeded")
 )
 
 type RuleSetService struct {
@@ -205,37 +205,37 @@ func (s *RuleSetService) UpdateRuleSet(ctx context.Context, params UpdateRuleSet
 		return nil, fmt.Errorf("%w: %s", ErrInvalidOutcome, params.DefaultOutcome)
 	}
 
-	rs, err := s.repo.FindByID(ctx, params.OrganizationID, params.ID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrRuleSetNotFound, err)
-	}
-
-	if rs.Status != rulesdomain.StatusDraft {
-		return nil, fmt.Errorf("%w: only draft rule sets can be modified", ErrRuleSetNotDraft)
-	}
-
-	rs.Name = params.Name
-	rs.Description = params.Description
-	if params.DefaultOutcome != "" {
-		rs.DefaultOutcome = params.DefaultOutcome
-	}
-	if params.Rules != nil {
-		if len(params.Rules) > rulesdomain.MaxRulesPerRuleSet {
-			return nil, fmt.Errorf("%w: maximum %d rules", ErrRuleSetInvalid, rulesdomain.MaxRulesPerRuleSet)
-		}
-		rs.Rules = params.Rules
-	}
-	if params.Triggers != nil {
-		rs.Triggers = params.Triggers
-	}
-	rs.UpdatedAt = time.Now().UTC()
-
-	if err := rulesdomain.ValidateRuleSet(rs); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrRuleSetInvalid, err)
-	}
-
 	var updated *rulesdomain.RuleSet
-	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+	err := database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		rs, err := s.repo.FindByIDForUpdateTx(ctx, tx, params.OrganizationID, params.ID)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrRuleSetNotFound, err)
+		}
+
+		if rs.Status != rulesdomain.StatusDraft {
+			return fmt.Errorf("%w: only draft rule sets can be modified", ErrRuleSetNotDraft)
+		}
+
+		rs.Name = params.Name
+		rs.Description = params.Description
+		if params.DefaultOutcome != "" {
+			rs.DefaultOutcome = params.DefaultOutcome
+		}
+		if params.Rules != nil {
+			if len(params.Rules) > rulesdomain.MaxRulesPerRuleSet {
+				return fmt.Errorf("%w: maximum %d rules", ErrRuleSetInvalid, rulesdomain.MaxRulesPerRuleSet)
+			}
+			rs.Rules = params.Rules
+		}
+		if params.Triggers != nil {
+			rs.Triggers = params.Triggers
+		}
+		rs.UpdatedAt = time.Now().UTC()
+
+		if err := rulesdomain.ValidateRuleSet(rs); err != nil {
+			return fmt.Errorf("%w: %v", ErrRuleSetInvalid, err)
+		}
+
 		if err := s.repo.UpdateTx(ctx, tx, rs); err != nil {
 			return fmt.Errorf("failed to update rule set: %w", err)
 		}
@@ -416,7 +416,10 @@ func (s *RuleSetService) PublishRuleSet(ctx context.Context, orgID, id uuid.UUID
 
 	var published *rulesdomain.RuleSet
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		if err := s.repo.UpdateTx(ctx, tx, rs); err != nil {
+		if err := s.repo.UpdateStatusTx(ctx, tx, orgID, id, rulesdomain.StatusDraft, rulesdomain.StatusPublished); err != nil {
+			if errors.Is(err, rulesdomain.ErrRuleSetNotFound) {
+				return fmt.Errorf("%w: status changed concurrently", ErrRuleSetNotDraft)
+			}
 			return fmt.Errorf("failed to publish rule set: %w", err)
 		}
 
@@ -467,7 +470,10 @@ func (s *RuleSetService) ArchiveRuleSet(ctx context.Context, orgID, id uuid.UUID
 
 	var archived *rulesdomain.RuleSet
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
-		if err := s.repo.UpdateTx(ctx, tx, rs); err != nil {
+		if err := s.repo.UpdateStatusTx(ctx, tx, orgID, id, rulesdomain.StatusPublished, rulesdomain.StatusArchived); err != nil {
+			if errors.Is(err, rulesdomain.ErrRuleSetNotFound) {
+				return fmt.Errorf("%w: status changed concurrently", ErrRuleSetArchived)
+			}
 			return fmt.Errorf("failed to archive rule set: %w", err)
 		}
 
@@ -500,17 +506,18 @@ func (s *RuleSetService) ArchiveRuleSet(ctx context.Context, orgID, id uuid.UUID
 }
 
 func (s *RuleSetService) DeleteRuleSet(ctx context.Context, orgID, id uuid.UUID) error {
-	rs, err := s.repo.FindByID(ctx, orgID, id)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrRuleSetNotFound, err)
-	}
-
-	if rs.Status != rulesdomain.StatusDraft {
-		return fmt.Errorf("%w: only draft rule sets can be deleted", ErrRuleSetNotDraft)
-	}
-
-	var actorID uuid.UUID
+	var rs *rulesdomain.RuleSet
+	var err error
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		rs, err = s.repo.FindByIDForUpdateTx(ctx, tx, orgID, id)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrRuleSetNotFound, err)
+		}
+
+		if rs.Status != rulesdomain.StatusDraft {
+			return fmt.Errorf("%w: only draft rule sets can be deleted", ErrRuleSetNotDraft)
+		}
+
 		if err := s.repo.DeleteTx(ctx, tx, orgID, id); err != nil {
 			return fmt.Errorf("failed to delete rule set: %w", err)
 		}
@@ -518,7 +525,7 @@ func (s *RuleSetService) DeleteRuleSet(ctx context.Context, orgID, id uuid.UUID)
 		if s.auditor != nil {
 			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: rs.OrganizationID,
-				ActorID:        &actorID,
+				ActorID:        &uuid.UUID{},
 				ResourceID:     shared.StrPtr(rs.ID.String()),
 				Action:         "ruleset.deleted",
 				Resource:       "ruleset",

@@ -168,31 +168,78 @@ func (m *Migrator) runMigration(ctx context.Context, mg Migration) error {
 }
 
 // splitSQL splits a migration script into individual SQL statements,
-// respecting single-quoted string literals so that semicolons inside
-// them (e.g. CHECK constraint value lists) are not treated as statement
-// boundaries.
+// respecting single-quoted string literals (including PostgreSQL's ”
+// escape for an embedded quote) so that semicolons inside them are not
+// treated as statement boundaries. It also skips SQL line comments
+// (`-- ...`) and block comments (`/* ... */`) so semicolons inside
+// comments do not corrupt the statement stream.
 func splitSQL(sql string) []string {
 	var stmts []string
-	var cur []rune
+	var cur strings.Builder
 	inString := false
-	for _, r := range sql {
-		if r == '\'' {
-			inString = !inString
-		}
-		if r == ';' && !inString {
-			if len(cur) > 0 {
-				stmts = append(stmts, strings.TrimSpace(string(cur)))
-				cur = nil
+	inLineComment := false
+	inBlockComment := false
+
+	chars := []rune(sql)
+	n := len(chars)
+	for i := 0; i < n; i++ {
+		r := chars[i]
+
+		switch {
+		case inLineComment:
+			if r == '\n' {
+				inLineComment = false
+			}
+			continue
+
+		case inBlockComment:
+			if r == '*' && i+1 < n && chars[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+
+		case inString:
+			cur.WriteRune(r)
+			if r == '\'' {
+				// PostgreSQL escape: a doubled quote is an embedded quote,
+				// not the end of the string literal.
+				if i+1 < n && chars[i+1] == '\'' {
+					cur.WriteRune(chars[i+1])
+					i++
+				} else {
+					inString = false
+				}
 			}
 			continue
 		}
-		cur = append(cur, r)
-	}
-	if len(cur) > 0 {
-		s := strings.TrimSpace(string(cur))
-		if s != "" {
-			stmts = append(stmts, s)
+
+		switch {
+		case r == '\'' && !inString:
+			inString = true
+			cur.WriteRune(r)
+
+		case r == '-' && i+1 < n && chars[i+1] == '-':
+			inLineComment = true
+			i++
+
+		case r == '/' && i+1 < n && chars[i+1] == '*':
+			inBlockComment = true
+			i++
+
+		case r == ';':
+			if stmt := strings.TrimSpace(cur.String()); stmt != "" {
+				stmts = append(stmts, stmt)
+			}
+			cur.Reset()
+
+		default:
+			cur.WriteRune(r)
 		}
+	}
+
+	if stmt := strings.TrimSpace(cur.String()); stmt != "" {
+		stmts = append(stmts, stmt)
 	}
 	return stmts
 }

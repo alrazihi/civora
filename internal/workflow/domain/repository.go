@@ -19,6 +19,7 @@ type WorkflowDefinitionRepository interface {
 	FindByIDTx(ctx context.Context, tx *sql.Tx, tenantID, id uuid.UUID) (*WorkflowDefinition, error)
 	FindByKeyAndVersion(ctx context.Context, tenantID uuid.UUID, key string, version int) (*WorkflowDefinition, error)
 	FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)
+	FindByServiceType(ctx context.Context, tenantID uuid.UUID, serviceType string) (*WorkflowDefinition, error)
 	FindLatestActiveByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)
 	FindByKey(ctx context.Context, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)
 	FindByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*WorkflowDefinition, error)

@@ -867,12 +867,12 @@ func (h *Handler) CreateRuleTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Scope       string            `json:"scope"`
-		Key         string            `json:"key"`
-		Name        string            `json:"name"`
-		Description string            `json:"description"`
-		Category    string            `json:"category"`
-		Rule        json.RawMessage   `json:"rule"`
+		Scope       string          `json:"scope"`
+		Key         string          `json:"key"`
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Category    string          `json:"category"`
+		Rule        json.RawMessage `json:"rule"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
@@ -1067,28 +1067,28 @@ func serializeRuleTemplate(rt *rulesdomain.RuleTemplate) map[string]interface{} 
 		orgID = rt.OrganizationID.String()
 	}
 	return map[string]interface{}{
-		"id":               rt.ID,
-		"scope":            string(rt.Scope),
-		"organization_id":  orgID,
-		"key":              rt.Key,
-		"name":             rt.Name,
-		"description":      rt.Description,
-		"category":         rt.Category,
-		"rule":             rt.Rule,
-		"created_by":       rt.CreatedBy,
-		"created_at":       rt.CreatedAt,
-		"updated_at":       rt.UpdatedAt,
+		"id":              rt.ID,
+		"scope":           string(rt.Scope),
+		"organization_id": orgID,
+		"key":             rt.Key,
+		"name":            rt.Name,
+		"description":     rt.Description,
+		"category":        rt.Category,
+		"rule":            rt.Rule,
+		"created_by":      rt.CreatedBy,
+		"created_at":      rt.CreatedAt,
+		"updated_at":      rt.UpdatedAt,
 	}
 }
 
 func serializeRule(rule *rulesdomain.Rule) map[string]interface{} {
 	return map[string]interface{}{
-		"id":          rule.ID,
-		"priority":    rule.Priority,
-		"outcome":     string(rule.Outcome),
-		"conditions":  rule.Conditions,
-		"active":      rule.Active,
-		"created_at":  rule.CreatedAt,
+		"id":         rule.ID,
+		"priority":   rule.Priority,
+		"outcome":    string(rule.Outcome),
+		"conditions": rule.Conditions,
+		"active":     rule.Active,
+		"created_at": rule.CreatedAt,
 	}
 }
 

@@ -20,6 +20,7 @@ type RuleSetRepository interface {
 	ListVersions(ctx context.Context, orgID uuid.UUID, key string, limit, offset int) ([]*RuleSet, int, error)
 	FindPublished(ctx context.Context, orgID uuid.UUID, key string, caseID *uuid.UUID) (*RuleSet, error)
 	UpdateTx(ctx context.Context, tx *sql.Tx, rs *RuleSet) error
+	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID, from, to RuleSetStatus) error
 	DeleteTx(ctx context.Context, tx *sql.Tx, orgID, id uuid.UUID) error
 	CountByKey(ctx context.Context, orgID uuid.UUID, key string) (int, error)
 }

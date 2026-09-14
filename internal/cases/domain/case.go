@@ -72,6 +72,34 @@ var (
 	ErrCaseStatusContradiction = errors.New("case status contradicts workflow state")
 )
 
+var validServiceTypes = map[ServiceType]struct{}{
+	ServiceTypeGeneral:   {},
+	ServiceTypeEmergency: {},
+	ServiceTypeFinancial: {},
+	ServiceTypeFood:      {},
+	ServiceTypeShelter:   {},
+	ServiceTypeMedical:   {},
+	ServiceTypeEducation: {},
+	ServiceTypeTransport: {},
+}
+
+// IsValid reports whether the ServiceType value is recognized by the domain.
+func (s ServiceType) IsValid() bool {
+	_, ok := validServiceTypes[s]
+	return ok
+}
+
+// ValidateServiceType returns an error if the service type is not a known value.
+func ValidateServiceType(s ServiceType) error {
+	if s == "" {
+		return fmt.Errorf("%w: service_type is required", ErrCaseInvalidInput)
+	}
+	if !s.IsValid() {
+		return fmt.Errorf("%w: invalid service_type %q", ErrCaseInvalidInput, s)
+	}
+	return nil
+}
+
 type Case struct {
 	ID                 uuid.UUID   `json:"id"`
 	OrganizationID     uuid.UUID   `json:"organization_id"`

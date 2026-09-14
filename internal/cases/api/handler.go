@@ -117,6 +117,10 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 	if req.Priority == "" {
 		req.Priority = "NORMAL"
 	}
+	if !domain.ServiceType(req.ServiceType).IsValid() {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid service_type")
+		return
+	}
 
 	var personID *uuid.UUID
 	if req.PersonID != nil && *req.PersonID != "" {
@@ -129,16 +133,14 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var workflowID *uuid.UUID
-	if req.WorkflowID == nil || *req.WorkflowID == "" {
-		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "workflow_id is required")
-		return
+	if req.WorkflowID != nil && *req.WorkflowID != "" {
+		wid, err := uuid.Parse(*req.WorkflowID)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
+			return
+		}
+		workflowID = &wid
 	}
-	wid, err := uuid.Parse(*req.WorkflowID)
-	if err != nil {
-		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid workflow ID")
-		return
-	}
-	workflowID = &wid
 
 	c, err := h.svc.CreateCase(r.Context(), application.CreateCaseParams{
 		OrganizationID: orgID,

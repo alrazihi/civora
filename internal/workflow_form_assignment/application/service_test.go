@@ -66,6 +66,9 @@ func (m *mockWorkflowDefRepo) FindByKeyTx(ctx context.Context, tx *sql.Tx, tenan
 func (m *mockWorkflowDefRepo) FindLatestActiveByKey(ctx context.Context, tenantID uuid.UUID, key string) (*workflowdomain.WorkflowDefinition, error) {
 	return nil, workflowdomain.ErrWorkflowDefinitionNotFound{DefID: uuid.Nil}
 }
+func (m *mockWorkflowDefRepo) FindByServiceType(ctx context.Context, tenantID uuid.UUID, serviceType string) (*workflowdomain.WorkflowDefinition, error) {
+	return nil, workflowdomain.ErrWorkflowDefinitionNotFound{DefID: uuid.Nil}
+}
 func (m *mockWorkflowDefRepo) FindLatestActiveByKeyTx(ctx context.Context, tx *sql.Tx, tenantID uuid.UUID, key string) (*workflowdomain.WorkflowDefinition, error) {
 	return nil, workflowdomain.ErrWorkflowDefinitionNotFound{DefID: uuid.Nil}
 }
