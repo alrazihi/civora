@@ -109,6 +109,7 @@ func main() {
 
 	ruleSetRepo := rulespostgres.NewPostgresRuleSetRepository(db.DB)
 	evalRepo := rulespostgres.NewPostgresEvaluationRepository(db.DB)
+	ruleTemplateRepo := rulespostgres.NewRuleTemplateRepository(db.DB)
 	ruleAssignmentRepo := rulespostgres.NewPostgresWorkflowStateRuleAssignmentRepository(db.DB)
 
 	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
@@ -209,7 +210,7 @@ func main() {
 	formService := formapp.NewFormService(formRepo, formVersionRepo, formFieldRepo, auditService)
 	formHandler := formapi.NewHandler(formService)
 
-	rulesService := rulesapp.NewRuleSetService(ruleSetRepo, evalRepo, formService, auditService)
+	rulesService := rulesapp.NewRuleSetService(ruleSetRepo, evalRepo, ruleTemplateRepo, formService, auditService)
 	rulesHandler := rulesapi.NewHandler(rulesService)
 
 	ruleIntegration := rulesapp.NewCaseRuleIntegrationService(ruleSetRepo, evalRepo, caseRepo, workflowInstanceRepo, ruleAssignmentRepo, submissionpostgres.NewPostgresFormSubmissionRepository(db.DB), auditService)

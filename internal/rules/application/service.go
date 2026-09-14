@@ -16,26 +16,31 @@ import (
 )
 
 var (
-	ErrRuleSetNotFound      = errors.New("rule set not found")
-	ErrRuleSetInvalid       = errors.New("rule set is invalid")
-	ErrRuleSetNotDraft      = errors.New("rule set is not a draft")
-	ErrRuleSetNotPublished  = errors.New("rule set is not published")
-	ErrRuleSetArchived      = errors.New("rule set is archived")
-	ErrRuleSetKeyExists     = errors.New("rule set key already exists")
-	ErrRuleSetVersionExists = errors.New("rule set version already exists")
-	ErrInvalidOutcome       = errors.New("invalid outcome")
-	ErrDuplicatePriority    = errors.New("duplicate rule priority")
-	ErrEvaluationNotFound   = errors.New("evaluation not found")
-	ErrInvalidTrigger       = errors.New("invalid trigger")
-	ErrInvalidFactPath      = errors.New("invalid fact path")
-	ErrMaxRulesExceeded     = errors.New("maximum number of rules exceeded")
-	ErrInvalidCondition     = errors.New("invalid condition")
-	ErrUserNotFound         = errors.New("user not found")
+	ErrRuleSetNotFound        = errors.New("rule set not found")
+	ErrRuleSetInvalid         = errors.New("rule set is invalid")
+	ErrRuleSetNotDraft        = errors.New("rule set is not a draft")
+	ErrRuleSetNotPublished    = errors.New("rule set is not published")
+	ErrRuleSetArchived        = errors.New("rule set is archived")
+	ErrRuleSetKeyExists       = errors.New("rule set key already exists")
+	ErrRuleSetVersionExists   = errors.New("rule set version already exists")
+	ErrInvalidOutcome         = errors.New("invalid outcome")
+	ErrDuplicatePriority      = errors.New("duplicate rule priority")
+	ErrEvaluationNotFound     = errors.New("evaluation not found")
+	ErrInvalidTrigger         = errors.New("invalid trigger")
+	ErrInvalidFactPath        = errors.New("invalid fact path")
+	ErrMaxRulesExceeded       = errors.New("maximum number of rules exceeded")
+	ErrInvalidCondition       = errors.New("invalid condition")
+	ErrUserNotFound           = errors.New("user not found")
+	ErrRuleTemplateNotFound   = errors.New("rule template not found")
+	ErrRuleTemplateInvalid    = errors.New("rule template is invalid")
+	ErrRuleTemplateKeyExists  = errors.New("rule template key already exists")
+	ErrMaxTemplatesExceeded   = errors.New("maximum number of rule templates exceeded")
 )
 
 type RuleSetService struct {
 	repo            rulesdomain.RuleSetRepository
 	evalRepo        rulesdomain.EvaluationRepository
+	templateRepo    rulesdomain.RuleTemplateRepository
 	fieldDiscoverer shared.FieldDiscoverer
 	auditor         auditdomain.EventRecorder
 }
@@ -43,12 +48,14 @@ type RuleSetService struct {
 func NewRuleSetService(
 	repo rulesdomain.RuleSetRepository,
 	evalRepo rulesdomain.EvaluationRepository,
+	templateRepo rulesdomain.RuleTemplateRepository,
 	fieldDiscover shared.FieldDiscoverer,
 	auditor auditdomain.EventRecorder,
 ) *RuleSetService {
 	return &RuleSetService{
 		repo:            repo,
 		evalRepo:        evalRepo,
+		templateRepo:    templateRepo,
 		fieldDiscoverer: fieldDiscover,
 		auditor:         auditor,
 	}
@@ -711,4 +718,179 @@ func (s *RuleSetService) ListDiscoverableFields(ctx context.Context, orgID uuid.
 		return nil, errors.New("field discovery is not configured")
 	}
 	return s.fieldDiscoverer.ListDiscoverableFields(ctx, orgID)
+}
+
+type CreateRuleTemplateParams struct {
+	OrganizationID uuid.UUID
+	Scope          rulesdomain.RuleTemplateScope
+	Key            string
+	Name           string
+	Description    string
+	Category       string
+	Rule           rulesdomain.Rule
+	ActorID        uuid.UUID
+}
+
+func (s *RuleSetService) CreateRuleTemplate(ctx context.Context, params CreateRuleTemplateParams) (*rulesdomain.RuleTemplate, error) {
+	if params.Scope == rulesdomain.RuleTemplateScopeOrg && params.OrganizationID == uuid.Nil {
+		return nil, fmt.Errorf("%w: organization_id required for org scope", ErrRuleTemplateInvalid)
+	}
+	if params.Scope == rulesdomain.RuleTemplateScopeGlobal && params.OrganizationID != uuid.Nil {
+		return nil, fmt.Errorf("%w: organization_id must be nil for global scope", ErrRuleTemplateInvalid)
+	}
+	if err := rulesdomain.ValidateRuleTemplateKey(params.Key); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRuleTemplateInvalid, err)
+	}
+	if params.Name == "" {
+		return nil, fmt.Errorf("%w: name is required", ErrRuleTemplateInvalid)
+	}
+	if len(params.Name) > 200 {
+		return nil, fmt.Errorf("%w: name exceeds maximum length", ErrRuleTemplateInvalid)
+	}
+	if len(params.Description) > 2000 {
+		return nil, fmt.Errorf("%w: description exceeds maximum length", ErrRuleTemplateInvalid)
+	}
+	if len(params.Category) > 100 {
+		return nil, fmt.Errorf("%w: category exceeds maximum length", ErrRuleTemplateInvalid)
+	}
+	if !rulesdomain.IsValidOutcome(params.Rule.Outcome) {
+		return nil, fmt.Errorf("%w: invalid rule outcome: %s", ErrRuleTemplateInvalid, params.Rule.Outcome)
+	}
+	if err := rulesdomain.ValidateCondition(&params.Rule.Conditions, 0); err != nil {
+		return nil, fmt.Errorf("%w: invalid rule condition: %v", ErrRuleTemplateInvalid, err)
+	}
+
+	var orgID *uuid.UUID
+	if params.Scope == rulesdomain.RuleTemplateScopeOrg {
+		orgID = &params.OrganizationID
+	}
+
+	count, err := s.templateRepo.CountByKey(ctx, params.OrganizationID, params.Key)
+	if err != nil && !errors.Is(err, rulesdomain.ErrRuleSetNotFound) {
+		return nil, fmt.Errorf("failed to check duplicate key: %w", err)
+	}
+	if count > 0 {
+		return nil, fmt.Errorf("%w: key %s", ErrRuleTemplateKeyExists, params.Key)
+	}
+
+	rt, err := rulesdomain.NewRuleTemplate(params.Scope, orgID, params.Key, params.Name, params.Description, params.Category, params.Rule, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRuleTemplateInvalid, err)
+	}
+
+	var saved *rulesdomain.RuleTemplate
+	err = database.InTransaction(ctx, s.templateRepo.DB(), func(tx *sql.Tx) error {
+		if err := s.templateRepo.SaveTx(ctx, tx, rt); err != nil {
+			return fmt.Errorf("failed to save rule template: %w", err)
+		}
+		if s.auditor != nil {
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: params.OrganizationID,
+				ActorID:        &params.ActorID,
+				Action:         "ruletemplate.created",
+				Resource:       "ruletemplate",
+				ResourceID:     shared.StrPtr(rt.ID.String()),
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key":      rt.Key,
+					"scope":    string(rt.Scope),
+					"category": rt.Category,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+		saved = rt
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return saved, nil
+}
+
+type ListRuleTemplatesParams struct {
+	OrganizationID uuid.UUID
+	Scope          rulesdomain.RuleTemplateScope
+	Category       string
+	Limit          int
+	Offset         int
+}
+
+func (s *RuleSetService) ListRuleTemplates(ctx context.Context, params ListRuleTemplatesParams) ([]*rulesdomain.RuleTemplate, int, error) {
+	if params.Scope == rulesdomain.RuleTemplateScopeGlobal {
+		return s.templateRepo.ListGlobal(ctx, params.Category, params.Limit, params.Offset)
+	}
+	if params.OrganizationID == uuid.Nil {
+		return nil, 0, fmt.Errorf("%w: organization_id required for org scope", ErrRuleTemplateInvalid)
+	}
+	if params.Limit <= 0 {
+		params.Limit = 20
+	}
+	if params.Limit > 200 {
+		params.Limit = 200
+	}
+	if params.Offset < 0 {
+		params.Offset = 0
+	}
+	return s.templateRepo.List(ctx, params.OrganizationID, params.Scope, params.Category, params.Limit, params.Offset)
+}
+
+func (s *RuleSetService) GetRuleTemplate(ctx context.Context, orgID, id uuid.UUID) (*rulesdomain.RuleTemplate, error) {
+	rt, err := s.templateRepo.FindByID(ctx, orgID, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRuleTemplateNotFound, err)
+	}
+	return rt, nil
+}
+
+func (s *RuleSetService) GetRuleTemplateByKey(ctx context.Context, orgID uuid.UUID, key string) (*rulesdomain.RuleTemplate, error) {
+	rt, err := s.templateRepo.FindByKey(ctx, orgID, key)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRuleTemplateNotFound, err)
+	}
+	return rt, nil
+}
+
+func (s *RuleSetService) DeleteRuleTemplate(ctx context.Context, orgID, id uuid.UUID, actorID uuid.UUID) error {
+	rt, err := s.templateRepo.FindByID(ctx, orgID, id)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrRuleTemplateNotFound, err)
+	}
+
+	err = database.InTransaction(ctx, s.templateRepo.DB(), func(tx *sql.Tx) error {
+		if err := s.templateRepo.DeleteTx(ctx, tx, orgID, id); err != nil {
+			return fmt.Errorf("failed to delete rule template: %w", err)
+		}
+		if s.auditor != nil {
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: orgID,
+				ActorID:        &actorID,
+				Action:         "ruletemplate.deleted",
+				Resource:       "ruletemplate",
+				ResourceID:     shared.StrPtr(rt.ID.String()),
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"key": rt.Key,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+func (s *RuleSetService) InstantiateRuleTemplate(ctx context.Context, orgID, templateID uuid.UUID, actorID uuid.UUID) (*rulesdomain.Rule, error) {
+	rt, err := s.templateRepo.FindByID(ctx, orgID, templateID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrRuleTemplateNotFound, err)
+	}
+	cloned := rt.Rule
+	cloned.ID = uuid.New()
+	cloned.CreatedAt = time.Now().UTC()
+	return &cloned, nil
 }

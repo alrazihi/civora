@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -353,5 +355,345 @@ func main() {
 	fmt.Printf("Staff: staff@demo.org / demopass1234 (id: %s)\n", staffID)
 	fmt.Printf("Case A (ACTIVE): %s\n", caseAID)
 	fmt.Printf("Case B (COMPLETED): %s\n", caseBID)
+
+	// ============================================================
+	// ORG B: Education Grant Foundation
+	// ============================================================
+	seedEducationGrantOrg(ctx, db.DB)
+
+	fmt.Println("\n=== All seeds completed successfully ===")
+	fmt.Println("Emergency Demo: admin@demo.org / demopass1234")
+	fmt.Println("Education Grant: admin@education.org / demopass1234")
 	fmt.Println("Use these credentials to log in at http://localhost:8080")
+}
+
+func seedEducationGrantOrg(ctx context.Context, db *sql.DB) {
+	orgID := uuid.New()
+	slug := "education-grant"
+	var existingSlug string
+	err := db.QueryRowContext(ctx, "SELECT slug FROM organizations WHERE slug = $1", slug).Scan(&existingSlug)
+	if err == nil {
+		fmt.Printf("Education Grant organization already exists (slug=%s). Skipping.\n", slug)
+		return
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("demopass1234"), 4)
+
+	_, err = db.ExecContext(ctx, `INSERT INTO organizations (id, name, description, slug, created_at, updated_at) VALUES ($1,$2,$3,$4,NOW(),NOW())`,
+		orgID, "Education Grant Foundation", "Demo organization for education grant eligibility workflow", slug)
+	if err != nil {
+		log.Fatalf("failed to create education org: %v", err)
+	}
+
+	adminRoleID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`,
+		adminRoleID, orgID, "admin", "Full access", `["*"]`)
+	if err != nil {
+		log.Fatalf("failed to create admin role: %v", err)
+	}
+
+	staffRoleID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO roles (id, organization_id, name, description, permissions, created_at) VALUES ($1,$2,$3,$4,$5,NOW())`,
+		staffRoleID, orgID, "staff", "Standard access", `["cases:*"]`)
+	if err != nil {
+		log.Fatalf("failed to create staff role: %v", err)
+	}
+
+	adminID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO users (id, organization_id, email, name, role_id, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		adminID, orgID, "admin@education.org", "Education Admin", adminRoleID, string(hashedPassword))
+	if err != nil {
+		log.Fatalf("failed to create admin user: %v", err)
+	}
+
+	staffID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO users (id, organization_id, email, name, role_id, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		staffID, orgID, "staff@education.org", "Education Staff", staffRoleID, string(hashedPassword))
+	if err != nil {
+		log.Fatalf("failed to create staff user: %v", err)
+	}
+
+	personID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO people (id, organization_id, first_name, last_name, preferred_language, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		personID, orgID, "Maria", "Santos", "en", "ACTIVE")
+	if err != nil {
+		log.Fatalf("failed to create person: %v", err)
+	}
+
+	// Create forms for education grant
+	studentFormID, incomeFormID := createEducationForms(ctx, db, orgID, adminID)
+
+	// Create workflow for education grant
+	workflowDefID := createEducationWorkflow(ctx, db, orgID, adminID, studentFormID, incomeFormID)
+
+	// Create rule set for education grant
+	createEducationRuleSet(ctx, db, orgID, adminID, studentFormID, incomeFormID)
+
+	// Create global rule templates (minimum age, income threshold)
+	createGlobalRuleTemplates(ctx, db, adminID)
+
+	// Create case
+	createEducationCase(ctx, db, orgID, adminID, staffID, personID, workflowDefID)
+
+	fmt.Printf("Education Grant org seeded: %s (admin@education.org / demopass1234)\n", orgID)
+}
+
+func createEducationForms(ctx context.Context, db *sql.DB, orgID, adminID uuid.UUID) (uuid.UUID, uuid.UUID) {
+	// Student Assessment Form
+	studentFormID := uuid.New()
+	_, err := db.ExecContext(ctx, `INSERT INTO forms (id, organization_id, key, name, description, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		studentFormID, orgID, "student_assessment", "Student Assessment", "Academic enrollment and performance verification", "ACTIVE")
+	if err != nil {
+		log.Fatalf("failed to create student form: %v", err)
+	}
+	studentVersionID := uuid.New()
+	studentFields := []map[string]interface{}{
+		{"id": uuid.New(), "key": "enrollment_status", "label": "Enrollment Status", "type": "SELECT", "required": true, "order": 0, "options": []string{"ENROLLED", "NOT_ENROLLED", "PENDING"}, "help_text": "Current enrollment status"},
+		{"id": uuid.New(), "key": "gpa", "label": "GPA", "type": "DECIMAL", "required": true, "order": 1, "validation": map[string]interface{}{"min": 0, "max": 4.0}, "help_text": "Grade point average (0.0-4.0)"},
+		{"id": uuid.New(), "key": "program_type", "label": "Program Type", "type": "SELECT", "required": true, "order": 2, "options": []string{"UNDERGRADUATE", "GRADUATE", "VOCATIONAL", "CERTIFICATE"}, "help_text": "Type of educational program"},
+		{"id": uuid.New(), "key": "credits_completed", "label": "Credits Completed", "type": "NUMBER", "required": false, "order": 3, "help_text": "Number of credits completed toward degree"},
+	}
+	fieldsJSON, _ := json.Marshal(studentFields)
+	_, err = db.ExecContext(ctx, `INSERT INTO form_versions (id, form_id, version_number, status, fields, created_at, published_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
+		studentVersionID, studentFormID, 1, "PUBLISHED", fieldsJSON)
+	if err != nil {
+		log.Fatalf("failed to create student form version: %v", err)
+	}
+
+	// Income Verification Form (reusable pattern)
+	incomeFormID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO forms (id, organization_id, key, name, description, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())`,
+		incomeFormID, orgID, "income_verification", "Income Verification", "Verify household income for grant eligibility", "ACTIVE")
+	if err != nil {
+		log.Fatalf("failed to create income form: %v", err)
+	}
+	incomeVersionID := uuid.New()
+	incomeFields := []map[string]interface{}{
+		{"id": uuid.New(), "key": "amount", "label": "Annual Household Income", "type": "DECIMAL", "required": true, "order": 0, "help_text": "Total annual household income in USD"},
+		{"id": uuid.New(), "key": "dependents", "label": "Number of Dependents", "type": "NUMBER", "required": true, "order": 1, "help_text": "Number of dependents in household"},
+		{"id": uuid.New(), "key": "tax_filed", "label": "Tax Return Filed", "type": "BOOLEAN", "required": true, "order": 2, "help_text": "Whether most recent tax return was filed"},
+	}
+	fieldsJSON, _ = json.Marshal(incomeFields)
+	_, err = db.ExecContext(ctx, `INSERT INTO form_versions (id, form_id, version_number, status, fields, created_at, published_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
+		incomeVersionID, incomeFormID, 1, "PUBLISHED", fieldsJSON)
+	if err != nil {
+		log.Fatalf("failed to create income form version: %v", err)
+	}
+
+	return studentFormID, incomeFormID
+}
+
+func createEducationWorkflow(ctx context.Context, db *sql.DB, orgID, adminID, studentFormID, incomeFormID uuid.UUID) uuid.UUID {
+	workflowDefID := uuid.New()
+	_, err := db.ExecContext(ctx, `INSERT INTO workflow_definitions (id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())`,
+		workflowDefID, orgID, "education_grant", "Education Grant", "Education grant application and approval workflow", 1, "ACTIVE", "NEW", `{}`)
+	if err != nil {
+		log.Fatalf("failed to create education workflow: %v", err)
+	}
+
+	now := time.Now().UTC()
+	stateIDs := make([]uuid.UUID, 7)
+	stateInsert := `INSERT INTO workflow_states (id, workflow_definition_id, organization_id, key, name, description, category, terminal, display_order, responsible_role, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`
+	stateKeys := []string{"NEW", "APPLICATION_REVIEW", "ELIGIBILITY_CHECK", "APPROVED", "REJECTED", "DISBURSEMENT", "CLOSED"}
+	for i, stateKey := range stateKeys {
+		stateIDs[i] = uuid.New()
+		terminal := "false"
+		if stateKey == "REJECTED" || stateKey == "CLOSED" {
+			terminal = "true"
+		}
+		_, err = db.ExecContext(ctx, stateInsert, stateIDs[i], workflowDefID, orgID, stateKey, stateKey, "", "", terminal, i, "", now)
+		if err != nil {
+			log.Fatalf("failed to create workflow state: %v", err)
+		}
+	}
+
+	// Assign forms to states
+	var studentVerID, incomeVerID uuid.UUID
+	db.QueryRowContext(ctx, `SELECT id FROM form_versions WHERE form_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1`, studentFormID).Scan(&studentVerID)
+	db.QueryRowContext(ctx, `SELECT id FROM form_versions WHERE form_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1`, incomeFormID).Scan(&incomeVerID)
+
+	assignmentInsert := `INSERT INTO workflow_form_assignments (id, tenant_id, workflow_definition_id, workflow_state_key, form_id, form_version_id, required, display_order, active, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`
+	assignments := []struct {
+		id            uuid.UUID
+		stateKey      string
+		formID        uuid.UUID
+		formVersionID uuid.UUID
+		required      bool
+		displayOrder  int
+	}{
+		{uuid.New(), "NEW", studentFormID, studentVerID, true, 0},
+		{uuid.New(), "NEW", incomeFormID, incomeVerID, true, 1},
+	}
+	for _, a := range assignments {
+		_, err = db.ExecContext(ctx, assignmentInsert, a.id, orgID, workflowDefID, a.stateKey, a.formID, a.formVersionID, a.required, a.displayOrder, true, adminID)
+		if err != nil {
+			log.Fatalf("failed to create form assignment: %v", err)
+		}
+	}
+
+	transitionInsert := `INSERT INTO workflow_transitions (id, workflow_definition_id, organization_id, key, name, from_state, to_state, description, conditions, allowed_roles, active, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`
+	transitions := []struct {
+		id   uuid.UUID
+		key  string
+		from uuid.UUID
+		to   uuid.UUID
+	}{
+		{uuid.New(), "submit", stateIDs[0], stateIDs[1]},
+		{uuid.New(), "check_eligibility", stateIDs[1], stateIDs[2]},
+		{uuid.New(), "approve", stateIDs[2], stateIDs[3]},
+		{uuid.New(), "reject", stateIDs[2], stateIDs[4]},
+		{uuid.New(), "disburse", stateIDs[3], stateIDs[5]},
+		{uuid.New(), "close_approved", stateIDs[5], stateIDs[6]},
+		{uuid.New(), "close_rejected", stateIDs[4], stateIDs[6]},
+	}
+	for _, t := range transitions {
+		_, err = db.ExecContext(ctx, transitionInsert, t.id, workflowDefID, orgID, t.key, t.key, t.from.String(), t.to.String(), "", "[]", "[]", true, now)
+		if err != nil {
+			log.Fatalf("failed to create transition: %v", err)
+		}
+	}
+
+	return workflowDefID
+}
+
+func createEducationRuleSet(ctx context.Context, db *sql.DB, orgID, adminID, studentFormID, incomeFormID uuid.UUID) {
+	ruleSetID := uuid.New()
+	rules := []map[string]interface{}{
+		{
+			"id":         uuid.New(),
+			"priority":   0,
+			"outcome":    "FLAG",
+			"active":     true,
+			"conditions": map[string]interface{}{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "NOT_ENROLLED"},
+			"created_at": time.Now().UTC(),
+		},
+		{
+			"id":         uuid.New(),
+			"priority":   1,
+			"outcome":    "INFORMATION_REQUIRED",
+			"active":     true,
+			"conditions": map[string]interface{}{"field": "form.student_assessment.enrollment_status", "operator": "not_exists"},
+			"created_at": time.Now().UTC(),
+		},
+		{
+			"id":         uuid.New(),
+			"priority":   2,
+			"outcome":    "INFORMATION_REQUIRED",
+			"active":     true,
+			"conditions": map[string]interface{}{"field": "form.income_verification.amount", "operator": "not_exists"},
+			"created_at": time.Now().UTC(),
+		},
+		{
+			"id":         uuid.New(),
+			"priority":   3,
+			"outcome":    "ELIGIBLE",
+			"active":     true,
+			"conditions": map[string]interface{}{"all": []map[string]interface{}{
+				{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "ENROLLED"},
+				{"field": "form.student_assessment.gpa", "operator": "gte", "value": 2.5},
+				{"field": "form.income_verification.amount", "operator": "lte", "value": 30000},
+			}},
+			"created_at": time.Now().UTC(),
+		},
+		{
+			"id":         uuid.New(),
+			"priority":   4,
+			"outcome":    "REQUIRES_REVIEW",
+			"active":     true,
+			"conditions": map[string]interface{}{"all": []map[string]interface{}{
+				{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "ENROLLED"},
+				{"field": "form.student_assessment.gpa", "operator": "gte", "value": 2.0},
+				{"field": "form.income_verification.amount", "operator": "lte", "value": 50000},
+			}},
+			"created_at": time.Now().UTC(),
+		},
+		{
+			"id":         uuid.New(),
+			"priority":   5,
+			"outcome":    "INELIGIBLE",
+			"active":     true,
+			"conditions": map[string]interface{}{"all": []map[string]interface{}{
+				{"field": "form.student_assessment.enrollment_status", "operator": "eq", "value": "ENROLLED"},
+			}},
+			"created_at": time.Now().UTC(),
+		},
+	}
+	rulesJSON, _ := json.Marshal(rules)
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO rules.rule_sets (id, organization_id, key, name, description, version, status, default_outcome, rules, created_by, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+	`, ruleSetID, orgID, "education_grant", "Education Grant Eligibility",
+		"Determines eligibility for education grants based on enrollment, GPA, and household income", 1, "PUBLISHED",
+		"INELIGIBLE", rulesJSON, adminID)
+	if err != nil {
+		log.Fatalf("failed to create education rule set: %v", err)
+	}
+}
+
+func createGlobalRuleTemplates(ctx context.Context, db *sql.DB, adminID uuid.UUID) {
+	// Minimum Age 18 template
+	templateID := uuid.New()
+	rule := map[string]interface{}{
+		"id":         uuid.New(),
+		"priority":   0,
+		"outcome":    "INELIGIBLE",
+		"active":     true,
+		"conditions": map[string]interface{}{"field": "person.age", "operator": "lt", "value": 18},
+		"created_at": time.Now().UTC(),
+	}
+	ruleJSON, _ := json.Marshal(rule)
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO rules.rule_templates (id, scope, organization_id, key, name, description, category, rule_json, created_by, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+	`, templateID, "GLOBAL", nil, "minimum_age_18", "Minimum Age 18",
+		"Applicant must be at least 18 years old", "eligibility", ruleJSON, adminID)
+	if err != nil {
+		log.Fatalf("failed to create minimum age template: %v", err)
+	}
+
+	// Income Threshold template
+	templateID2 := uuid.New()
+	rule2 := map[string]interface{}{
+		"id":         uuid.New(),
+		"priority":   0,
+		"outcome":    "INELIGIBLE",
+		"active":     true,
+		"conditions": map[string]interface{}{"field": "form.income_verification.amount", "operator": "gt", "value": 50000},
+		"created_at": time.Now().UTC(),
+	}
+	ruleJSON2, _ := json.Marshal(rule2)
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO rules.rule_templates (id, scope, organization_id, key, name, description, category, rule_json, created_by, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+	`, templateID2, "GLOBAL", nil, "income_threshold_50k", "Income Threshold $50,000",
+		"Household income exceeds $50,000 threshold", "eligibility", ruleJSON2, adminID)
+	if err != nil {
+		log.Fatalf("failed to create income threshold template: %v", err)
+	}
+}
+
+func createEducationCase(ctx context.Context, db *sql.DB, orgID, adminID, staffID, personID, workflowDefID uuid.UUID) {
+	now := time.Now().UTC()
+
+	caseID := uuid.New()
+	_, err := db.ExecContext(ctx, `INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, workflow_state, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())`,
+		caseID, orgID, "CAS-20260914-EDU-001", "Education Grant Application - Maria Santos",
+		"Undergraduate student applying for tuition assistance grant", "NEW", "EDUCATION", "NORMAL", &personID, adminID, "NEW")
+	if err != nil {
+		log.Fatalf("failed to create education case: %v", err)
+	}
+
+	instanceID := uuid.New()
+	_, err = db.ExecContext(ctx, `INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		instanceID, orgID, workflowDefID, 1, caseID, "NEW", now, nil, `{}`, 1)
+	if err != nil {
+		log.Fatalf("failed to create workflow instance: %v", err)
+	}
+	_, err = db.ExecContext(ctx, `UPDATE cases SET workflow_instance_id = $1 WHERE id = $2`, instanceID, caseID)
+	if err != nil {
+		log.Fatalf("failed to link instance: %v", err)
+	}
 }

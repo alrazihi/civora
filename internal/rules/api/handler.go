@@ -41,6 +41,12 @@ type RuleSetService interface {
 	ListEvaluationsByRuleSet(ctx context.Context, orgID, ruleSetID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
 	ListEvaluationsByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
 	ListDiscoverableFields(ctx context.Context, orgID uuid.UUID) ([]shared.FormFieldView, error)
+	CreateRuleTemplate(ctx context.Context, params application.CreateRuleTemplateParams) (*rulesdomain.RuleTemplate, error)
+	ListRuleTemplates(ctx context.Context, params application.ListRuleTemplatesParams) ([]*rulesdomain.RuleTemplate, int, error)
+	GetRuleTemplate(ctx context.Context, orgID, id uuid.UUID) (*rulesdomain.RuleTemplate, error)
+	GetRuleTemplateByKey(ctx context.Context, orgID uuid.UUID, key string) (*rulesdomain.RuleTemplate, error)
+	DeleteRuleTemplate(ctx context.Context, orgID, id uuid.UUID, actorID uuid.UUID) error
+	InstantiateRuleTemplate(ctx context.Context, orgID, templateID uuid.UUID, actorID uuid.UUID) (*rulesdomain.Rule, error)
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
@@ -59,6 +65,12 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Get("/evaluations/{evaluationId}", h.GetEvaluation)
 			r.Get("/cases/{caseId}/evaluations", h.ListEvaluationsByCase)
 			r.Get("/fields", h.ListFields)
+
+			// Rule template endpoints - read access for admin and staff
+			r.Get("/templates", h.ListRuleTemplates)
+			r.Get("/templates/{templateId}", h.GetRuleTemplate)
+			r.Get("/templates/key/{key}", h.GetRuleTemplateByKey)
+			r.Post("/templates/{templateId}/instantiate", h.InstantiateRuleTemplate)
 		})
 
 		// Rule set write endpoints - admin only
@@ -70,6 +82,10 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Post("/rule-sets/{ruleSetId}/publish", h.PublishRuleSet)
 			r.Post("/rule-sets/{ruleSetId}/archive", h.ArchiveRuleSet)
 			r.Delete("/rule-sets/{ruleSetId}", h.DeleteRuleSet)
+
+			// Rule template write endpoints - admin only
+			r.Post("/templates", h.CreateRuleTemplate)
+			r.Delete("/templates/{templateId}", h.DeleteRuleTemplate)
 		})
 
 		// Evaluation endpoint - admin and staff can trigger evaluations
@@ -819,6 +835,260 @@ func writeEvaluationError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, err.Error())
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
+	}
+}
+
+func writeRuleTemplateError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, application.ErrRuleTemplateNotFound):
+		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "rule template not found")
+	case errors.Is(err, application.ErrRuleTemplateInvalid):
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())
+	case errors.Is(err, application.ErrRuleTemplateKeyExists):
+		shared.WriteError(w, http.StatusConflict, shared.CodeConflict, err.Error())
+	case errors.Is(err, application.ErrMaxTemplatesExceeded):
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())
+	default:
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
+	}
+}
+
+func (h *Handler) CreateRuleTemplate(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	var req struct {
+		Scope       string            `json:"scope"`
+		Key         string            `json:"key"`
+		Name        string            `json:"name"`
+		Description string            `json:"description"`
+		Category    string            `json:"category"`
+		Rule        json.RawMessage   `json:"rule"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	scope := rulesdomain.RuleTemplateScope(req.Scope)
+	if scope != rulesdomain.RuleTemplateScopeOrg && scope != rulesdomain.RuleTemplateScopeGlobal {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid scope: must be ORG or GLOBAL")
+		return
+	}
+
+	var rule rulesdomain.Rule
+	dec := json.NewDecoder(bytes.NewReader(req.Rule))
+	dec.UseNumber()
+	if err := dec.Decode(&rule); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid rule: "+err.Error())
+		return
+	}
+
+	rt, err := h.svc.CreateRuleTemplate(r.Context(), application.CreateRuleTemplateParams{
+		OrganizationID: orgID,
+		Scope:          scope,
+		Key:            req.Key,
+		Name:           req.Name,
+		Description:    req.Description,
+		Category:       req.Category,
+		Rule:           rule,
+		ActorID:        actorID,
+	})
+	if err != nil {
+		writeRuleTemplateError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusCreated, serializeRuleTemplate(rt), nil)
+}
+
+func (h *Handler) ListRuleTemplates(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	scopeStr := r.URL.Query().Get("scope")
+	scope := rulesdomain.RuleTemplateScope(scopeStr)
+	category := r.URL.Query().Get("category")
+
+	page, parseErr := strconv.Atoi(r.URL.Query().Get("page"))
+	if parseErr != nil {
+		page = 1
+	}
+	perPage, parseErr := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if parseErr != nil {
+		perPage = 20
+	}
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 200 {
+		perPage = 200
+	}
+	offset := (page - 1) * perPage
+
+	items, total, err := h.svc.ListRuleTemplates(r.Context(), application.ListRuleTemplatesParams{
+		OrganizationID: orgID,
+		Scope:          scope,
+		Category:       category,
+		Limit:          perPage,
+		Offset:         offset,
+	})
+	if err != nil {
+		writeRuleTemplateError(w, err)
+		return
+	}
+
+	result := make([]map[string]interface{}, len(items))
+	for i, rt := range items {
+		result[i] = serializeRuleTemplate(rt)
+	}
+
+	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
+}
+
+func (h *Handler) GetRuleTemplate(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	templateID, ok := parseUUID(r, "templateId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid template ID")
+		return
+	}
+
+	rt, err := h.svc.GetRuleTemplate(r.Context(), orgID, templateID)
+	if err != nil {
+		writeRuleTemplateError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, serializeRuleTemplate(rt), nil)
+}
+
+func (h *Handler) GetRuleTemplateByKey(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	key := chi.URLParam(r, "key")
+	if key == "" {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "key is required")
+		return
+	}
+
+	rt, err := h.svc.GetRuleTemplateByKey(r.Context(), orgID, key)
+	if err != nil {
+		writeRuleTemplateError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, serializeRuleTemplate(rt), nil)
+}
+
+func (h *Handler) DeleteRuleTemplate(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	templateID, ok := parseUUID(r, "templateId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid template ID")
+		return
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	err := h.svc.DeleteRuleTemplate(r.Context(), orgID, templateID, actorID)
+	if err != nil {
+		writeRuleTemplateError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{"deleted": true}, nil)
+}
+
+func (h *Handler) InstantiateRuleTemplate(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	templateID, ok := parseUUID(r, "templateId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid template ID")
+		return
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	rule, err := h.svc.InstantiateRuleTemplate(r.Context(), orgID, templateID, actorID)
+	if err != nil {
+		writeRuleTemplateError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, serializeRule(rule), nil)
+}
+
+func serializeRuleTemplate(rt *rulesdomain.RuleTemplate) map[string]interface{} {
+	orgID := ""
+	if rt.OrganizationID != nil {
+		orgID = rt.OrganizationID.String()
+	}
+	return map[string]interface{}{
+		"id":               rt.ID,
+		"scope":            string(rt.Scope),
+		"organization_id":  orgID,
+		"key":              rt.Key,
+		"name":             rt.Name,
+		"description":      rt.Description,
+		"category":         rt.Category,
+		"rule":             rt.Rule,
+		"created_by":       rt.CreatedBy,
+		"created_at":       rt.CreatedAt,
+		"updated_at":       rt.UpdatedAt,
+	}
+}
+
+func serializeRule(rule *rulesdomain.Rule) map[string]interface{} {
+	return map[string]interface{}{
+		"id":          rule.ID,
+		"priority":    rule.Priority,
+		"outcome":     string(rule.Outcome),
+		"conditions":  rule.Conditions,
+		"active":      rule.Active,
+		"created_at":  rule.CreatedAt,
 	}
 }
 
