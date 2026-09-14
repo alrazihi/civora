@@ -11,6 +11,8 @@ import (
 	"github.com/alrazihi/civora/internal/cases/domain"
 	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	"github.com/alrazihi/civora/internal/middleware"
+	rulesintegration "github.com/alrazihi/civora/internal/rules/application"
+	rulesdomain "github.com/alrazihi/civora/internal/rules/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/go-chi/chi/v5"
@@ -41,6 +43,9 @@ type CaseService interface {
 	ListSubmissions(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
 	GetCaseFormSubmissions(ctx context.Context, orgID, caseID uuid.UUID) (map[string]*application.SubmissionResponse, error)
 	GetWorkflowRequirements(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
+	EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error)
+	GetCaseEvaluations(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
+	AssembleCaseFacts(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error)
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler) http.Handler) {
@@ -71,6 +76,12 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Post("/{caseId}/form/submission", h.SubmitFormByKey)
 		r.Get("/{caseId}/form/{formKey}/submission", h.GetFormSubmissionByKey)
 		r.Get("/{caseId}/form-submissions/{submissionId}", h.GetSubmission)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAnyRole("admin", "staff"))
+			r.Post("/{caseId}/evaluate", h.EvaluateCaseRules)
+			r.Get("/{caseId}/evaluations", h.ListCaseEvaluations)
+			r.Get("/{caseId}/facts", h.AssembleCaseFacts)
+		})
 	})
 }
 
@@ -655,6 +666,152 @@ func (h *Handler) GetWorkflowRequirements(w http.ResponseWriter, r *http.Request
 	}
 
 	shared.WriteSuccess(w, http.StatusOK, requirements, nil)
+}
+
+func (h *Handler) EvaluateCaseRules(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	var req struct {
+		Facts   map[string]interface{} `json:"facts"`
+		Trigger string                 `json:"trigger"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	result, err := h.svc.EvaluateCaseRules(ctx, rulesintegration.EvaluateCaseRulesParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+		Facts:          req.Facts,
+		Trigger:        rulesdomain.Trigger(req.Trigger),
+	})
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, result, nil)
+}
+
+func (h *Handler) ListCaseEvaluations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	page, parseErr := strconv.Atoi(r.URL.Query().Get("page"))
+	if parseErr != nil {
+		page = 1
+	}
+	perPage, parseErr := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if parseErr != nil {
+		perPage = 20
+	}
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 200 {
+		perPage = 200
+	}
+	offset := (page - 1) * perPage
+
+	items, total, err := h.svc.GetCaseEvaluations(ctx, orgID, caseID, perPage, offset)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	result := make([]map[string]interface{}, len(items))
+	for i, ev := range items {
+		result[i] = serializeEvaluation(*ev)
+	}
+
+	shared.WritePaginatedSuccess(w, http.StatusOK, result, page, perPage, total)
+}
+
+func (h *Handler) AssembleCaseFacts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+	caseID, ok := parseUUID(r, "caseId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid case ID")
+		return
+	}
+
+	facts, err := h.svc.AssembleCaseFacts(ctx, orgID, caseID)
+	if err != nil {
+		writeCaseFormError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, facts, nil)
+}
+
+func serializeEvaluation(ev rulesdomain.Evaluation) map[string]interface{} {
+	caseID := ""
+	if ev.CaseID != nil {
+		caseID = ev.CaseID.String()
+	}
+	matchedRuleID := ""
+	if ev.MatchedRuleID != nil {
+		matchedRuleID = ev.MatchedRuleID.String()
+	}
+	evaluatedBy := ""
+	if ev.EvaluatedBy != nil {
+		evaluatedBy = ev.EvaluatedBy.String()
+	}
+	reason := ""
+	if ev.Reason != nil {
+		reason = *ev.Reason
+	}
+
+	return map[string]interface{}{
+		"id":               ev.ID,
+		"rule_set_id":      ev.RuleSetID,
+		"rule_set_version": ev.RuleSetVersion,
+		"organization_id":  ev.OrganizationID,
+		"case_id":          caseID,
+		"status":           string(ev.Status),
+		"outcome":          string(ev.Outcome),
+		"reason":           reason,
+		"matched_rule_id":  matchedRuleID,
+		"trace":            ev.Trace,
+		"trigger":          string(ev.Trigger),
+		"evaluated_by":     evaluatedBy,
+		"evaluated_at":     ev.EvaluatedAt,
+		"facts_snapshot":   ev.FactsSnapshot,
+	}
 }
 
 func writeCaseFormError(w http.ResponseWriter, err error) {

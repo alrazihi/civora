@@ -15,6 +15,8 @@ import (
 	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	formdomain "github.com/alrazihi/civora/internal/forms/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	rulesintegration "github.com/alrazihi/civora/internal/rules/application"
+	rulesdomain "github.com/alrazihi/civora/internal/rules/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
@@ -75,6 +77,11 @@ type CaseService struct {
 	formFieldRepo        formdomain.FormFieldRepository
 	assignmentRepo       assignmentdomain.WorkflowStateFormAssignmentRepository
 	submissionRepo       submissiondomain.FormSubmissionRepository
+	ruleIntegration      interface {
+		EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error)
+		ListEvaluationsByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
+		AssembleFactsFromCase(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error)
+	}
 }
 
 func NewCaseService(
@@ -108,6 +115,14 @@ func NewCaseService(
 		ws.SetTransitionObserver(svc)
 	}
 	return svc
+}
+
+func (s *CaseService) SetRuleIntegration(svc interface {
+	EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error)
+	ListEvaluationsByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
+	AssembleFactsFromCase(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error)
+}) {
+	s.ruleIntegration = svc
 }
 
 type CreateCaseParams struct {
@@ -524,10 +539,29 @@ func (s *CaseService) GetCaseTimeline(ctx context.Context, orgID, caseID uuid.UU
 	return timeline, nil
 }
 
-// GetWorkflowService returns the underlying workflow service for testing
-// and advanced use cases.
 func (s *CaseService) GetWorkflowService() WorkflowTransitionExecutor {
 	return s.workflowSvc
+}
+
+func (s *CaseService) EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error) {
+	if s.ruleIntegration == nil {
+		return nil, fmt.Errorf("rule integration not configured")
+	}
+	return s.ruleIntegration.EvaluateCaseRules(ctx, params)
+}
+
+func (s *CaseService) GetCaseEvaluations(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error) {
+	if s.ruleIntegration == nil {
+		return nil, 0, fmt.Errorf("rule integration not configured")
+	}
+	return s.ruleIntegration.ListEvaluationsByCase(ctx, orgID, caseID, limit, offset)
+}
+
+func (s *CaseService) AssembleCaseFacts(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error) {
+	if s.ruleIntegration == nil {
+		return nil, fmt.Errorf("rule integration not configured")
+	}
+	return s.ruleIntegration.AssembleFactsFromCase(ctx, orgID, caseID)
 }
 
 // GetWorkflowInstance returns the workflow instance associated with a case.

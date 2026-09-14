@@ -12,6 +12,8 @@ import (
 	"github.com/alrazihi/civora/internal/cases/application"
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/middleware"
+	rulesapplication "github.com/alrazihi/civora/internal/rules/application"
+	rulesdomain "github.com/alrazihi/civora/internal/rules/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
@@ -36,6 +38,9 @@ type mockCaseService struct {
 	listSubmissionsFn        func(ctx context.Context, orgID, caseID uuid.UUID) ([]*application.SubmissionResponse, error)
 	getCaseFormSubmissionsFn func(ctx context.Context, orgID, caseID uuid.UUID) (map[string]*application.SubmissionResponse, error)
 	getWorkflowReqsFn        func(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error)
+	evaluateRulesFn          func(ctx context.Context, params rulesapplication.EvaluateCaseRulesParams) (*rulesapplication.CaseRuleEvaluationResult, error)
+	getCaseEvaluationsFn     func(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
+	assembleFactsFn          func(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error)
 }
 
 func (m *mockCaseService) CreateCase(ctx context.Context, params application.CreateCaseParams) (*domain.Case, error) {
@@ -139,6 +144,27 @@ func (m *mockCaseService) GetCaseFormSubmissions(ctx context.Context, orgID, cas
 func (m *mockCaseService) GetWorkflowRequirements(ctx context.Context, orgID, caseID uuid.UUID) (*application.WorkflowRequirements, error) {
 	if m.getWorkflowReqsFn != nil {
 		return m.getWorkflowReqsFn(ctx, orgID, caseID)
+	}
+	return nil, nil
+}
+
+func (m *mockCaseService) EvaluateCaseRules(ctx context.Context, params rulesapplication.EvaluateCaseRulesParams) (*rulesapplication.CaseRuleEvaluationResult, error) {
+	if m.evaluateRulesFn != nil {
+		return m.evaluateRulesFn(ctx, params)
+	}
+	return nil, nil
+}
+
+func (m *mockCaseService) GetCaseEvaluations(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error) {
+	if m.getCaseEvaluationsFn != nil {
+		return m.getCaseEvaluationsFn(ctx, orgID, caseID, limit, offset)
+	}
+	return nil, 0, nil
+}
+
+func (m *mockCaseService) AssembleCaseFacts(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error) {
+	if m.assembleFactsFn != nil {
+		return m.assembleFactsFn(ctx, orgID, caseID)
 	}
 	return nil, nil
 }
