@@ -44,6 +44,30 @@ function escapeHTML(str) {
     .replace(/'/g, '&#039;');
 }
 
+function icon(name) {
+  const size = 'width="16" height="16"';
+  const base = 'svg';
+  const icons = {
+    home: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+    settings: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+    eye: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    edit: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+    play: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+    archive: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>`,
+    trash: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+    plus: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+    save: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>`,
+    upload: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    close: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    refresh: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
+    arrowLeft: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
+    search: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+    link: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    lock: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  };
+  return icons[name] || '';
+}
+
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container') || (() => {
     const c = document.createElement('div');
@@ -892,7 +916,7 @@ async loadSection(name, path) {
   },
 
   btn(label, onclick) {
-    return `<button class="btn" onclick="app.${onclick}"><span class="icon">⚡</span> ${label}</button>`;
+    return `<button class="btn" onclick="app.${onclick}"><span class="icon">${icon('settings')}</span> ${label}</button>`;
   },
 
   async loadWorkflowTransitions(caseId) {
@@ -933,7 +957,7 @@ async loadSection(name, path) {
           const formList = missingForms.map(f => `<code>${escapeHTML(f)}</code>`).join(', ');
           html += `
             <button type="button" class="btn secondary" disabled style="opacity:0.6;cursor:not-allowed">
-              <span class="icon">🔒</span> ${escapeHTML(t.name || t.key)}
+              <span class="icon">${icon('lock')}</span> ${escapeHTML(t.name || t.key)}
             </button>
             <div style="margin-top:4px;padding:8px 12px;background:var(--info-light);border-radius:var(--radius-sm);font-size:0.8rem">
               Cannot continue to ${escapeHTML(t.name || t.key)}.
@@ -1210,9 +1234,9 @@ async loadSection(name, path) {
   renderWorkflowListActions() {
     const actions = document.getElementById('wf-list-actions');
     if (!actions) return;
-    actions.innerHTML = `<button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">🏠</span> Dashboard</button>` +
+    actions.innerHTML = `<button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon">${icon('home')}</span> Dashboard</button>` +
       (currentUserIsAdmin()
-        ? ` <button class="btn" onclick="app.showWorkflowCreateView()"><span class="icon">⚙️</span> Create Workflow</button>`
+        ? ` <button class="btn" onclick="app.showWorkflowCreateView()"><span class="icon">${icon('settings')}</span> Create Workflow</button>`
         : '');
   },
 
@@ -1226,18 +1250,18 @@ async loadSection(name, path) {
     const canArchive = d.status === 'ACTIVE';
     const canEdit = d.status === 'DRAFT';
     const canDelete = d.status === 'DRAFT';
-    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${d.id}')"><span class="icon">👁️</span> View</button>`;
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${d.id}')"><span class="icon">${icon('eye')}</span> View</button>`;
     if (canEdit) {
-      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')"><span class="icon">✏️</span> Edit</button>`;
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
     }
     if (canActivate) {
-      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${d.id}')"><span class="icon">▶️</span> Activate</button>`;
+      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${d.id}')"><span class="icon">${icon('play')}</span> Activate</button>`;
     }
     if (canArchive) {
-      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')"><span class="icon">📦</span> Archive</button>`;
+      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')"><span class="icon">${icon('archive')}</span> Archive</button>`;
     }
     if (canDelete) {
-      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')"><span class="icon">🗑️</span> Delete</button>`;
+      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
     }
     return `<tr>
       <td>${escapeHTML(d.name)} <span class="text-muted" style="font-size:0.8rem">(${escapeHTML(d.key)})</span></td>
@@ -1340,10 +1364,10 @@ async loadSection(name, path) {
     const statusBadge = (status, text) => `<span class="badge wf-status-${status.toLowerCase()}" style="text-transform:none">${escapeHTML(text)}</span>`;
     let actions = `<button class="btn secondary sm" onclick="app.showWorkflowsView()"><span class="icon">←</span> Back to Workflows</button>`;
     if (isDraft) {
-      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')"><span class="icon">▶️</span> Activate</button>`;
+      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')"><span class="icon">${icon('play')}</span> Activate</button>`;
     } else if (isActive) {
-      actions += ` <button class="btn sm" onclick="router.navigate('new-case', '${def.id}')"><span class="icon">➕</span> Use for New Case</button>`;
-      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')"><span class="icon">📦</span> Archive</button>`;
+      actions += ` <button class="btn sm" onclick="router.navigate('new-case', '${def.id}')"><span class="icon">${icon('plus')}</span> Use for New Case</button>`;
+      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')"><span class="icon">${icon('archive')}</span> Archive</button>`;
     }
     const badge = statusBadge(def.status, def.status);
 
@@ -1499,7 +1523,7 @@ async loadSection(name, path) {
     container.innerHTML = `
       <div class="header" style="margin-bottom:16px">
         <h1>${title}</h1>
-        <nav><button class="btn secondary sm" onclick="app.cancelWorkflowCreate()"><span class="icon">✖</span> Cancel</button></nav>
+         <nav><button class="btn secondary sm" onclick="app.cancelWorkflowCreate()"><span class="icon">${icon('close')}</span> Cancel</button></nav>
       </div>
       <div class="card">
         <h2>Workflow</h2>
@@ -1517,7 +1541,7 @@ async loadSection(name, path) {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h2>States (${c.states.length})</h2>
-          <button class="btn success" onclick="app.addWorkflowState()"><span class="icon">➕</span> Add State</button>
+           <button class="btn success" onclick="app.addWorkflowState()"><span class="icon">${icon('plus')}</span> Add State</button>
         </div>
         <p class="section-hint">Define the lifecycle states. Mark one as the initial state and any number as terminal.</p>
         <div class="table-wrap">
@@ -1530,7 +1554,7 @@ async loadSection(name, path) {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h2>Transitions (${c.transitions.length})</h2>
-          <button class="btn success" onclick="app.addWorkflowTransition()"><span class="icon">➕</span> Add Transition</button>
+           <button class="btn success" onclick="app.addWorkflowTransition()"><span class="icon">${icon('plus')}</span> Add Transition</button>
         </div>
         <p class="section-hint">Define transitions between states. A transition's source and target must reference existing state keys.</p>
         <div class="table-wrap">
@@ -1658,7 +1682,7 @@ async loadSection(name, path) {
         <td style="white-space:nowrap">
           <button class="btn secondary sm" onclick="app.moveStateUp(${i})">↑</button>
           <button class="btn secondary sm" onclick="app.moveStateDown(${i})">↓</button>
-          <button class="btn danger sm" onclick="app.removeWorkflowState(${i})">✕</button>
+           <button class="btn danger sm" onclick="app.removeWorkflowState(${i})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </td>
       </tr>`;
       }).join('');
@@ -1682,7 +1706,7 @@ async loadSection(name, path) {
         <td><input value="${Array.isArray(t.allowed_roles) ? t.allowed_roles.join(', ') : ''}" oninput="app.onTransitionFieldChange(${i}, 'allowed_roles_raw', this.value)" placeholder="admin, staff"></td>
         <td><input style="width:140px" value="${Array.isArray(t.conditions) && t.conditions.length ? JSON.stringify(t.conditions) : ''}" oninput="app.onTransitionFieldChange(${i}, 'conditions_raw', this.value)" placeholder="[]"></td>
         <td><input value="${escapeHTML(t.description)}" oninput="app.onTransitionFieldChange(${i}, 'description', this.value)"></td>
-        <td style="white-space:nowrap"><button class="btn danger sm" onclick="app.removeWorkflowTransition(${i})">✕</button></td>
+        <td style="white-space:nowrap"><button class="btn danger sm" onclick="app.removeWorkflowTransition(${i})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
       </tr>`;
     }).join('');
   },
@@ -2160,7 +2184,7 @@ async loadSection(name, path) {
     const submitBtn = container.querySelector('button[type="submit"]');
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="loading-spinner" style="width:16px;height:16px"></span> Submitting…';
+        submitBtn.innerHTML = '<span class="icon">' + icon('save') + '</span> Submitting…';
     }
 
     this.currentSubmittingFormKey = formDef.key;
@@ -2214,7 +2238,7 @@ async loadSection(name, path) {
       this.currentSubmittingFormKey = null;
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span class="icon">💾</span> Submit';
+         submitBtn.innerHTML = '<span class="icon">' + icon('save') + '</span> Submit';
       }
     }
   },
@@ -2291,9 +2315,9 @@ async loadSection(name, path) {
     const statusBadge = `<span class="badge wf-status-${statusClass}" style="text-transform:none">${escapeHTML(status)}</span>`;
     const fieldCount = (f.fields || []).length;
     const canEdit = status === 'DRAFT';
-    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showFormDetail('${f.id}')"><span class="icon" aria-hidden="true">👁️</span> View</button>`;
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showFormDetail('${f.id}')"><span class="icon">${icon('eye')}</span> View</button>`;
     if (canEdit) {
-      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="router.navigate('form-design', '${f.id}')"><span class="icon" aria-hidden="true">✏️</span> Edit</button>`;
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="router.navigate('form-design', '${f.id}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
     }
     return `<tr>
       <td>${escapeHTML(f.name || f.key)}</td>
@@ -2476,8 +2500,8 @@ async loadSection(name, path) {
             ${f.required ? '<span class="badge" style="font-size:0.7rem;margin-left:8px">Required</span>' : ''}
           </div>
           <div style="display:flex;gap:4px">
-            <button class="btn secondary sm" style="font-size:0.8rem" onclick="app.editField(${idx})"><span class="icon" aria-hidden="true">✏️</span> Edit</button>
-            <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeField(${idx})"><span class="icon" aria-hidden="true">🗑️</span> Remove</button>
+             <button class="btn secondary sm" style="font-size:0.8rem" onclick="app.editField(${idx})"><span class="icon">${icon('edit')}</span> Edit</button>
+             <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeField(${idx})"><span class="icon">${icon('trash')}</span> Remove</button>
           </div>
         </div>
         <div style="display:flex;gap:16px;font-size:0.85rem;color:var(--text-secondary)">
@@ -2572,7 +2596,7 @@ async loadSection(name, path) {
         <div class="option-row" style="display:flex;gap:8px;align-items:center">
           <input type="text" class="option-value" placeholder="Value" style="flex:1">
           <input type="text" class="option-label" placeholder="Display Label" style="flex:2">
-          <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+           <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       `;
       return;
@@ -2581,7 +2605,7 @@ async loadSection(name, path) {
       <div class="option-row" style="display:flex;gap:8px;align-items:center">
         <input type="text" class="option-value" placeholder="Value" value="${escapeHTML(opt.value || '')}" style="flex:1">
         <input type="text" class="option-label" placeholder="Display Label" value="${escapeHTML(opt.label || '')}" style="flex:2">
-        <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+         <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     `).join('');
   },
@@ -2597,7 +2621,7 @@ async loadSection(name, path) {
     newRow.innerHTML = `
       <input type="text" class="option-value" placeholder="Value" style="flex:1">
       <input type="text" class="option-label" placeholder="Display Label" style="flex:2">
-      <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px">✕</button>
+       <button type="button" class="btn danger sm" onclick="app.removeOption(this)" style="padding:4px 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     `;
     container.appendChild(newRow);
   },
@@ -2818,7 +2842,7 @@ async loadSection(name, path) {
       if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
     } finally {
       const saveBtn = document.getElementById('btn-form-save');
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<span class="icon" aria-hidden="true">💾</span> Save Draft'; }
+      if (saveBtn) { saveBtn.disabled = false;        saveBtn.innerHTML = '<span class="icon">' + icon('save') + '</span> Save Draft'; }
     }
   },
 
@@ -3039,9 +3063,9 @@ async loadSection(name, path) {
     const ruleCount = (rs.rules || []).length;
     const triggers = (rs.triggers || []).join(', ');
     const updatedAt = rs.updated_at ? new Date(rs.updated_at).toLocaleDateString() : '-';
-    let actions = '<button class="btn sm" onclick="app.showRuleSetDetail(\'' + rs.id + '\')"><span class="icon" aria-hidden="true">👁️</span> View</button>';
+     let actions = '<button class="btn sm" onclick="app.showRuleSetDetail(\'' + rs.id + '\')"><span class="icon">' + icon('eye') + '</span> View</button>';
     if (rs.status === 'DRAFT') {
-      actions += '<button class="btn sm danger" onclick="app.deleteRuleSet(\'' + rs.id + '\')"><span class="icon" aria-hidden="true">🗑</span> Delete</button>';
+       actions += '<button class="btn sm danger" onclick="app.deleteRuleSet(\'' + rs.id + '\')"><span class="icon">' + icon('trash') + '</span> Delete</button>';
     }
     return `<tr>
       <td><code>${escapeHTML(rs.key)}</code></td>
@@ -3138,7 +3162,7 @@ async loadSection(name, path) {
 
     const saveBtn = document.getElementById('btn-ruleset-save-draft');
     const publishBtn = document.getElementById('btn-ruleset-publish');
-    if (saveBtn) saveBtn.textContent = this.ruleSetEditMode ? '💾 Save Changes' : '💾 Save Draft';
+     if (saveBtn) saveBtn.textContent = this.ruleSetEditMode ? 'Save Changes' : 'Save Draft';
     if (publishBtn) {
       if (this.ruleSetEditMode && rs.status === 'DRAFT') {
         publishBtn.style.display = 'inline-flex';
@@ -3173,8 +3197,8 @@ async loadSection(name, path) {
           <div style="margin-top:8px;color:var(--text-secondary);font-size:0.9rem">${escapeHTML(condText)}</div>
         </div>
         <div style="display:flex;gap:4px">
-          <button class="btn sm" onclick="app.editRule(${index})"><span class="icon" aria-hidden="true">✏️</span> Edit</button>
-          <button class="btn sm danger" onclick="app.deleteRule(${index})"><span class="icon" aria-hidden="true">🗑</span> Delete</button>
+           <button class="btn sm" onclick="app.editRule(${index})"><span class="icon">${icon('edit')}</span> Edit</button>
+           <button class="btn sm danger" onclick="app.deleteRule(${index})"><span class="icon">${icon('trash')}</span> Delete</button>
         </div>
       </div>
     </div>`;
@@ -3295,8 +3319,8 @@ async loadSection(name, path) {
       }
 
       parts.push(`<div style="display:flex;gap:4px;margin-top:8px">
-        <button class="btn sm" onclick="app.addChildCondition('${path}')"><span class="icon" aria-hidden="true">➕</span> Add Child</button>
-        <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon" aria-hidden="true">🗑</span> Remove</button>
+       <button class="btn sm" onclick="app.addChildCondition('${path}')"><span class="icon">${icon('plus')}</span> Add Child</button>
+       <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon">${icon('trash')}</span> Remove</button>
       </div>`);
       parts.push(`</div>`);
     } else {
@@ -3308,7 +3332,7 @@ async loadSection(name, path) {
             ${this.renderOperatorOptions(cond.Operator)}
           </select>
           <input type="text" id="cond-${path}-value" placeholder="Value" value="${escapeHTML(valStr)}" onchange="app.updateConditionValue('${path}')" style="flex:2;min-width:150px" ${this.isValueLessOperator(cond.Operator) ? 'disabled' : ''}>
-          <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon" aria-hidden="true">🗑</span></button>
+           <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon">${icon('trash')}</span></button>
         </div>
       </div>`);
     }
@@ -3713,12 +3737,12 @@ async loadSection(name, path) {
 
     let actionBtns = '';
     if (rs.status === 'DRAFT') {
-      actionBtns += `<button class="btn" onclick="app.showRuleSetEditView('${rs.id}')"><span class="icon" aria-hidden="true">✏️</span> Edit</button>`;
-      actionBtns += `<button class="btn secondary" onclick="app.publishRuleSetEdit()"><span class="icon" aria-hidden="true">🚀</span> Publish</button>`;
-      actionBtns += `<button class="btn danger" onclick="app.deleteRuleSet('${rs.id}')"><span class="icon" aria-hidden="true">🗑</span> Delete</button>`;
+       actionBtns += `<button class="btn" onclick="app.showRuleSetEditView('${rs.id}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
+       actionBtns += `<button class="btn secondary" onclick="app.publishRuleSetEdit()"><span class="icon">${icon('upload')}</span> Publish</button>`;
+       actionBtns += `<button class="btn danger" onclick="app.deleteRuleSet('${rs.id}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
     } else if (rs.status === 'PUBLISHED') {
-      actionBtns += `<button class="btn secondary" onclick="app.createRuleSetVersionFromDetail()"><span class="icon" aria-hidden="true">📄</span> New Version</button>`;
-      actionBtns += `<button class="btn secondary" onclick="app.archiveRuleSetFromDetail()"><span class="icon" aria-hidden="true">📦</span> Archive</button>`;
+       actionBtns += `<button class="btn secondary" onclick="app.createRuleSetVersionFromDetail()"><span class="icon">${icon('save')}</span> New Version</button>`;
+       actionBtns += `<button class="btn secondary" onclick="app.archiveRuleSetFromDetail()"><span class="icon">${icon('archive')}</span> Archive</button>`;
     } else if (rs.status === 'ARCHIVED') {
       actionBtns = '<span class="badge" style="background:var(--text-secondary)">This rule set is archived.</span>';
     }
@@ -3740,7 +3764,7 @@ async loadSection(name, path) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn secondary" onclick="router.navigate('rules')">← Rules</button>
         ${actionBtns}
-        <button class="btn secondary" onclick="app.showEvaluateModal('${rs.id}')"><span class="icon" aria-hidden="true">▶</span> Evaluate</button>
+        <button class="btn secondary" onclick="app.showEvaluateModal('${rs.id}')"><span class="icon">${icon('play')}</span> Evaluate</button>
       </div>
     </div>
 

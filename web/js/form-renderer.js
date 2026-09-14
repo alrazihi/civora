@@ -668,7 +668,7 @@
     const submitBtn = document.createElement('button');
     submitBtn.type = 'submit';
     submitBtn.className = 'btn';
-    submitBtn.innerHTML = '<span class="icon">💾</span> Submit';
+     submitBtn.innerHTML = '<span class="icon">' + (window.icon ? window.icon('save') : 'Save') + '</span> Submit';
     actionBar.appendChild(submitBtn);
 
     form.appendChild(actionBar);
