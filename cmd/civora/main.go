@@ -52,6 +52,9 @@ import (
 	peopleapi "github.com/alrazihi/civora/internal/people/api"
 	peoplapp "github.com/alrazihi/civora/internal/people/application"
 	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
+	rulesapi "github.com/alrazihi/civora/internal/rules/api"
+	rulesapp "github.com/alrazihi/civora/internal/rules/application"
+	rulespostgres "github.com/alrazihi/civora/internal/rules/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/server"
 	workflowapi "github.com/alrazihi/civora/internal/workflow/api"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
@@ -103,6 +106,9 @@ func main() {
 	formRepo := formpostgres.NewPostgresFormRepository(db.DB)
 	formVersionRepo := formpostgres.NewPostgresFormVersionRepository(db.DB)
 	formFieldRepo := formpostgres.NewPostgresFormFieldRepository(db.DB)
+
+	ruleSetRepo := rulespostgres.NewPostgresRuleSetRepository(db.DB)
+	evalRepo := rulespostgres.NewPostgresEvaluationRepository(db.DB)
 
 	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
 	workflowStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db.DB)
@@ -202,6 +208,9 @@ func main() {
 	formService := formapp.NewFormService(formRepo, formVersionRepo, formFieldRepo, auditService)
 	formHandler := formapi.NewHandler(formService)
 
+	rulesService := rulesapp.NewRuleSetService(ruleSetRepo, evalRepo, formService, auditService)
+	rulesHandler := rulesapi.NewHandler(rulesService)
+
 	auditHandler := auditapi.NewHandler(auditService)
 
 	workflowHandler := workflowapi.NewHandler(workflowService)
@@ -228,6 +237,7 @@ func main() {
 	assistanceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	followUpHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	formHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	rulesHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)

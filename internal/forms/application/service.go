@@ -652,6 +652,47 @@ type GetActiveVersionParams struct {
 	FormID         uuid.UUID
 }
 
+func (s *FormService) ListDiscoverableFields(ctx context.Context, orgID uuid.UUID) ([]shared.FormFieldView, error) {
+	forms, _, err := s.repo.List(ctx, orgID, 200, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list forms: %w", err)
+	}
+
+	var fields []shared.FormFieldView
+	for _, form := range forms {
+		if form.Status != domain.FormStatusActive {
+			continue
+		}
+		version, err := s.versionRepo.FindActiveVersion(ctx, orgID, form.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find active version for form %s: %w", form.Key, err)
+		}
+		if version == nil {
+			continue
+		}
+		formFields, err := s.fieldRepo.FindByVersion(ctx, orgID, version.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list fields for form %s: %w", form.Key, err)
+		}
+		for _, f := range formFields {
+			view := shared.FormFieldView{
+				Key:      fmt.Sprintf("%s.%s.%s", "form", form.Key, f.Key),
+				Label:    fmt.Sprintf("%s: %s", form.Name, f.Label),
+				Type:     string(f.Type),
+				Required: f.Required,
+			}
+			for _, opt := range f.Options {
+				view.Options = append(view.Options, shared.FormOptionView{
+					Value: opt.Value,
+					Label: opt.Label,
+				})
+			}
+			fields = append(fields, view)
+		}
+	}
+	return fields, nil
+}
+
 func (s *FormService) GetActiveVersion(ctx context.Context, params GetActiveVersionParams) (*domain.FormVersion, error) {
 	version, err := s.versionRepo.FindActiveVersion(ctx, params.OrganizationID, params.FormID)
 	if err != nil {

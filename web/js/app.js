@@ -334,6 +334,8 @@ const app = {
     // Show/hide Forms nav button based on admin role
     const formsNav = document.getElementById('btn-forms-nav');
     if (formsNav) formsNav.style.display = currentUserIsAdmin() ? 'inline-flex' : 'none';
+    const rulesNav = document.getElementById('btn-rules-nav');
+    if (rulesNav) rulesNav.style.display = currentUserIsAdmin() ? 'inline-flex' : 'none';
 
     const tbody = document.getElementById('case-table-body');
     const statsEl = document.getElementById('dashboard-stats');
@@ -1166,7 +1168,7 @@ async loadSection(name, path) {
   },
 
   switchView(viewId) {
-    const views = ['view-login', 'view-dashboard', 'view-case', 'view-new-case', 'view-workflows', 'view-workflow-detail', 'view-new-workflow', 'view-forms', 'view-form-design', 'view-form-detail'];
+    const views = ['view-login', 'view-dashboard', 'view-case', 'view-new-case', 'view-workflows', 'view-workflow-detail', 'view-new-workflow', 'view-forms', 'view-form-design', 'view-form-detail', 'view-rules', 'view-rule-set-edit', 'view-rule-set-detail'];
     views.forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', id !== viewId);
@@ -2982,6 +2984,808 @@ async loadSection(name, path) {
       showToast(`Failed to remove assignment: ${escapeHTML(err.message)}`, 'error');
     }
   },
+
+  // ── Rules Engine UI ─────────────────────────────────────────────────
+
+  ruleSetCurrentId: null,
+  ruleSetCurrentKey: '',
+  ruleSetEditMode: false,
+  ruleSetDraft: null,
+  ruleSetVersions: [],
+  ruleSetPublishedVersion: null,
+
+  async loadRuleSets(page = 1) {
+    this.ruleSetPage = page;
+    const tbody = document.getElementById('rules-table-body');
+    const errorEl = document.getElementById('rules-list-error');
+    const loadingEl = document.getElementById('rules-list-loading');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty">Loading rule sets…</td></tr>';
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
+
+    try {
+      const filters = { page };
+      const search = document.getElementById('rules-search');
+      if (search && search.value) filters.key = search.value;
+      const statusFilter = document.getElementById('rules-status-filter');
+      if (statusFilter && statusFilter.value) filters.status = statusFilter.value;
+      const res = await window.RulesAPI.listRuleSets(filters);
+      const ruleSets = res.data || [];
+      const total = (res.meta && res.meta.total) || ruleSets.length;
+      const perPage = (res.meta && res.meta.per_page) || 20;
+      const totalPages = (res.meta && res.meta.total_pages) || Math.ceil(total / perPage) || 1;
+
+      if (!ruleSets.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty">No rule sets yet. Create one to get started.</td></tr>';
+      } else {
+        tbody.innerHTML = ruleSets.map(rs => this.renderRuleSetRow(rs)).join('');
+      }
+      this.renderRulesPagination(page, totalPages, total);
+      if (errorEl) errorEl.classList.add('hidden');
+    } catch (err) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty">Error loading rule sets: ' + escapeHTML(err.message) + '</td></tr>';
+      if (errorEl) {
+        errorEl.textContent = 'Failed to load rule sets: ' + escapeHTML(err.message);
+        errorEl.classList.remove('hidden');
+      }
+    } finally {
+      if (loadingEl) loadingEl.classList.add('hidden');
+    }
+  },
+
+  renderRuleSetRow(rs) {
+    const statusClass = rs.status === 'PUBLISHED' ? 'wf-status-published' : rs.status === 'DRAFT' ? 'wf-status-draft' : 'wf-status-archived';
+    const outcomeLabel = rs.default_outcome ? rs.default_outcome.replace(/_/g, ' ') : '-';
+    const ruleCount = (rs.rules || []).length;
+    const triggers = (rs.triggers || []).join(', ');
+    const updatedAt = rs.updated_at ? new Date(rs.updated_at).toLocaleDateString() : '-';
+    let actions = '<button class="btn sm" onclick="app.showRuleSetDetail(\'' + rs.id + '\')"><span class="icon" aria-hidden="true">👁️</span> View</button>';
+    if (rs.status === 'DRAFT') {
+      actions += '<button class="btn sm danger" onclick="app.deleteRuleSet(\'' + rs.id + '\')"><span class="icon" aria-hidden="true">🗑</span> Delete</button>';
+    }
+    return `<tr>
+      <td><code>${escapeHTML(rs.key)}</code></td>
+      <td>${escapeHTML(rs.name)}</td>
+      <td>${rs.version || 1}</td>
+      <td><span class="badge ${statusClass}">${escapeHTML(rs.status)}</span></td>
+      <td>${escapeHTML(outcomeLabel)}</td>
+      <td>${ruleCount}</td>
+      <td>${escapeHTML(triggers)}</td>
+      <td>${updatedAt}</td>
+      <td>${actions}</td>
+    </tr>`;
+  },
+
+  renderRulesPagination(page, totalPages, total) {
+    const pag = document.getElementById('rules-pagination');
+    if (!pag) return;
+    let html = '';
+    if (totalPages > 1) {
+      html += '<span style="font-size:0.85rem;color:var(--text-secondary)">Page ' + page + ' of ' + totalPages + ' (' + total + ' rule set' + (total === 1 ? '' : 's') + ')</span>';
+      if (page > 1) html += ' <a href="#" onclick="app.loadRuleSets(' + (page - 1) + ')">Previous</a>';
+      if (page < totalPages) html += ' <a href="#" onclick="app.loadRuleSets(' + (page + 1) + ')">Next</a>';
+    }
+    pag.innerHTML = html;
+  },
+
+  clearRulesSearch() {
+    const search = document.getElementById('rules-search');
+    const statusFilter = document.getElementById('rules-status-filter');
+    if (search) search.value = '';
+    if (statusFilter) statusFilter.value = '';
+    this.loadRuleSets(1);
+  },
+
+  showRuleSetCreateView() {
+    this.ruleSetEditMode = false;
+    this.ruleSetCurrentId = null;
+    this.ruleSetDraft = {
+      key: '',
+      name: '',
+      description: '',
+      default_outcome: 'INELIGIBLE',
+      rules: [],
+      triggers: [],
+    };
+    this.switchView('view-rule-set-edit');
+    this.renderRuleSetForm();
+  },
+
+  async showRuleSetDetail(id) {
+    this.ruleSetCurrentId = id;
+    const container = document.getElementById('ruleset-detail-container');
+    if (!container) return;
+    this.switchView('view-rule-set-detail');
+    container.innerHTML = '<div class="loading" style="text-align:center;padding:40px"><div class="loading-spinner" aria-hidden="true"></div> Loading rule set…</div>';
+
+    try {
+      const rs = await window.RulesAPI.getRuleSet(id);
+      this.ruleSetDraft = rs;
+      this.ruleSetPublishedVersion = rs;
+      container.innerHTML = this.renderRuleSetDetail(rs);
+    } catch (err) {
+      container.innerHTML = '<div class="hidden" style="color:var(--danger);padding:20px;background:var(--danger-light);border:1px solid var(--danger);border-radius:var(--radius-sm)" role="alert">Failed to load rule set: ' + escapeHTML(err.message) + '</div>';
+    }
+  },
+
+  async showRuleSetEditView(id) {
+    this.ruleSetEditMode = true;
+    this.ruleSetCurrentId = id;
+    this.switchView('view-rule-set-edit');
+
+    try {
+      const rs = await window.RulesAPI.getRuleSet(id);
+      this.ruleSetDraft = rs;
+      this.renderRuleSetForm();
+    } catch (err) {
+      const errEl = document.getElementById('ruleset-edit-error');
+      if (errEl) {
+        errEl.textContent = 'Failed to load rule set: ' + escapeHTML(err.message);
+        errEl.classList.remove('hidden');
+      }
+    }
+  },
+
+  renderRuleSetForm() {
+    const rs = this.ruleSetDraft;
+    document.getElementById('ruleset-edit-title').textContent = this.ruleSetEditMode ? 'Edit Rule Set' : 'New Rule Set';
+    document.getElementById('ruleset-edit-key').value = rs.key || '';
+    document.getElementById('ruleset-edit-name').value = rs.name || '';
+    document.getElementById('ruleset-edit-description').value = rs.description || '';
+    document.getElementById('ruleset-edit-key').disabled = this.ruleSetEditMode;
+    document.getElementById('ruleset-edit-default-outcome').value = rs.default_outcome || 'INELIGIBLE';
+    document.getElementById('ruleset-triggers').value = (rs.triggers || []).join(', ');
+
+    const saveBtn = document.getElementById('btn-ruleset-save-draft');
+    const publishBtn = document.getElementById('btn-ruleset-publish');
+    if (saveBtn) saveBtn.textContent = this.ruleSetEditMode ? '💾 Save Changes' : '💾 Save Draft';
+    if (publishBtn) {
+      if (this.ruleSetEditMode && rs.status === 'DRAFT') {
+        publishBtn.style.display = 'inline-flex';
+      } else {
+        publishBtn.style.display = 'none';
+      }
+    }
+
+    this.renderRulesList(rs.rules || []);
+    this.renderFieldSuggestions();
+  },
+
+  renderRulesList(rules) {
+    const container = document.getElementById('rules-list');
+    if (!container) return;
+    if (!rules.length) {
+      container.innerHTML = '<div class="empty" style="padding:20px;text-align:center">No rules yet. Add one to get started.</div>';
+      return;
+    }
+    container.innerHTML = rules.map((rule, i) => this.renderRuleCard(rule, i)).join('');
+  },
+
+  renderRuleCard(rule, index) {
+    const outcomeLabel = rule.outcome ? rule.outcome.replace(/_/g, ' ') : '—';
+    const activeLabel = rule.active !== false ? 'Active' : 'Inactive';
+    const condText = this.conditionToSummary(rule.conditions || {});
+    return `<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div style="flex:1">
+          <strong>Rule ${index + 1}</strong> · <span class="badge" style="background:var(--info-light);color:var(--info)">${escapeHTML(outcomeLabel)}</span>
+          <span class="badge" style="background:var(--bg);color:var(--text-secondary);font-size:0.75rem">${escapeHTML(activeLabel)}</span>
+          <div style="margin-top:8px;color:var(--text-secondary);font-size:0.9rem">${escapeHTML(condText)}</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn sm" onclick="app.editRule(${index})"><span class="icon" aria-hidden="true">✏️</span> Edit</button>
+          <button class="btn sm danger" onclick="app.deleteRule(${index})"><span class="icon" aria-hidden="true">🗑</span> Delete</button>
+        </div>
+      </div>
+    </div>`;
+  },
+
+  conditionToSummary(c) {
+    if (!c) return '(none)';
+    if (!c.Field) {
+      const parts = [];
+      if ((c.All || []).length) parts.push('ALL(' + c.All.map(x => this.conditionToSummary(x)).join(', ') + ')');
+      if ((c.Any || []).length) parts.push('ANY(' + c.Any.map(x => this.conditionToSummary(x)).join(', ') + ')');
+      if (c.Not) parts.push('NOT(' + this.conditionToSummary(c.Not) + ')');
+      return parts.join(' + ');
+    }
+    const valStr = c.Value !== undefined && c.Value !== null ? JSON.stringify(c.Value) : '';
+    return `${c.Field} ${c.Operator} ${valStr}`;
+  },
+
+  async addRule() {
+    this.ruleEditorMode = 'add';
+    this.ruleEditorIndex = null;
+    this.ruleEditorDraft = { outcome: 'ELIGIBLE', active: true, conditions: {} };
+    this.openRuleEditor();
+  },
+
+  editRule(index) {
+    this.ruleEditorMode = 'edit';
+    this.ruleEditorIndex = index;
+    this.ruleEditorDraft = JSON.parse(JSON.stringify(this.ruleSetDraft.rules[index]));
+    this.openRuleEditor();
+  },
+
+  deleteRule(index) {
+    this.ruleSetDraft.rules.splice(index, 1);
+    this.renderRulesList(this.ruleSetDraft.rules);
+  },
+
+  openRuleEditor() {
+    const modal = document.getElementById('rule-editor-modal');
+    const title = document.getElementById('rule-editor-modal-title');
+    if (title) title.textContent = this.ruleEditorMode === 'add' ? 'Add Rule' : 'Edit Rule';
+    if (modal) modal.classList.remove('hidden');
+    if (!this.ruleEditorDraft.conditions) {
+      this.ruleEditorDraft.conditions = {};
+    }
+    if (!this.ruleEditorDraft.conditions.Field && !this.ruleEditorDraft.conditions.All && !this.ruleEditorDraft.conditions.Any && !this.ruleEditorDraft.conditions.Not) {
+      this.ruleEditorDraft.conditions = { Field: '', Operator: 'eq', Value: '' };
+    }
+    this.renderConditionBuilder(this.ruleEditorDraft.conditions);
+    document.getElementById('rule-outcome').value = this.ruleEditorDraft.outcome || 'ELIGIBLE';
+  },
+
+  cancelRuleEditor() {
+    const modal = document.getElementById('rule-editor-modal');
+    if (modal) modal.classList.add('hidden');
+  },
+
+  saveRuleEditor() {
+    const outcome = document.getElementById('rule-outcome').value;
+    const conditions = this.serializeConditionBuilder();
+
+    if (!conditions) {
+      showToast('Please define at least one condition', 'error');
+      return;
+    }
+
+    const rule = {
+      outcome: outcome,
+      active: true,
+      conditions: conditions,
+    };
+
+    if (this.ruleEditorMode === 'edit') {
+      this.ruleSetDraft.rules[this.ruleEditorIndex] = rule;
+    } else {
+      this.ruleSetDraft.rules.push(rule);
+    }
+
+    this.cancelRuleEditor();
+    this.renderRulesList(this.ruleSetDraft.rules);
+  },
+
+  renderConditionBuilder(cond) {
+    const root = document.getElementById('condition-root');
+    if (!root) return;
+    root.innerHTML = this.renderConditionNode(cond, 'root');
+  },
+
+  renderConditionNode(cond, path) {
+    const parts = [];
+
+    if (cond.Field === undefined) {
+      parts.push(`<div class="condition-node" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">`);
+      parts.push(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <select onchange="app.updateConditionOp('${path}','all',this.value)" style="flex:1">
+          <option value="all" ${(!cond.Any && !cond.Not && cond.All) ? 'selected' : ''}>ALL (AND)</option>
+          <option value="any" ${cond.Any ? 'selected' : ''}>ANY (OR)</option>
+          <option value="not" ${cond.Not ? 'selected' : ''}>NOT</option>
+        </select>
+      </div>`);
+
+      if (cond.All) {
+        parts.push(`<div id="cond-${path}-children">`);
+        cond.All.forEach((c, i) => {
+          parts.push(this.renderConditionNode(c, `${path}.all.${i}`));
+        });
+        parts.push(`</div>`);
+      } else if (cond.Any) {
+        parts.push(`<div id="cond-${path}-children">`);
+        cond.Any.forEach((c, i) => {
+          parts.push(this.renderConditionNode(c, `${path}.any.${i}`));
+        });
+        parts.push(`</div>`);
+      } else if (cond.Not) {
+        parts.push(`<div id="cond-${path}-children">`);
+        parts.push(this.renderConditionNode(cond.Not, `${path}.not.0`));
+        parts.push(`</div>`);
+      }
+
+      parts.push(`<div style="display:flex;gap:4px;margin-top:8px">
+        <button class="btn sm" onclick="app.addChildCondition('${path}')"><span class="icon" aria-hidden="true">➕</span> Add Child</button>
+        <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon" aria-hidden="true">🗑</span> Remove</button>
+      </div>`);
+      parts.push(`</div>`);
+    } else {
+      const valStr = cond.Value !== undefined && cond.Value !== null ? JSON.stringify(cond.Value) : '';
+      parts.push(`<div class="condition-node" style="border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="cond-${path}-field" placeholder="Field path" value="${escapeHTML(cond.Field)}" onchange="app.updateConditionField('${path}')" style="flex:2;min-width:150px">
+          <select id="cond-${path}-op" onchange="app.updateConditionOp('${path}','leaf')" style="flex:1;min-width:120px">
+            ${this.renderOperatorOptions(cond.Operator)}
+          </select>
+          <input type="text" id="cond-${path}-value" placeholder="Value" value="${escapeHTML(valStr)}" onchange="app.updateConditionValue('${path}')" style="flex:2;min-width:150px" ${this.isValueLessOperator(cond.Operator) ? 'disabled' : ''}>
+          <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon" aria-hidden="true">🗑</span></button>
+        </div>
+      </div>`);
+    }
+    return parts.join('');
+  },
+
+  isValueLessOperator(op) {
+    return op === 'exists' || op === 'not_exists';
+  },
+
+  renderOperatorOptions(selected) {
+    const ops = [
+      ['eq', 'Equals'], ['neq', 'Not Equals'],
+      ['gt', 'Greater Than'], ['gte', 'Greater or Equal'],
+      ['lt', 'Less Than'], ['lte', 'Less or Equal'],
+      ['in', 'In List'], ['not_in', 'Not In List'],
+      ['is', 'Is'], ['is_not', 'Is Not'],
+      ['exists', 'Exists'], ['not_exists', 'Does Not Exist'],
+      ['contains', 'Contains'], ['matches', 'Matches Regex'],
+    ];
+    return ops.map(([v, l]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${l}</option>`).join('');
+  },
+
+  updateConditionField(path) {
+    const el = document.getElementById(`cond-${path}-field`);
+    if (el) {
+      this.setConditionByPath(path, { Field: el.value });
+    }
+  },
+
+  updateConditionOp(path, mode, value) {
+    if (mode === 'leaf') {
+      const op = value;
+      const valEl = document.getElementById(`cond-${path}-value`);
+      this.setConditionByPath(path, { Operator: op, Value: op === 'exists' || op === 'not_exists' ? null : this.parseValue(valEl ? valEl.value : '') });
+      if (valEl) valEl.disabled = this.isValueLessOperator(op);
+      this.renderConditionBuilder(this.ruleEditorDraft.conditions);
+    } else {
+      this.setConditionByPath(path, { type: mode });
+      this.renderConditionBuilder(this.ruleEditorDraft.conditions);
+    }
+  },
+
+  updateConditionValue(path) {
+    const el = document.getElementById(`cond-${path}-value`);
+    if (el) {
+      const op = this.getConditionByPath(path).Operator;
+      this.setConditionByPath(path, { Value: this.parseValue(el.value), Operator: op });
+    }
+  },
+
+  parseValue(str) {
+    if (!str || str.trim() === '') return null;
+    const trimmed = str.trim();
+    const op = this.getConditionByPath ? null : null;
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try { return JSON.parse(trimmed); } catch (e) { return str; }
+    }
+    if (trimmed === 'true' || trimmed === 'false') return trimmed === 'true';
+    if (!isNaN(Number(trimmed))) {
+      const n = Number(trimmed);
+      if (Number.isInteger(n)) return n;
+      return n;
+    }
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      try { return JSON.parse(trimmed); } catch (e) { return trimmed; }
+    }
+    return trimmed;
+  },
+
+  setConditionByPath(path, updates) {
+    if (path === 'root') {
+      Object.assign(this.ruleEditorDraft.conditions, updates);
+      return;
+    }
+    const parts = path.split('.');
+    let cur = this.ruleEditorDraft.conditions;
+    for (let i = 0; i < parts.length - 2; i++) {
+      const key = parts[i];
+      if (key === 'all' || key === 'any') {
+        const idx = parseInt(parts[i + 1]);
+        if (!cur[key]) cur[key] = [];
+        if (!cur[key][idx]) cur[key][idx] = {};
+        cur = cur[key][idx];
+        i++;
+      } else if (key === 'not') {
+        if (!cur.Not) cur.Not = {};
+        cur = cur.Not;
+      }
+    }
+    const last = parts[parts.length - 1];
+    const parentKey = parts[parts.length - 2];
+    if (parentKey === 'all' || parentKey === 'any') {
+      if (!cur[parentKey]) cur[parentKey] = [];
+      const idx = parseInt(last);
+      if (!cur[parentKey][idx]) cur[parentKey][idx] = {};
+    }
+    Object.assign(cur, updates);
+  },
+
+  getConditionByPath(path) {
+    if (path === 'root') return this.ruleEditorDraft.conditions;
+    const parts = path.split('.');
+    let cur = this.ruleEditorDraft.conditions;
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === 'all' || parts[i] === 'any') {
+        cur = (cur[parts[i]] || [])[parseInt(parts[i + 1])];
+        i++;
+      } else if (parts[i] === 'not') {
+        cur = cur.Not;
+      }
+    }
+    return cur;
+  },
+
+  addChildCondition(path) {
+    this.setConditionByPath(path, { child: {} });
+    this.renderConditionBuilder(this.ruleEditorDraft.conditions);
+  },
+
+  removeChildCondition(path) {
+    if (path === 'root') {
+      this.ruleEditorDraft.conditions = {};
+      return;
+    }
+    const parts = path.split('.');
+    const parentPath = parts.slice(0, -2).join('.');
+    const parentKey = parts[parts.length - 2];
+    const idx = parseInt(parts[parts.length - 1]);
+    const parent = parentPath ? this.getConditionByPath(parentPath) : this.ruleEditorDraft.conditions;
+    if (parent[parentKey] && parent[parentKey][idx]) {
+      parent[parentKey].splice(idx, 1);
+    }
+    this.renderConditionBuilder(this.ruleEditorDraft.conditions);
+  },
+
+  serializeConditionBuilder() {
+    const cond = JSON.parse(JSON.stringify(this.ruleEditorDraft.conditions));
+    this.cleanCondition(cond);
+    if (!cond.Field && !cond.All && !cond.Any && !cond.Not) return null;
+    return cond;
+  },
+
+  cleanCondition(c) {
+    if (!c) return;
+    if (c.Field) {
+      delete c.All; delete c.Any; delete c.Not;
+    } else {
+      delete c.Field; delete c.Operator; delete c.Value;
+      if (c.All) c.All.forEach(x => this.cleanCondition(x));
+      if (c.Any) c.Any.forEach(x => this.cleanCondition(x));
+      if (c.Not) this.cleanCondition(c.Not);
+    }
+  },
+
+  async renderFieldSuggestions() {
+    try {
+      const fields = await window.RulesAPI.listDiscoverableFields();
+      const dl = document.getElementById('cond-field-suggestions');
+      if (dl && fields.length) {
+        dl.innerHTML = fields.map(f => `<option value="${escapeHTML(f.key)}">${escapeHTML(f.label)}</option>`).join('');
+      }
+    } catch (e) {
+      // Field discovery is optional; continue without suggestions.
+    }
+  },
+
+  async validateRuleSet() {
+    const resultEl = document.getElementById('ruleset-validation-result');
+    if (!resultEl) return;
+    resultEl.classList.remove('hidden');
+    resultEl.style.background = 'var(--info-light)';
+    resultEl.style.borderColor = 'var(--info)';
+    resultEl.style.color = 'var(--info)';
+    resultEl.innerHTML = '<div class="loading-spinner" style="margin:0 auto 8px" aria-hidden="true"></div>Validating rule set…';
+
+    try {
+      const rs = this.ruleSetDraft;
+      const rules = rs.rules || [];
+      if (!rules.length) {
+        resultEl.style.background = 'var(--danger-light)';
+        resultEl.style.borderColor = 'var(--danger)';
+        resultEl.style.color = 'var(--danger)';
+        resultEl.textContent = 'Validation failed: At least one rule is required.';
+        return;
+      }
+      for (let i = 0; i < rules.length; i++) {
+        if (!rules[i].outcome) {
+          resultEl.style.background = 'var(--danger-light)';
+          resultEl.style.borderColor = 'var(--danger)';
+          resultEl.style.color = 'var(--danger)';
+          resultEl.textContent = `Validation failed: Rule ${i + 1} is missing an outcome.`;
+          return;
+        }
+        if (!this.validateCondition(rules[i].conditions)) {
+          resultEl.style.background = 'var(--danger-light)';
+          resultEl.style.borderColor = 'var(--danger)';
+          resultEl.style.color = 'var(--danger)';
+          resultEl.textContent = `Validation failed: Rule ${i + 1} has an invalid condition.`;
+          return;
+        }
+      }
+      resultEl.style.background = 'var(--success-light)';
+      resultEl.style.borderColor = 'var(--success)';
+      resultEl.style.color = 'var(--success)';
+      resultEl.textContent = '✓ Rule set is valid.';
+    } catch (err) {
+      resultEl.style.background = 'var(--danger-light)';
+      resultEl.style.borderColor = 'var(--danger)';
+      resultEl.style.color = 'var(--danger)';
+      resultEl.textContent = 'Validation error: ' + escapeHTML(err.message);
+    }
+  },
+
+  validateCondition(c) {
+    if (!c) return false;
+    if (c.Field) {
+      if (!c.Operator) return false;
+      return true;
+    }
+    if (c.All) return c.All.every(x => this.validateCondition(x));
+    if (c.Any) return c.Any.every(x => this.validateCondition(x));
+    if (c.Not) return this.validateCondition(c.Not);
+    return false;
+  },
+
+  async saveRuleSetDraft() {
+    const errEl = document.getElementById('ruleset-edit-error');
+    const key = document.getElementById('ruleset-edit-key');
+    const name = document.getElementById('ruleset-edit-name');
+    if (errEl) errEl.classList.add('hidden');
+
+    if (!name.value.trim()) {
+      if (errEl) { errEl.textContent = 'Name is required.'; errEl.classList.remove('hidden'); }
+      return;
+    }
+    if (!key.value.trim()) {
+      if (errEl) { errEl.textContent = 'Key is required.'; errEl.classList.remove('hidden'); }
+      return;
+    }
+
+    const triggersStr = document.getElementById('ruleset-triggers').value;
+    const triggers = triggersStr ? triggersStr.split(',').map(t => t.trim()).filter(t => t) : [];
+    const defaultOutcome = document.getElementById('ruleset-edit-default-outcome').value;
+
+    const payload = {
+      name: name.value,
+      description: document.getElementById('ruleset-edit-description').value,
+      default_outcome: defaultOutcome,
+      rules: this.ruleSetDraft.rules || [],
+      triggers: triggers,
+    };
+
+    try {
+      if (this.ruleSetEditMode) {
+        await window.RulesAPI.updateRuleSet(this.ruleSetCurrentId, payload);
+        showToast('Rule set updated', 'success');
+      } else {
+        payload.key = key.value;
+        await window.RulesAPI.createRuleSet(payload);
+        showToast('Rule set created', 'success');
+      }
+      router.navigate('rules');
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = 'Failed to save rule set: ' + escapeHTML(err.message);
+        errEl.classList.remove('hidden');
+      }
+    }
+  },
+
+  async createRuleSetVersionFromDetail() {
+    const id = this.ruleSetCurrentId;
+    try {
+      const rs = await window.RulesAPI.createRuleSetVersion(id);
+      showToast('New version created', 'success');
+      this.showRuleSetDetail(rs.id);
+    } catch (err) {
+      showToast('Failed to create version: ' + escapeHTML(err.message), 'error');
+    }
+  },
+
+  async publishRuleSetEdit() {
+    const id = this.ruleSetCurrentId;
+    try {
+      const rs = await window.RulesAPI.publishRuleSet(id);
+      showToast('Rule set published', 'success');
+      this.showRuleSetDetail(rs.id);
+    } catch (err) {
+      showToast('Failed to publish: ' + escapeHTML(err.message), 'error');
+    }
+  },
+
+  async showEvaluateModal(ruleSetId) {
+    this.ruleSetCurrentId = ruleSetId;
+    const modal = document.getElementById('evaluation-modal');
+    if (modal) modal.classList.remove('hidden');
+    document.getElementById('eval-case-id').value = '';
+    document.getElementById('eval-trigger').value = 'MANUAL';
+    document.getElementById('eval-facts').value = '';
+  },
+
+  cancelEvaluationModal() {
+    const modal = document.getElementById('evaluation-modal');
+    if (modal) modal.classList.add('hidden');
+  },
+
+  async runEvaluation() {
+    const ruleSetId = this.ruleSetCurrentId;
+    const caseId = document.getElementById('eval-case-id').value.trim();
+    const trigger = document.getElementById('eval-trigger').value;
+    const factsStr = document.getElementById('eval-facts').value.trim();
+
+    let facts;
+    try {
+      facts = factsStr ? JSON.parse(factsStr) : {};
+    } catch (e) {
+      showToast('Invalid JSON in facts field', 'error');
+      return;
+    }
+
+    this.cancelEvaluationModal();
+
+    try {
+      const ev = await window.RulesAPI.evaluateRuleSet(ruleSetId, facts, caseId || undefined, trigger);
+      this.showEvaluationResult(ev);
+    } catch (err) {
+      showToast('Evaluation failed: ' + escapeHTML(err.message), 'error');
+    }
+  },
+
+  showEvaluationResult(ev) {
+    const modal = document.getElementById('rule-editor-modal');
+    if (modal) modal.classList.add('hidden');
+    const container = document.getElementById('ruleset-detail-container');
+    if (!container || !ev) return;
+    container.innerHTML = this.renderEvaluationResult(ev);
+    this.switchView('view-rule-set-detail');
+  },
+
+  renderEvaluationResult(ev) {
+    const outcomeLabel = (ev.outcome || '').replace(/_/g, ' ');
+    const trace = ev.trace || [];
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="margin:0">Evaluation Result</h2>
+        <button class="btn sm" onclick="app.showRuleSetDetail('${ev.rule_set_id}')"><span class="icon" aria-hidden="true">←</span> Back to Rule Set</button>
+      </div>
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">
+        <span class="badge" style="font-size:1.2rem;padding:8px 16px;background:var(--${ev.status === 'ELIGIBLE' ? 'success' : ev.status === 'INELIGIBLE' ? 'danger' : 'info'}-light);color:var(--${ev.status === 'ELIGIBLE' ? 'success' : ev.status === 'INELIGIBLE' ? 'danger' : 'info'})">
+          ${escapeHTML(outcomeLabel)}
+        </span>
+        <span class="text-muted">Ruleset Version: ${ev.rule_set_version}</span>
+        <span class="text-muted">Trigger: ${escapeHTML(ev.trigger || '')}</span>
+      </div>
+      ${ev.reason ? `<div class="card" style="background:var(--bg);border:1px solid var(--border)"><strong>Reason:</strong> ${escapeHTML(ev.reason)}</div>` : ''}
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin:0 0 12px 0">Evaluation Trace</h3>
+        <div id="eval-trace-tree">${this.renderTraceNode(trace, ev)}</div>
+      </div>
+    </div>`;
+  },
+
+  renderTraceNode(trace, ev) {
+    if (!trace || !trace.length) return '<div class="text-muted">No trace available.</div>';
+    const root = trace.find(n => n.node_type === 'root') || trace[0];
+    return '<div style="margin-left:0">' + this.renderTraceNodeRecursive(root, 0) + '</div>';
+  },
+
+  renderTraceNodeRecursive(node, depth) {
+    const indent = depth * 20;
+    const resultClass = node.result === 'TRUE' ? 'var(--success)' : node.result === 'FALSE' ? 'var(--danger)' : node.result === 'ERROR' ? 'var(--danger)' : 'var(--text-secondary)';
+    let html = `<div style="margin-left:${indent}px;border-left:${depth > 0 ? '1px solid var(--border)' : 'none'};padding-left:${depth > 0 ? 8 : 0}px;margin-bottom:4px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <code style="font-size:0.8rem">${escapeHTML(node.node_type)}</code>
+        <span style="font-weight:600">${escapeHTML(node.description || '')}</span>
+        ${node.result ? `<span style="color:${resultClass}">[${escapeHTML(node.result)}]</span>` : ''}
+      </div>`;
+    if (node.field) {
+      html += `<div style="margin-left:12px;color:var(--text-secondary);font-size:0.85rem">
+        ${escapeHTML(node.field)} ${escapeHTML(node.operator)} expected: <code>${escapeHTML(JSON.stringify(node.expected))}</code> actual: <code>${escapeHTML(JSON.stringify(node.actual))}</code> (${node.actual_type || 'unknown'})
+      </div>`;
+    }
+    if (node.reason) {
+      html += `<div style="margin-left:12px;color:var(--text-secondary);font-size:0.85rem">${escapeHTML(node.reason)}</div>`;
+    }
+    if (node.children) {
+      node.children.forEach(child => {
+        html += this.renderTraceNodeRecursive(child, depth + 1);
+      });
+    }
+    html += '</div>';
+    return html;
+  },
+
+  renderRuleSetDetail(rs) {
+    const statusClass = rs.status === 'PUBLISHED' ? 'wf-status-published' : rs.status === 'DRAFT' ? 'wf-status-draft' : 'wf-status-archived';
+    const outcomeLabel = rs.default_outcome ? rs.default_outcome.replace(/_/g, ' ') : '-';
+    const ruleCount = (rs.rules || []).length;
+    const triggers = (rs.triggers || []).join(', ');
+    const updatedAt = rs.updated_at ? new Date(rs.updated_at).toLocaleDateString() : '-';
+
+    let actionBtns = '';
+    if (rs.status === 'DRAFT') {
+      actionBtns += `<button class="btn" onclick="app.showRuleSetEditView('${rs.id}')"><span class="icon" aria-hidden="true">✏️</span> Edit</button>`;
+      actionBtns += `<button class="btn secondary" onclick="app.publishRuleSetEdit()"><span class="icon" aria-hidden="true">🚀</span> Publish</button>`;
+      actionBtns += `<button class="btn danger" onclick="app.deleteRuleSet('${rs.id}')"><span class="icon" aria-hidden="true">🗑</span> Delete</button>`;
+    } else if (rs.status === 'PUBLISHED') {
+      actionBtns += `<button class="btn secondary" onclick="app.createRuleSetVersionFromDetail()"><span class="icon" aria-hidden="true">📄</span> New Version</button>`;
+      actionBtns += `<button class="btn secondary" onclick="app.archiveRuleSetFromDetail()"><span class="icon" aria-hidden="true">📦</span> Archive</button>`;
+    } else if (rs.status === 'ARCHIVED') {
+      actionBtns = '<span class="badge" style="background:var(--text-secondary)">This rule set is archived.</span>';
+    }
+
+    const rulesHtml = (rs.rules || []).length
+      ? (rs.rules || []).map((rule, i) => this.renderRuleCard(rule, i)).join('')
+      : '<div class="empty" style="padding:20px;text-align:center">No rules defined.</div>';
+
+    return `<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:16px">
+      <div>
+        <h1 style="margin:0">${escapeHTML(rs.name)}</h1>
+        <p style="color:var(--text-secondary);margin-top:4px">
+          <span class="badge ${statusClass}">${escapeHTML(rs.status)}</span>
+          <code style="margin-left:8px">${escapeHTML(rs.key)}</code>
+          <span class="text-muted" style="margin-left:8px;font-size:0.85rem">Version ${rs.version || 1}</span>
+        </p>
+        <p style="color:var(--text-secondary);margin-top:8px">${escapeHTML(rs.description || '')}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn secondary" onclick="router.navigate('rules')">← Rules</button>
+        ${actionBtns}
+        <button class="btn secondary" onclick="app.showEvaluateModal('${rs.id}')"><span class="icon" aria-hidden="true">▶</span> Evaluate</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Details</h2>
+      <dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px">
+        <dt>Key</dt><dd><code>${escapeHTML(rs.key)}</code></dd>
+        <dt>Name</dt><dd>${escapeHTML(rs.name)}</dd>
+        <dt>Description</dt><dd>${escapeHTML(rs.description || '')}</dd>
+        <dt>Version</dt><dd>${rs.version || 1}</dd>
+        <dt>Status</dt><dd><span class="badge ${statusClass}">${escapeHTML(rs.status)}</span></dd>
+        <dt>Default Outcome</dt><dd>${escapeHTML(outcomeLabel)}</dd>
+        <dt>Triggers</dt><dd>${escapeHTML(triggers)}</dd>
+        <dt>Rule Count</dt><dd>${ruleCount}</dd>
+        <dt>Last Updated</dt><dd>${updatedAt}</dd>
+      </dl>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Rules</h2>
+      ${rulesHtml}
+    </div>`;
+  },
+
+  async archiveRuleSetFromDetail() {
+    const id = this.ruleSetCurrentId;
+    try {
+      await window.RulesAPI.archiveRuleSet(id);
+      showToast('Rule set archived', 'success');
+      router.navigate('rules');
+    } catch (err) {
+      showToast('Failed to archive: ' + escapeHTML(err.message), 'error');
+    }
+  },
+
+  async deleteRuleSet(id) {
+    if (!confirm('Are you sure you want to delete this rule set? This cannot be undone.')) return;
+    try {
+      await window.RulesAPI.deleteRuleSet(id || this.ruleSetCurrentId);
+      showToast('Rule set deleted', 'success');
+      router.navigate('rules');
+    } catch (err) {
+      showToast('Failed to delete: ' + escapeHTML(err.message), 'error');
+    }
+  },
 };
 
 const router = {
@@ -3016,6 +3820,12 @@ router.on('login', () => {
   document.getElementById('view-forms').classList.add('hidden');
   document.getElementById('view-form-design').classList.add('hidden');
   document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
   document.getElementById('form-field-modal').classList.add('hidden');
   document.getElementById('form-assign-modal').classList.add('hidden');
@@ -3032,6 +3842,12 @@ router.on('dashboard', async () => {
   document.getElementById('view-forms').classList.add('hidden');
   document.getElementById('view-form-design').classList.add('hidden');
   document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
   document.getElementById('form-field-modal').classList.add('hidden');
   document.getElementById('form-assign-modal').classList.add('hidden');
@@ -3050,6 +3866,12 @@ router.on('case', async (id) => {
   document.getElementById('view-forms').classList.add('hidden');
   document.getElementById('view-form-design').classList.add('hidden');
   document.getElementById('view-form-detail').classList.add('hidden');
+    document.getElementById('view-rules').classList.add('hidden');
+    document.getElementById('view-rule-set-edit').classList.add('hidden');
+    document.getElementById('view-rule-set-detail').classList.add('hidden');
+    document.getElementById('rule-editor-modal').classList.add('hidden');
+    document.getElementById('rule-condition-modal').classList.add('hidden');
+    document.getElementById('evaluation-modal').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
   document.getElementById('form-field-modal').classList.add('hidden');
   document.getElementById('form-assign-modal').classList.add('hidden');
@@ -3067,6 +3889,12 @@ router.on('new-case', (preselectId) => {
   document.getElementById('view-forms').classList.add('hidden');
   document.getElementById('view-form-design').classList.add('hidden');
   document.getElementById('view-form-detail').classList.add('hidden');
+    document.getElementById('view-rules').classList.add('hidden');
+    document.getElementById('view-rule-set-edit').classList.add('hidden');
+    document.getElementById('view-rule-set-detail').classList.add('hidden');
+    document.getElementById('rule-editor-modal').classList.add('hidden');
+    document.getElementById('rule-condition-modal').classList.add('hidden');
+    document.getElementById('evaluation-modal').classList.add('hidden');
   document.getElementById('form-modal').classList.add('hidden');
   document.getElementById('form-field-modal').classList.add('hidden');
   document.getElementById('form-assign-modal').classList.add('hidden');
@@ -3112,4 +3940,31 @@ router.on('form-detail', (id) => {
   app.showFormDetail(id);
   document.getElementById('form-field-modal').classList.add('hidden');
   document.getElementById('form-assign-modal').classList.add('hidden');
+});
+
+router.on('rules', () => {
+  app.switchView('view-rules');
+  app.loadRuleSets(1);
+  if (!currentUserIsAdmin()) {
+    document.getElementById('btn-create-ruleset').style.display = 'none';
+  } else {
+    document.getElementById('btn-create-ruleset').style.display = 'inline-flex';
+  }
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+});
+
+router.on('ruleset-create', () => {
+  app.switchView('view-rule-set-edit');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+});
+
+router.on('rule-set-edit', (id) => {
+  app.showRuleSetEditView(id);
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
 });

@@ -127,6 +127,7 @@
            <button class="btn" onclick="router.navigate('new-case')" aria-label="Create new service request"><span class="icon" aria-hidden="true">➕</span> New Request</button>
            <button class="btn secondary" onclick="router.navigate('workflows')" aria-label="View workflows"><span class="icon" aria-hidden="true">🔄</span> Workflows</button>
            <button class="btn secondary" id="btn-forms-nav" style="display:none" onclick="router.navigate('forms')" aria-label="Manage forms"><span class="icon" aria-hidden="true">📋</span> Forms</button>
+           <button class="btn secondary" id="btn-rules-nav" style="display:none" onclick="router.navigate('rules')" aria-label="Manage rules"><span class="icon" aria-hidden="true">⚙️</span> Rules</button>
            <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true">🚪</span> Logout</button>
         </nav>
       </div>
@@ -854,10 +855,274 @@
     </div>
   </div>
 
+   <div id="view-rules" class="hidden">
+     <div class="container" id="main-content">
+       <div class="header">
+         <div>
+           <h1>Rules</h1>
+           <p>Eligibility Rules Engine</p>
+         </div>
+         <nav aria-label="Rules actions">
+           <button class="btn secondary" onclick="router.navigate('dashboard')"><span class="icon" aria-hidden="true">🏠</span> Dashboard</button>
+           <button class="btn" id="btn-create-ruleset" onclick="app.showRuleSetCreateView()" style="display:none"><span class="icon" aria-hidden="true">➕</span> New Rule Set</button>
+         </nav>
+       </div>
+
+       <div class="card">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+           <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:250px">
+             <span class="icon">🔍</span>
+             <input type="text" id="rules-search" placeholder="Search rule sets by name or key…" style="flex:1">
+           </div>
+           <div id="rules-filters" style="display:flex;gap:8px;align-items:center">
+             <select id="rules-status-filter" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg)">
+               <option value="">All statuses</option>
+               <option value="DRAFT">Draft</option>
+               <option value="PUBLISHED">Published</option>
+               <option value="ARCHIVED">Archived</option>
+             </select>
+           </div>
+         </div>
+
+         <div id="rules-list-loading" class="loading hidden" style="padding:20px;text-align:center">
+           <div class="loading-spinner" aria-hidden="true"></div> Loading rule sets…
+         </div>
+         <div id="rules-list-error" class="hidden" style="color:var(--danger);padding:20px;text-align:center;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger)" role="alert"></div>
+
+         <table id="rules-table" aria-label="Rule sets">
+           <thead>
+             <tr>
+               <th scope="col">Key</th>
+               <th scope="col">Name</th>
+               <th scope="col">Version</th>
+               <th scope="col">Status</th>
+               <th scope="col">Default Outcome</th>
+               <th scope="col">Rules</th>
+               <th scope="col">Triggers</th>
+               <th scope="col">Last Updated</th>
+               <th scope="col">Actions</th>
+             </tr>
+           </thead>
+           <tbody id="rules-table-body">
+             <tr><td colspan="9" class="empty">Loading rule sets…</td></tr>
+           </tbody>
+         </table>
+         <div id="rules-empty" class="empty hidden" style="padding:40px;text-align:center">No rule sets match your search. <a href="#" onclick="app.clearRulesSearch()">Clear filters</a>.</div>
+         <div id="rules-pagination" style="margin-top:12px"></div>
+       </div>
+     </div>
+   </div>
+
+   <div id="view-rule-set-edit" class="hidden">
+     <div class="container" id="main-content">
+       <div class="header">
+         <div>
+           <h1 id="ruleset-edit-title"></h1>
+           <p id="ruleset-edit-subtitle" style="color:var(--text-secondary);margin-top:4px">
+             <span id="ruleset-edit-status" class="badge"></span>
+              <span id="ruleset-edit-key-display" class="text-muted" style="font-size:0.85rem"></span>
+           </p>
+         </div>
+         <nav aria-label="Rule set actions">
+           <button class="btn secondary" onclick="router.navigate('rules')"><span class="icon" aria-hidden="true">←</span> Rules</button>
+         </nav>
+       </div>
+
+       <div id="ruleset-edit-error" class="hidden" style="color:var(--danger);padding:12px 16px;background:var(--danger-light);border-radius:var(--radius-sm);border:1px solid var(--danger);margin-bottom:16px" role="alert"></div>
+       <div id="ruleset-edit-success" class="hidden" style="color:var(--success);padding:12px 16px;background:var(--success-light);border-radius:var(--radius-sm);border:1px solid var(--success);margin-bottom:16px" role="status"></div>
+
+       <div class="card">
+         <h2>Rule Set Details</h2>
+         <div class="form-fields">
+           <div class="form-field">
+             <label for="ruleset-key">Key <span class="required-marker">*</span></label>
+             <input id="ruleset-edit-key" type="text" placeholder="e.g. income_check" style="width:100%">
+             <p class="field-description">Machine-readable identifier. Lowercase letters, numbers, and underscores only.</p>
+           </div>
+           <div class="form-field">
+             <label for="ruleset-name">Name <span class="required-marker">*</span></label>
+             <input id="ruleset-edit-name" type="text" placeholder="e.g. Income Eligibility Check" style="width:100%">
+           </div>
+           <div class="form-field">
+             <label for="ruleset-description">Description</label>
+             <textarea id="ruleset-edit-description" rows="3" placeholder="Describe what this rule set does…" style="width:100%"></textarea>
+           </div>
+           <div class="form-field">
+             <label for="ruleset-default-outcome">Default Outcome</label>
+             <select id="ruleset-default-outcome" style="width:100%">
+               <option value="INELIGIBLE">Ineligible</option>
+               <option value="ELIGIBLE">Eligible</option>
+               <option value="REQUIRES_REVIEW">Requires Review</option>
+               <option value="INFORMATION_REQUIRED">Information Required</option>
+               <option value="FLAG">Flag</option>
+             </select>
+           </div>
+           <div class="form-field">
+             <label for="ruleset-triggers">Triggers</label>
+             <input id="ruleset-triggers" type="text" placeholder="e.g. case.created, case.closed" style="width:100%">
+             <p class="field-description">Comma-separated trigger descriptions.</p>
+           </div>
+         </div>
+       </div>
+
+       <div class="card" style="margin-top:16px">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+           <h2 style="margin:0">Rules</h2>
+           <button class="btn" onclick="app.addRule()"><span class="icon" aria-hidden="true">➕</span> Add Rule</button>
+         </div>
+
+         <div id="rules-list" style="display:grid;gap:12px">
+           <div class="empty" style="padding:20px;text-align:center">No rules yet. Add one to get started.</div>
+         </div>
+       </div>
+
+       <div class="card" style="margin-top:16px">
+         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+           <h2 style="margin:0">Preview &amp; Validation</h2>
+         </div>
+         <div id="ruleset-preview" style="margin-bottom:12px">
+           <button class="btn secondary sm" onclick="app.validateRuleSet()">Validate</button>
+         </div>
+         <div id="ruleset-validation-result" class="hidden" style="padding:12px;border-radius:var(--radius-sm);font-size:0.9rem"></div>
+       </div>
+
+       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+         <button class="btn secondary" onclick="router.navigate('rules')"><span class="icon" aria-hidden="true">←</span> Cancel</button>
+         <button class="btn" id="btn-ruleset-save-draft" onclick="app.saveRuleSetDraft()"><span class="icon" aria-hidden="true">💾</span> Save Draft</button>
+         <button class="btn" id="btn-ruleset-publish" style="display:none" onclick="app.publishRuleSetEdit()"><span class="icon" aria-hidden="true">🚀</span> Publish</button>
+       </div>
+     </div>
+   </div>
+
+   <div id="view-rule-set-detail" class="hidden">
+     <div class="container" id="main-content">
+       <div id="ruleset-detail-container"></div>
+     </div>
+   </div>
+
+   <div id="ruleset-actions-menu" class="hidden dropdown-menu">
+     <ul>
+       <li><a href="#" onclick="app.createRuleSetVersionFromDetail()">New Version</a></li>
+       <li><a href="#" onclick="app.archiveRuleSetFromDetail()">Archive Rule Set</a></li>
+       <li><a href="#" onclick="app.deleteRuleSetFromDetail()">Delete Rule Set</a></li>
+     </ul>
+   </div>
+
+   <div id="rule-editor-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rule-editor-modal-title">
+     <div class="card" style="max-width:700px;width:100%">
+       <h2 id="rule-editor-modal-title">Add Rule</h2>
+
+       <div class="form-fields">
+         <div class="form-field">
+           <label for="rule-outcome">Outcome <span class="required-marker">*</span></label>
+           <select id="rule-outcome" style="width:100%">
+             <option value="ELIGIBLE">Eligible</option>
+             <option value="INELIGIBLE">Ineligible</option>
+             <option value="REQUIRES_REVIEW">Requires Review</option>
+             <option value="INFORMATION_REQUIRED">Information Required</option>
+             <option value="FLAG">Flag</option>
+           </select>
+         </div>
+
+         <div class="form-field">
+           <label>Conditions</label>
+           <div id="condition-builder" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
+             <div id="condition-root"></div>
+           </div>
+           <div style="display:flex;gap:8px;margin-top:8px">
+             <button type="button" class="btn secondary sm" onclick="app.addConditionGroup('all')">AND Group</button>
+             <button type="button" class="btn secondary sm" onclick="app.addConditionGroup('any')">OR Group</button>
+             <button type="button" class="btn secondary sm" onclick="app.addConditionLeaf()">Add Condition</button>
+           </div>
+         </div>
+       </div>
+
+       <div style="display:flex;gap:8px;justify-content:flex-end">
+         <button type="button" class="btn secondary" onclick="app.cancelRuleEditor()"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+         <button type="button" class="btn" onclick="app.saveRuleEditor()">Save Rule</button>
+       </div>
+     </div>
+   </div>
+
+   <div id="rule-condition-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rule-condition-modal-title">
+     <div class="card" style="max-width:500px;width:100%">
+       <h2 id="rule-condition-modal-title">Add Condition</h2>
+
+       <div class="form-fields">
+         <div class="form-field">
+           <label for="cond-field">Field</label>
+           <input id="cond-field" type="text" list="cond-field-suggestions" placeholder="e.g. form.income.amount" style="width:100%">
+           <datalist id="cond-field-suggestions"></datalist>
+         </div>
+
+         <div class="form-field">
+           <label for="cond-operator">Operator</label>
+           <select id="cond-operator" style="width:100%">
+             <option value="eq">Equals</option>
+             <option value="neq">Not Equals</option>
+             <option value="gt">Greater Than</option>
+             <option value="gte">Greater Than or Equal</option>
+             <option value="lt">Less Than</option>
+             <option value="lte">Less Than or Equal</option>
+             <option value="in">In List</option>
+             <option value="not_in">Not In List</option>
+             <option value="is">Is</option>
+             <option value="is_not">Is Not</option>
+             <option value="exists">Exists</option>
+             <option value="not_exists">Does Not Exist</option>
+             <option value="contains">Contains</option>
+             <option value="matches">Matches Regex</option>
+           </select>
+         </div>
+
+         <div class="form-field">
+           <label for="cond-value">Value</label>
+           <input id="cond-value" type="text" placeholder="Enter value (or comma-separated list for in/not_in)" style="width:100%">
+         </div>
+       </div>
+
+       <div style="display:flex;gap:8px;justify-content:flex-end">
+         <button type="button" class="btn secondary" onclick="app.cancelConditionModal()"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+         <button type="button" class="btn" onclick="app.saveConditionModal()">Add</button>
+       </div>
+     </div>
+   </div>
+
+   <div id="evaluation-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="evaluation-modal-title">
+     <div class="card" style="max-width:700px;width:100%">
+       <h2 id="evaluation-modal-title">Evaluate Rule Set</h2>
+
+       <div class="form-fields">
+         <div class="form-field">
+           <label for="eval-case-id">Case ID (optional)</label>
+           <input id="eval-case-id" type="text" placeholder="UUID of case to attach to" style="width:100%">
+         </div>
+
+         <div class="form-field">
+           <label for="eval-trigger">Trigger</label>
+           <select id="eval-trigger" style="width:100%">
+             <option value="MANUAL">Manual</option>
+             <option value="AUTOMATIC">Automatic</option>
+           </select>
+         </div>
+
+         <div class="form-field">
+           <label for="eval-facts">Facts (JSON)</label>
+           <textarea id="eval-facts" rows="5" placeholder='{&#34;form&#34;: {&#34;income_verification&#34;: {&#34;amount&#34;: 500}}}' style="width:100%;font-family:monospace"></textarea>
+         </div>
+       </div>
+
+       <div style="display:flex;gap:8px;justify-content:flex-end">
+         <button type="button" class="btn secondary" onclick="app.cancelEvaluationModal()"><span class="icon" aria-hidden="true">✖</span> Cancel</button>
+         <button type="button" class="btn" onclick="app.runEvaluation()"><span class="icon" aria-hidden="true">▶</span> Evaluate</button>
+       </div>
+     </div>
+   </div>
+
    <script src="/js/api.js"></script>
-  <script src="/js/form-renderer.js"></script>
-  <script src="/js/app.js"></script>
-  <script src="/js/tests.js"></script>
-  <script>app.init();</script>
-</body>
-</html>
+   <script src="/js/form-renderer.js"></script>
+   <script src="/js/app.js"></script>
+   <script src="/js/tests.js"></script>
+   <script>app.init();</script>
+ </body>
+ </html>

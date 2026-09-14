@@ -53,6 +53,8 @@ tags:
   description: Configurable workflow definitions, instances, and transitions
 - name: Forms
   description: Configurable forms for data collection
+- name: Rules
+  description: Deterministic eligibility rules engine configuration and evaluation
 - name: System
   description: Health and readiness checks
 components:
@@ -1747,6 +1749,324 @@ components:
           type: array
           items:
             type: string
+
+    Condition:
+      type: object
+      description: A condition node. Either a leaf comparison (field/operator/value) or a group (all/any/not).
+      properties:
+        field:
+          type: string
+          description: The fact path being compared (e.g. "form.income_verification.amount").
+        operator:
+          type: string
+          enum: [eq, neq, gt, gte, lt, lte, in, not_in, is, is_not, exists, not_exists, contains, matches]
+          description: The comparison operator.
+        value:
+          description: The expected value. Type depends on operator.
+        all:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+          description: Group where ALL child conditions must be true.
+        any:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+          description: Group where ANY child condition must be true.
+        not:
+          $ref: '#/components/schemas/Condition'
+      additionalProperties: false
+
+    Rule:
+      type: object
+      description: A single conditional rule with an outcome and priority.
+      required:
+        - outcome
+        - conditions
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        priority:
+          type: integer
+          minimum: 0
+        outcome:
+          type: string
+          enum: [ELIGIBLE, INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR]
+        conditions:
+          $ref: '#/components/schemas/Condition'
+        active:
+          type: boolean
+          description: Whether this rule is enabled.
+        created_at:
+          type: string
+          format: date-time
+
+    RuleSet:
+      type: object
+      description: A versioned, tenant-scoped collection of rules.
+      required:
+        - id
+        - organization_id
+        - key
+        - name
+        - version
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        organization_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        case_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+          description: If set, the rule set is scoped to a specific case.
+        key:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+          description: Unique machine-readable identifier within the organization.
+        name:
+          type: string
+          description: Human-readable name.
+        description:
+          type: string
+          description: Human-readable description.
+        version:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+        default_outcome:
+          type: string
+          enum: [ELIGIBLE, INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR]
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        triggers:
+          type: array
+          items:
+            type: string
+          description: Trigger descriptions (e.g. "case.created", "case.closed").
+        created_by:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateRuleSetRequest:
+      type: object
+      required:
+        - key
+        - name
+      properties:
+        case_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        key:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+        name:
+          type: string
+        description:
+          type: string
+        default_outcome:
+          type: string
+          enum: [ELIGIBLE, INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR]
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        triggers:
+          type: array
+          items:
+            type: string
+
+    UpdateRuleSetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        default_outcome:
+          type: string
+          enum: [ELIGIBLE, INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR]
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        triggers:
+          type: array
+          items:
+            type: string
+
+    Evaluation:
+      type: object
+      description: The result of evaluating a rule set against facts.
+      required:
+        - id
+        - rule_set_id
+        - rule_set_version
+        - organization_id
+        - status
+        - outcome
+        - trigger
+        - evaluated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        rule_set_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        rule_set_version:
+          type: integer
+        organization_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        case_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+        status:
+          type: string
+          enum: [ELIGIBLE, INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR]
+        outcome:
+          type: string
+          enum: [ELIGIBLE, INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR]
+        reason:
+          type: string
+          nullable: true
+          description: Human-readable explanation of the outcome.
+        matched_rule_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+        trace:
+          type: array
+          items:
+            $ref: '#/components/schemas/TraceNode'
+          description: Evaluation trace tree for debugging/explanation.
+        trigger:
+          type: string
+          enum: [MANUAL, AUTOMATIC]
+        evaluated_by:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+        evaluated_at:
+          type: string
+          format: date-time
+        facts_snapshot:
+          type: object
+          description: The facts as they were at evaluation time.
+          additionalProperties: true
+
+    TraceNode:
+      type: object
+      description: A node in the evaluation trace tree.
+      properties:
+        id:
+          type: string
+        node_type:
+          type: string
+          enum: [leaf, group, rule, root]
+        description:
+          type: string
+        field:
+          type: string
+        operator:
+          type: string
+        expected:
+          description: Expected value as JSON.
+        actual:
+          description: Actual value as JSON.
+        actual_type:
+          type: string
+        result:
+          type: string
+          enum: ["TRUE", "FALSE", "UNKNOWN", "ERROR"]
+        reason:
+          type: string
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/TraceNode'
+        timestamp:
+          type: string
+          format: date-time
+
+    EvaluateRuleSetRequest:
+      type: object
+      required:
+        - facts
+      properties:
+        case_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        facts:
+          type: object
+          description: The fact document to evaluate against.
+          additionalProperties: true
+        trigger:
+          type: string
+          enum: [MANUAL, AUTOMATIC]
+
+    FormFieldView:
+      type: object
+      description: A discoverable form field for fact-path suggestions.
+      required:
+        - key
+        - label
+        - type
+        - required
+      properties:
+        key:
+          type: string
+          description: "Stable identifier in the form `{formKey}.{fieldKey}`."
+        label:
+          type: string
+          description: "Display label: `{FormName}: {FieldLabel}`."
+        type:
+          type: string
+          enum: [TEXT, TEXTAREA, NUMBER, DECIMAL, DATE, DATETIME, BOOLEAN, SELECT, MULTISELECT, RADIO, CHECKBOX, EMAIL, PHONE]
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormOptionView'
+
+    FormOptionView:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+
   responses:
     BadRequest:
       description: Bad request
@@ -5061,3 +5381,835 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  # Rules engine paths
+  /organizations/{orgId}/rules/rule-sets:
+    get:
+      operationId: listRuleSets
+      tags:
+        - Rules
+      summary: List rule sets
+      description: Lists rule sets for an organization with pagination. Supports optional filtering by case_id, key, or status.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: case_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, PUBLISHED, ARCHIVED]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of rule sets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createRuleSet
+      tags:
+        - Rules
+      summary: Create a rule set
+      description: Creates a new draft rule set. Requires admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRuleSetRequest'
+      responses:
+        '201':
+          description: Rule set created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}:
+    get:
+      operationId: getRuleSet
+      tags:
+        - Rules
+      summary: Get a rule set
+      description: Gets a rule set by ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Rule set details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateRuleSet
+      tags:
+        - Rules
+      summary: Update a rule set
+      description: Updates a draft rule set. Requires admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRuleSetRequest'
+      responses:
+        '200':
+          description: Rule set updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteRuleSet
+      tags:
+        - Rules
+      summary: Delete a rule set
+      description: Deletes a draft rule set. Published rule sets must be archived first. Requires admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Rule set deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      deleted:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /organizations/{orgId}/rules/rule-sets/key/{key}:
+    get:
+      operationId: getRuleSetByKey
+      tags:
+        - Rules
+      summary: Get a rule set by key
+      description: Gets the latest version of a rule set by its key.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule set details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}/versions:
+    get:
+      operationId: listVersions
+      tags:
+        - Rules
+      summary: List rule set versions
+      description: Lists all versions of a rule set, paginated.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of rule set versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}/version:
+    post:
+      operationId: createVersion
+      tags:
+        - Rules
+      summary: Create a new version
+      description: Creates a new draft version from the current version of a rule set. The new version is a clone. Requires admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '201':
+          description: New version created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}/publish:
+    post:
+      operationId: publishRuleSet
+      tags:
+        - Rules
+      summary: Publish a rule set
+      description: Publishes a draft rule set version, making it active. Requires admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Rule set published
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}/archive:
+    post:
+      operationId: archiveRuleSet
+      tags:
+        - Rules
+      summary: Archive a rule set
+      description: Archives a published rule set, preventing further evaluations. Requires admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Rule set archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RuleSet'
+                  pagination:
+                    type: object
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}/evaluations:
+    get:
+      operationId: listEvaluationsByRuleSet
+      tags:
+        - Rules
+      summary: List evaluations for a rule set
+      description: Lists evaluations for a rule set, paginated.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of evaluations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Evaluation'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/rules/rule-sets/{ruleSetId}/evaluate:
+    post:
+      operationId: evaluateRuleSet
+      tags:
+        - Rules
+      summary: Evaluate a rule set
+      description: Evaluates a published rule set against provided facts. Can optionally attach the evaluation to a case.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: ruleSetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRuleSetRequest'
+      responses:
+        '200':
+          description: Evaluation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Evaluation'
+                  pagination:
+                    type: object
+                    nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /organizations/{orgId}/rules/evaluations/{evaluationId}:
+    get:
+      operationId: getEvaluation
+      tags:
+        - Rules
+      summary: Get an evaluation
+      description: Gets an evaluation by ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: evaluationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: Evaluation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Evaluation'
+                  pagination:
+                    type: object
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/rules/cases/{caseId}/evaluations:
+    get:
+      operationId: listEvaluationsByCase
+      tags:
+        - Rules
+      summary: List evaluations for a case
+      description: Lists evaluations for a specific case, paginated.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of evaluations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Evaluation'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{orgId}/rules/fields:
+    get:
+      operationId: listDiscoverableFields
+      tags:
+        - Rules
+      summary: List discoverable fields
+      description: Lists form fields across all published forms for fact-path suggestions in the rules UI.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: List of discoverable form fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FormFieldView'
+                  pagination:
+                    type: object
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'

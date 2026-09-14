@@ -34,3 +34,24 @@ type FormView struct {
 	Name           string
 	OrganizationID uuid.UUID
 }
+
+// FormFieldView is a read-only projection of a form field used for field
+// discovery by the rules engine.
+type FormFieldView struct {
+	Key      string
+	Label    string
+	Type     string
+	Required bool
+	Options  []FormOptionView
+}
+
+type FormOptionView struct {
+	Value string
+	Label string
+}
+
+// FieldDiscoverer lists form fields across all published forms in an
+// organization, so the rules UI can present valid fact-path suggestions.
+type FieldDiscoverer interface {
+	ListDiscoverableFields(ctx context.Context, orgID uuid.UUID) ([]FormFieldView, error)
+}

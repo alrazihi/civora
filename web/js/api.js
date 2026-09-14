@@ -319,9 +319,193 @@ async function removeFormAssignment(workflowId, assignmentId) {
   await api('DELETE', `/organizations/${orgId}/workflows/${workflowId}/form-assignments/${assignmentId}`);
 }
 
+// ── Rules Engine API ──────────────────────────────────────────────────
+
+/**
+ * List rule sets for the organization.
+ * @param {object} [opts] - Pagination and filter options.
+ * @param {number} [opts.page] - Page number (1-based).
+ * @param {number} [opts.per_page] - Results per page.
+ * @param {string} [opts.key] - Filter by key.
+ * @param {string} [opts.status] - Filter by status (DRAFT, PUBLISHED, ARCHIVED).
+ * @param {string} [opts.case_id] - Filter by case ID.
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listRuleSets(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.per_page) params.set('per_page', String(opts.per_page));
+  if (opts.key) params.set('key', opts.key);
+  if (opts.status) params.set('status', opts.status);
+  if (opts.case_id) params.set('case_id', opts.case_id);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/rules/rule-sets${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * Get a rule set by ID.
+ * @param {string} ruleSetId
+ * @returns {Promise<object>}
+ */
+async function getRuleSet(ruleSetId) {
+  const res = await api('GET', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}`);
+  return res.data || null;
+}
+
+/**
+ * Get a rule set by key.
+ * @param {string} key
+ * @returns {Promise<object>}
+ */
+async function getRuleSetByKey(key) {
+  const res = await api('GET', `/organizations/${orgId}/rules/rule-sets/key/${encodeURIComponent(key)}`);
+  return res.data || null;
+}
+
+/**
+ * Create a new rule set (draft).
+ * @param {object} ruleSetData
+ * @returns {Promise<object>}
+ */
+async function createRuleSet(ruleSetData) {
+  const res = await api('POST', `/organizations/${orgId}/rules/rule-sets`, ruleSetData);
+  return res.data || null;
+}
+
+/**
+ * Update a draft rule set.
+ * @param {string} ruleSetId
+ * @param {object} ruleSetData
+ * @returns {Promise<object>}
+ */
+async function updateRuleSet(ruleSetId, ruleSetData) {
+  const res = await api('PATCH', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}`, ruleSetData);
+  return res.data || null;
+}
+
+/**
+ * Create a new version (clone) of a rule set.
+ * @param {string} ruleSetId
+ * @returns {Promise<object>}
+ */
+async function createRuleSetVersion(ruleSetId) {
+  const res = await api('POST', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}/version`);
+  return res.data || null;
+}
+
+/**
+ * Publish a draft rule set.
+ * @param {string} ruleSetId
+ * @returns {Promise<object>}
+ */
+async function publishRuleSet(ruleSetId) {
+  const res = await api('POST', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}/publish`);
+  return res.data || null;
+}
+
+/**
+ * Archive a published rule set.
+ * @param {string} ruleSetId
+ * @returns {Promise<object>}
+ */
+async function archiveRuleSet(ruleSetId) {
+  const res = await api('POST', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}/archive`);
+  return res.data || null;
+}
+
+/**
+ * Delete a draft rule set.
+ * @param {string} ruleSetId
+ */
+async function deleteRuleSet(ruleSetId) {
+  await api('DELETE', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}`);
+}
+
+/**
+ * List versions of a rule set.
+ * @param {string} ruleSetId
+ * @param {object} [opts] - Pagination options.
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listRuleSetVersions(ruleSetId, opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.per_page) params.set('per_page', String(opts.per_page));
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/rules/rule-sets/${ruleSetId}/versions${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * Evaluate a rule set against provided facts.
+ * @param {string} ruleSetId
+ * @param {object} facts - The fact document.
+ * @param {string} [caseId] - Optional case ID to attach the evaluation to.
+ * @param {string} [trigger] - Trigger type (MANUAL or AUTOMATIC).
+ * @returns {Promise<object>}
+ */
+async function evaluateRuleSet(ruleSetId, facts, caseId, trigger) {
+  const body = { facts: facts || {} };
+  if (caseId) body.case_id = caseId;
+  if (trigger) body.trigger = trigger;
+  const res = await api('POST', `/organizations/${orgId}/rules/rule-sets/${ruleSetId}/evaluate`, body);
+  return res.data || null;
+}
+
+/**
+ * List evaluations for a rule set.
+ * @param {string} ruleSetId
+ * @param {object} [opts] - Pagination options.
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listEvaluationsByRuleSet(ruleSetId, opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.per_page) params.set('per_page', String(opts.per_page));
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/rules/rule-sets/${ruleSetId}/evaluations${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * Get a specific evaluation.
+ * @param {string} evaluationId
+ * @returns {Promise<object>}
+ */
+async function getEvaluation(evaluationId) {
+  const res = await api('GET', `/organizations/${orgId}/rules/evaluations/${evaluationId}`);
+  return res.data || null;
+}
+
+/**
+ * List evaluations for a case.
+ * @param {string} caseId
+ * @param {object} [opts] - Pagination options.
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listEvaluationsByCase(caseId, opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.per_page) params.set('per_page', String(opts.per_page));
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/rules/cases/${caseId}/evaluations${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * List discoverable form fields for fact-path suggestions.
+ * @returns {Promise<object[]>}
+ */
+async function listDiscoverableFields() {
+  const res = await api('GET', `/organizations/${orgId}/rules/fields`);
+  return (res.data || []).filter(Boolean);
+}
+
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment, listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields };
 } else {
   window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment };
+  window.RulesAPI = { listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields };
 }

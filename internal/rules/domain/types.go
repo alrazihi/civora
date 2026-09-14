@@ -19,13 +19,13 @@ const (
 type Outcome string
 
 const (
-	OutcomeEligible              Outcome = "ELIGIBLE"
-	OutcomeIneligible            Outcome = "INELIGIBLE"
-	OutcomeRequiresReview        Outcome = "REQUIRES_REVIEW"
-	OutcomeInformationRequired   Outcome = "INFORMATION_REQUIRED"
-	OutcomeFlag                  Outcome = "FLAG"
-	OutcomeScore                 Outcome = "SCORE"
-	OutcomeError                 Outcome = "ERROR"
+	OutcomeEligible            Outcome = "ELIGIBLE"
+	OutcomeIneligible          Outcome = "INELIGIBLE"
+	OutcomeRequiresReview      Outcome = "REQUIRES_REVIEW"
+	OutcomeInformationRequired Outcome = "INFORMATION_REQUIRED"
+	OutcomeFlag                Outcome = "FLAG"
+	OutcomeScore               Outcome = "SCORE"
+	OutcomeError               Outcome = "ERROR"
 )
 
 // IsValidOutcome reports whether o is a recognised rule outcome.
@@ -44,20 +44,20 @@ func IsValidOutcome(o Outcome) bool {
 type Operator string
 
 const (
-	OpEqual             Operator = "eq"
-	OpNotEqual          Operator = "neq"
-	OpGreaterThan       Operator = "gt"
-	OpGreaterThanEqual  Operator = "gte"
-	OpLessThan          Operator = "lt"
-	OpLessThanEqual     Operator = "lte"
-	OpIn                Operator = "in"
-	OpNotIn             Operator = "not_in"
-	OpIs                Operator = "is"
-	OpIsNot             Operator = "is_not"
-	OpExists            Operator = "exists"
-	OpNotExists         Operator = "not_exists"
-	OpContains          Operator = "contains"
-	OpMatches           Operator = "matches"
+	OpEqual            Operator = "eq"
+	OpNotEqual         Operator = "neq"
+	OpGreaterThan      Operator = "gt"
+	OpGreaterThanEqual Operator = "gte"
+	OpLessThan         Operator = "lt"
+	OpLessThanEqual    Operator = "lte"
+	OpIn               Operator = "in"
+	OpNotIn            Operator = "not_in"
+	OpIs               Operator = "is"
+	OpIsNot            Operator = "is_not"
+	OpExists           Operator = "exists"
+	OpNotExists        Operator = "not_exists"
+	OpContains         Operator = "contains"
+	OpMatches          Operator = "matches"
 )
 
 // validOperators is the authoritative whitelist. Any operator not present here
@@ -140,14 +140,14 @@ func OperatorCategory(op Operator) string {
 type ValueType string
 
 const (
-	TypeString  ValueType = "string"
-	TypeInteger ValueType = "integer"
-	TypeDecimal ValueType = "decimal"
-	TypeBoolean ValueType = "boolean"
-	TypeNull    ValueType = "null"
-	TypeArray   ValueType = "array"
-	TypeObject  ValueType = "object"
-	TypeDate    ValueType = "date"
+	TypeString   ValueType = "string"
+	TypeInteger  ValueType = "integer"
+	TypeDecimal  ValueType = "decimal"
+	TypeBoolean  ValueType = "boolean"
+	TypeNull     ValueType = "null"
+	TypeArray    ValueType = "array"
+	TypeObject   ValueType = "object"
+	TypeDate     ValueType = "date"
 	TypeDateTime ValueType = "datetime"
 )
 
@@ -155,8 +155,8 @@ const (
 type Trigger string
 
 const (
-	TriggerManual      Trigger = "MANUAL"
-	TriggerAutomatic   Trigger = "AUTOMATIC"
+	TriggerManual    Trigger = "MANUAL"
+	TriggerAutomatic Trigger = "AUTOMATIC"
 )
 
 // EvalScope is the scope of evaluation: a single rule-set or the full set.
@@ -238,11 +238,11 @@ type Evaluation struct {
 type EvaluationStatus string
 
 const (
-	StatusEligible              EvaluationStatus = "ELIGIBLE"
-	StatusIneligible            EvaluationStatus = "INELIGIBLE"
-	StatusRequiresReview        EvaluationStatus = "REQUIRES_REVIEW"
-	StatusInformationRequired   EvaluationStatus = "INFORMATION_REQUIRED"
-	StatusFlag                  EvaluationStatus = "FLAG"
-	StatusScore                 EvaluationStatus = "SCORE"
-	StatusError                 EvaluationStatus = "ERROR"
+	StatusEligible            EvaluationStatus = "ELIGIBLE"
+	StatusIneligible          EvaluationStatus = "INELIGIBLE"
+	StatusRequiresReview      EvaluationStatus = "REQUIRES_REVIEW"
+	StatusInformationRequired EvaluationStatus = "INFORMATION_REQUIRED"
+	StatusFlag                EvaluationStatus = "FLAG"
+	StatusScore               EvaluationStatus = "SCORE"
+	StatusError               EvaluationStatus = "ERROR"
 )

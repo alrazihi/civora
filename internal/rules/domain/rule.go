@@ -309,7 +309,8 @@ func isValidFactPath(path string) bool {
 
 // splitFactPath splits a dotted path, preserving bracket array indices.
 // e.g. "submissions.income.data.items[0].name" ->
-//   ["submissions","income","data","items[0]","name"]
+//
+//	["submissions","income","data","items[0]","name"]
 func splitFactPath(path string) []string {
 	var segs []string
 	var cur bytes.Buffer

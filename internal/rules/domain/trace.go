@@ -7,28 +7,28 @@ import (
 
 // TraceNode is a single annotated step in an evaluation trace.
 type TraceNode struct {
-	ID          string                 `json:"id"`
-	NodeType    TraceNodeType          `json:"node_type"`
-	Description string                 `json:"description"`
-	Field       string                 `json:"field,omitempty"`
-	Operator    string                 `json:"operator,omitempty"`
-	Expected    json.RawMessage        `json:"expected,omitempty"`
-	Actual      json.RawMessage        `json:"actual,omitempty"`
-	ActualType  string                 `json:"actual_type,omitempty"`
-	Result      string                 `json:"result"`
-	Reason      string                 `json:"reason,omitempty"`
-	Children    []TraceNode            `json:"children,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
+	ID          string          `json:"id"`
+	NodeType    TraceNodeType   `json:"node_type"`
+	Description string          `json:"description"`
+	Field       string          `json:"field,omitempty"`
+	Operator    string          `json:"operator,omitempty"`
+	Expected    json.RawMessage `json:"expected,omitempty"`
+	Actual      json.RawMessage `json:"actual,omitempty"`
+	ActualType  string          `json:"actual_type,omitempty"`
+	Result      string          `json:"result"`
+	Reason      string          `json:"reason,omitempty"`
+	Children    []TraceNode     `json:"children,omitempty"`
+	Timestamp   time.Time       `json:"timestamp"`
 }
 
 // TraceNodeType classifies a trace node.
 type TraceNodeType string
 
 const (
-	TraceLeaf      TraceNodeType = "leaf"
-	TraceGroup     TraceNodeType = "group"
-	TraceRule      TraceNodeType = "rule"
-	TraceRoot      TraceNodeType = "root"
+	TraceLeaf  TraceNodeType = "leaf"
+	TraceGroup TraceNodeType = "group"
+	TraceRule  TraceNodeType = "rule"
+	TraceRoot  TraceNodeType = "root"
 )
 
 // conditionResult is the internal tri-state/quad result of a condition.

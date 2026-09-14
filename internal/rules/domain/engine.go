@@ -37,6 +37,7 @@ func ResolveFact(facts map[string]interface{}, path string) (interface{}, bool) 
 	}
 	return cur, true
 }
+
 // parseBracketIndex reports whether seg is an array index, e.g. "items[0]".
 // Returns (index, true) when seg ends with [n]; the caller still receives the
 // raw seg as key so it can look up the object field first.

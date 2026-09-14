@@ -28,13 +28,13 @@ func decodeCondition(t *testing.T, raw string) Condition {
 
 func parseRuleSetJSON(raw string) (*RuleSet, error) {
 	var rs struct {
-		Key            string  `json:"key"`
-		Name           string  `json:"name"`
-		Description    string  `json:"description"`
-		Version        int     `json:"version"`
-		Status         string  `json:"status"`
-		DefaultOutcome string  `json:"default_outcome"`
-		Rules          []Rule  `json:"rules"`
+		Key            string   `json:"key"`
+		Name           string   `json:"name"`
+		Description    string   `json:"description"`
+		Version        int      `json:"version"`
+		Status         string   `json:"status"`
+		DefaultOutcome string   `json:"default_outcome"`
+		Rules          []Rule   `json:"rules"`
 		Triggers       []string `json:"triggers"`
 	}
 	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
