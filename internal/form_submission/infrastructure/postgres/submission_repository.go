@@ -102,13 +102,21 @@ func (r *PostgresFormSubmissionRepository) FindByCaseAndFormVersionForUpdateTx(c
 }
 
 func (r *PostgresFormSubmissionRepository) ListByCase(ctx context.Context, tenantID, caseID uuid.UUID) ([]*domain.FormSubmission, error) {
+	return r.listByCase(ctx, nil, tenantID, caseID)
+}
+
+func (r *PostgresFormSubmissionRepository) ListByCaseTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID) ([]*domain.FormSubmission, error) {
+	return r.listByCase(ctx, tx, tenantID, caseID)
+}
+
+func (r *PostgresFormSubmissionRepository) listByCase(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID) ([]*domain.FormSubmission, error) {
 	query := `
 		SELECT id, tenant_id, case_id, form_id, form_version_id, submitted_by, status, data, submitted_at, updated_at
 		FROM form_submissions
 		WHERE tenant_id = $1 AND case_id = $2
 		ORDER BY submitted_at DESC
 	`
-	rows, err := r.query(ctx, nil, query, tenantID, caseID)
+	rows, err := r.query(ctx, tx, query, tenantID, caseID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list submissions by case: %w", err)
 	}

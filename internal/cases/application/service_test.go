@@ -11,6 +11,8 @@ import (
 	"github.com/alrazihi/civora/internal/cases/domain"
 	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	peopleDomain "github.com/alrazihi/civora/internal/people/domain"
+	rulesintegration "github.com/alrazihi/civora/internal/rules/application"
+	rulesdomain "github.com/alrazihi/civora/internal/rules/domain"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	assignmentdomain "github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
@@ -1179,4 +1181,105 @@ func TestChangeStatus_AllowsTransitionWhenFormsComplete(t *testing.T) {
 		ActorRole:      "staff",
 	})
 	require.NoError(t, err)
+}
+
+type mockRuleIntegration struct {
+	evaluateCalled bool
+	evaluateParams rulesintegration.EvaluateCaseRulesParams
+	evaluateResult *rulesintegration.CaseRuleEvaluationResult
+	evaluateErr    error
+}
+
+func (m *mockRuleIntegration) EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error) {
+	m.evaluateCalled = true
+	m.evaluateParams = params
+	return m.evaluateResult, m.evaluateErr
+}
+
+func (m *mockRuleIntegration) ListEvaluationsByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error) {
+	return nil, 0, nil
+}
+
+func (m *mockRuleIntegration) AssembleFactsFromCase(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+// TestOnTransition_TriggersRuleEvaluation verifies that when a rule integration
+// is configured, OnTransition calls EvaluateCaseRules with the workflow
+// transition event, automatic trigger, and the observer's transaction.
+func TestOnTransition_TriggersRuleEvaluation(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	mockIntegration := &mockRuleIntegration{}
+	svc.SetRuleIntegration(mockIntegration)
+
+	orgID := uuid.New()
+	creator := uuid.New()
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "Transition Integration Test",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
+	})
+	require.NoError(t, err)
+
+	instance := &workflowdomain.WorkflowInstance{
+		ID:            uuid.New(),
+		TenantID:      orgID,
+		CaseID:        c.ID,
+		CurrentState:  "NEW",
+		WorkflowDefID: testDefaultWorkflowID,
+	}
+	transition := &workflowdomain.WorkflowTransition{
+		Key:       "open",
+		FromState: "NEW",
+		ToState:   "OPEN",
+	}
+
+	err = svc.OnTransition(context.Background(), nil, instance, transition, false)
+	assert.NoError(t, err)
+
+	assert.True(t, mockIntegration.evaluateCalled, "EvaluateCaseRules should be called on state transition")
+	assert.Equal(t, rulesintegration.TriggerWorkflowTransition, mockIntegration.evaluateParams.Event)
+	assert.Equal(t, rulesdomain.TriggerAutomatic, mockIntegration.evaluateParams.Trigger)
+	assert.Equal(t, orgID, mockIntegration.evaluateParams.OrganizationID)
+	assert.Equal(t, c.ID, mockIntegration.evaluateParams.CaseID)
+	assert.Nil(t, mockIntegration.evaluateParams.Tx, "nil tx passed through to the integration service")
+}
+
+// TestOnTransition_NoRuleIntegration verifies that OnTransition is a no-op
+// when no rule integration is configured.
+func TestOnTransition_NoRuleIntegration(t *testing.T) {
+	repo := newMockCaseRepo()
+	svc := NewCaseService(repo, newMockPersonFinder(), newMockUserChecker(), nil, nil)
+
+	orgID := uuid.New()
+	creator := uuid.New()
+	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
+		OrganizationID: orgID,
+		Title:          "No Integration Test",
+		ServiceType:    domain.ServiceTypeGeneral,
+		Priority:       domain.PriorityNormal,
+		CreatedByID:    creator,
+		WorkflowID:     &testDefaultWorkflowID,
+	})
+	require.NoError(t, err)
+
+	instance := &workflowdomain.WorkflowInstance{
+		ID:           uuid.New(),
+		TenantID:     orgID,
+		CaseID:       c.ID,
+		CurrentState: "NEW",
+	}
+	transition := &workflowdomain.WorkflowTransition{
+		Key:       "open",
+		FromState: "NEW",
+		ToState:   "OPEN",
+	}
+
+	err = svc.OnTransition(context.Background(), nil, instance, transition, false)
+	assert.NoError(t, err)
 }

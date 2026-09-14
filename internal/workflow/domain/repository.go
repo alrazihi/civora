@@ -55,6 +55,7 @@ type WorkflowInstanceRepository interface {
 	SaveTx(ctx context.Context, tx *sql.Tx, instance *WorkflowInstance) error
 	FindByID(ctx context.Context, tenantID, id uuid.UUID) (*WorkflowInstance, error)
 	FindByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*WorkflowInstance, error)
+	FindByCaseIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID) (*WorkflowInstance, error)
 	FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID, limit, offset int) ([]*WorkflowInstance, int, error)
 	CountActiveByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) (int, error)
 	UpdateState(ctx context.Context, tenantID, id uuid.UUID, state string, version int) error

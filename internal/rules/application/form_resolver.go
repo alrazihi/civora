@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -34,7 +35,15 @@ func (a *formKeyResolverAdapter) FindByKey(ctx context.Context, orgID uuid.UUID,
 }
 
 func (a *formKeyResolverAdapter) FindByID(ctx context.Context, orgID, formID uuid.UUID) (*shared.FormView, error) {
-	form, err := a.formRepo.FindByID(ctx, orgID, formID)
+	return a.findByID(ctx, nil, orgID, formID)
+}
+
+func (a *formKeyResolverAdapter) FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, formID uuid.UUID) (*shared.FormView, error) {
+	return a.findByID(ctx, tx, orgID, formID)
+}
+
+func (a *formKeyResolverAdapter) findByID(ctx context.Context, tx *sql.Tx, orgID, formID uuid.UUID) (*shared.FormView, error) {
+	form, err := a.formRepo.FindByIDTx(ctx, tx, orgID, formID)
 	if err != nil {
 		if errors.Is(err, domain.ErrFormNotFound) {
 			return nil, shared.NewError(shared.CodeNotFound, "form not found", err)

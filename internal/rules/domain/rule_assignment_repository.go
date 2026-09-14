@@ -14,6 +14,7 @@ type RuleAssignmentRepository interface {
 
 	FindByID(ctx context.Context, orgID, id uuid.UUID) (*WorkflowStateRuleAssignment, error)
 	FindByWorkflowAndState(ctx context.Context, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*WorkflowStateRuleAssignment, error)
+	FindByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*WorkflowStateRuleAssignment, error)
 	ListByRuleSet(ctx context.Context, orgID, ruleSetID uuid.UUID) ([]*WorkflowStateRuleAssignment, error)
 	ListByWorkflow(ctx context.Context, orgID, workflowDefID uuid.UUID) ([]*WorkflowStateRuleAssignment, error)
 

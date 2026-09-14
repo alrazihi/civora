@@ -208,6 +208,9 @@ func (s *stubInstanceRepo) FindByID(ctx context.Context, tenantID, id uuid.UUID)
 	return nil, domain.ErrWorkflowInstanceNotFound{InstanceID: id}
 }
 func (s *stubInstanceRepo) FindByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error) {
+	return s.FindByCaseIDTx(ctx, nil, tenantID, caseID)
+}
+func (s *stubInstanceRepo) FindByCaseIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error) {
 	if i, ok := s.byCase[caseID]; ok {
 		return i, nil
 	}

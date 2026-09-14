@@ -400,4 +400,35 @@ func TestEvaluate_HistoricalReproducibility(t *testing.T) {
 	assert.Equal(t, string(b1), string(b2))
 }
 
+func TestToRat_Float64(t *testing.T) {
+	r, ok := toRat(float64(42))
+	assert.True(t, ok)
+	assert.NotNil(t, r)
+	assert.Equal(t, "42", r.RatString())
+
+	r, ok = toRat(float64(0))
+	assert.True(t, ok)
+	assert.NotNil(t, r)
+}
+
+func TestToRat_NonNumeric(t *testing.T) {
+	_, ok := toRat("not-a-number")
+	assert.False(t, ok)
+
+	r, ok := toRat("3.14")
+	assert.True(t, ok)
+	assert.NotNil(t, r)
+
+	r, ok = toRat(json.Number("99"))
+	assert.True(t, ok)
+	assert.Equal(t, "99", r.RatString())
+
+	r, ok = toRat(int(7))
+	assert.True(t, ok)
+	assert.Equal(t, "7", r.RatString())
+
+	_, ok = toRat(true)
+	assert.False(t, ok)
+}
+
 var _ = strings.TrimSpace

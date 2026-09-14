@@ -80,7 +80,7 @@ type CaseService struct {
 	ruleIntegration      interface {
 		EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error)
 		ListEvaluationsByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
-		AssembleFactsFromCase(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error)
+		AssembleFactsFromCase(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) (map[string]interface{}, error)
 	}
 }
 
@@ -120,7 +120,7 @@ func NewCaseService(
 func (s *CaseService) SetRuleIntegration(svc interface {
 	EvaluateCaseRules(ctx context.Context, params rulesintegration.EvaluateCaseRulesParams) (*rulesintegration.CaseRuleEvaluationResult, error)
 	ListEvaluationsByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*rulesdomain.Evaluation, int, error)
-	AssembleFactsFromCase(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error)
+	AssembleFactsFromCase(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) (map[string]interface{}, error)
 }) {
 	s.ruleIntegration = svc
 }
@@ -575,7 +575,7 @@ func (s *CaseService) AssembleCaseFacts(ctx context.Context, orgID, caseID uuid.
 	if s.ruleIntegration == nil {
 		return nil, fmt.Errorf("rule integration not configured")
 	}
-	return s.ruleIntegration.AssembleFactsFromCase(ctx, orgID, caseID)
+	return s.ruleIntegration.AssembleFactsFromCase(ctx, nil, orgID, caseID)
 }
 
 // GetWorkflowInstance returns the workflow instance associated with a case.
@@ -636,6 +636,24 @@ func (s *CaseService) OnTransition(ctx context.Context, tx *sql.Tx, instance *wo
 		return err
 	}
 	c.Version++
+
+	// Trigger automatic rule evaluation for the new workflow state. The
+	// observer runs within the transition transaction, so the evaluation
+	// reads the just-written case state and saves evaluations atomically —
+	// a validation or save failure rolls the entire transition back.
+	if s.ruleIntegration != nil {
+		if _, err := s.EvaluateCaseRules(ctx, rulesintegration.EvaluateCaseRulesParams{
+			OrganizationID: instance.TenantID,
+			CaseID:         instance.CaseID,
+			ActorID:        uuid.Nil,
+			Trigger:        rulesdomain.TriggerAutomatic,
+			Event:          rulesintegration.TriggerWorkflowTransition,
+			Tx:             tx,
+		}); err != nil {
+			return fmt.Errorf("rule evaluation on transition failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

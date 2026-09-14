@@ -347,7 +347,8 @@ func toRat(v interface{}) (*big.Rat, bool) {
 	case int64:
 		return new(big.Rat).SetInt64(n), true
 	case float64:
-		return new(big.Rat).SetFloat64(n), n != 0 || true
+		r := new(big.Rat).SetFloat64(n)
+		return r, r != nil
 	case bool:
 		return nil, false
 	case string:

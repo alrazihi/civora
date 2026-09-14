@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"database/sql"
 
 	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	"github.com/google/uuid"
@@ -19,16 +20,15 @@ type FormSubmissionFinder interface {
 // SubmissionLister lists all submissions for a case.
 type SubmissionLister interface {
 	ListByCase(ctx context.Context, orgID, caseID uuid.UUID) ([]*submissiondomain.FormSubmission, error)
+	ListByCaseTx(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) ([]*submissiondomain.FormSubmission, error)
 }
 
 // FormKeyResolver maps form keys (the stable identifier rules reference) to
 // resolved form metadata.
 type FormKeyResolver interface {
 	FindByKey(ctx context.Context, orgID uuid.UUID, key string) (*FormView, error)
-	// FindByID resolves a form's read-only projection by its UUID, used to
-	// map form submission rows (which carry form IDs) to the form keys that
-	// rules reference.
 	FindByID(ctx context.Context, orgID, formID uuid.UUID) (*FormView, error)
+	FindByIDTx(ctx context.Context, tx *sql.Tx, orgID, formID uuid.UUID) (*FormView, error)
 }
 
 // FormView is a read-only projection of a form used for fact resolution.

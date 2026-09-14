@@ -66,11 +66,19 @@ func (r *PostgresWorkflowStateRuleAssignmentRepository) FindByID(ctx context.Con
 }
 
 func (r *PostgresWorkflowStateRuleAssignmentRepository) FindByWorkflowAndState(ctx context.Context, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*domain.WorkflowStateRuleAssignment, error) {
+	return r.findByWorkflowAndState(ctx, nil, orgID, workflowDefID, stateKey)
+}
+
+func (r *PostgresWorkflowStateRuleAssignmentRepository) FindByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*domain.WorkflowStateRuleAssignment, error) {
+	return r.findByWorkflowAndState(ctx, tx, orgID, workflowDefID, stateKey)
+}
+
+func (r *PostgresWorkflowStateRuleAssignmentRepository) findByWorkflowAndState(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*domain.WorkflowStateRuleAssignment, error) {
 	query := `SELECT id, organization_id, workflow_definition_id, workflow_state_key, rule_set_id, required, active, display_order, created_at, updated_at
 		FROM rules.workflow_state_rule_assignments
 		WHERE organization_id = $1 AND workflow_definition_id = $2 AND workflow_state_key = $3 AND active = true
 		ORDER BY display_order`
-	rows, err := r.db.QueryContext(ctx, query, orgID, workflowDefID, stateKey)
+	rows, err := r.query(ctx, tx, query, orgID, workflowDefID, stateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +161,13 @@ func scanRuleAssignmentRows(rows *sql.Rows) ([]*domain.WorkflowStateRuleAssignme
 		assignments = append(assignments, &a)
 	}
 	return assignments, rows.Close()
+}
+
+func (r *PostgresWorkflowStateRuleAssignmentRepository) query(ctx context.Context, tx *sql.Tx, query string, args ...interface{}) (*sql.Rows, error) {
+	if tx != nil {
+		return tx.QueryContext(ctx, query, args...)
+	}
+	return r.db.QueryContext(ctx, query, args...)
 }
 
 type sqlRowScanner interface {

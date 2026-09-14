@@ -336,7 +336,6 @@ func (r *PostgresRuleSetRepository) scanRuleSet(row interface {
 	var status string
 	var outcome string
 	var caseID uuid.UUID
-	var hasCaseID bool
 	var rulesJSON []byte
 	var triggersJSON []byte
 
@@ -356,10 +355,6 @@ func (r *PostgresRuleSetRepository) scanRuleSet(row interface {
 	rs.DefaultOutcome = rulesdomain.Outcome(outcome)
 	if caseID != uuid.Nil {
 		rs.CaseID = &caseID
-		hasCaseID = true
-	} else {
-		rs.CaseID = nil
-		hasCaseID = false
 	}
 
 	if len(rulesJSON) > 0 {
@@ -380,7 +375,6 @@ func (r *PostgresRuleSetRepository) scanRuleSet(row interface {
 		rs.Triggers = []string{}
 	}
 
-	_ = hasCaseID
 	return &rs, nil
 }
 
@@ -562,11 +556,8 @@ func (r *PostgresEvaluationRepository) scanEvaluation(row interface {
 	var outcome string
 	var trigger string
 	var caseID uuid.UUID
-	var hasCaseID bool
 	var matchedRuleID uuid.UUID
-	var hasMatchedRuleID bool
 	var evalBy uuid.UUID
-	var hasEvalBy bool
 	var traceJSON []byte
 	var factsJSON []byte
 	var reasonStr sql.NullString
@@ -589,31 +580,21 @@ func (r *PostgresEvaluationRepository) scanEvaluation(row interface {
 
 	if caseID != uuid.Nil {
 		ev.CaseID = &caseID
-		hasCaseID = true
 	} else {
 		ev.CaseID = nil
-		hasCaseID = false
 	}
 
 	if matchedRuleID != uuid.Nil {
 		ev.MatchedRuleID = &matchedRuleID
-		hasMatchedRuleID = true
 	} else {
 		ev.MatchedRuleID = nil
-		hasMatchedRuleID = false
 	}
 
 	if evalBy != uuid.Nil {
 		ev.EvaluatedBy = &evalBy
-		hasEvalBy = true
 	} else {
 		ev.EvaluatedBy = nil
-		hasEvalBy = false
 	}
-
-	_ = hasCaseID
-	_ = hasMatchedRuleID
-	_ = hasEvalBy
 
 	if reasonStr.Valid {
 		ev.Reason = &reasonStr.String

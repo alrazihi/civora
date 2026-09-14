@@ -17,10 +17,9 @@ CREATE TABLE rules.rule_sets (
     description     TEXT,
     version         INTEGER NOT NULL,
     status          TEXT NOT NULL DEFAULT 'DRAFT',
-    default_outcome TEXT NOT NULL DEFAULT 'MANUAL_REVIEW',
-    rules           JSONB NOT NULL,
-    triggers        JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_by      UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+     default_outcome TEXT NOT NULL DEFAULT 'MANUAL_REVIEW',
+     rules           JSONB NOT NULL,
+     created_by      UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT valid_rule_set_status CHECK (

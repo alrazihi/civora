@@ -67,13 +67,23 @@ func (r *PostgresWorkflowInstanceRepository) FindByID(ctx context.Context, tenan
 }
 
 func (r *PostgresWorkflowInstanceRepository) FindByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error) {
+	return r.findByCaseID(ctx, r.db, tenantID, caseID)
+}
+
+func (r *PostgresWorkflowInstanceRepository) FindByCaseIDTx(ctx context.Context, tx *sql.Tx, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error) {
+	return r.findByCaseID(ctx, tx, tenantID, caseID)
+}
+
+func (r *PostgresWorkflowInstanceRepository) findByCaseID(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}, tenantID, caseID uuid.UUID) (*domain.WorkflowInstance, error) {
 	query := `
 		SELECT id, organization_id, workflow_definition_id, workflow_definition_version,
 			   case_id, current_state, started_at, completed_at, metadata, version
 		FROM workflow_instances
 		WHERE organization_id = $1 AND case_id = $2
 	`
-	return r.scanInstance(r.db.QueryRowContext(ctx, query, tenantID, caseID))
+	return r.scanInstance(q.QueryRowContext(ctx, query, tenantID, caseID))
 }
 
 func (r *PostgresWorkflowInstanceRepository) FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID, limit, offset int) ([]*domain.WorkflowInstance, int, error) {

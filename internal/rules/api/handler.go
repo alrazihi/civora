@@ -1091,6 +1091,3 @@ func serializeRule(rule *rulesdomain.Rule) map[string]interface{} {
 		"created_at": rule.CreatedAt,
 	}
 }
-
-var _ = bytes.NewReader
-var _ = fmt.Errorf

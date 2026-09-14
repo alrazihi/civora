@@ -148,11 +148,6 @@ func (c Condition) Clone() Condition {
 	return clone
 }
 
-// HasValueRequired reports operators that must carry a value.
-func hasValueRequired(op Operator) bool {
-	return !existenceOperators[op]
-}
-
 // ValidateCondition validates a single condition's structure and type
 // correctness of its value. Returns the first error encountered.
 func ValidateCondition(c *Condition, depth int) error {
@@ -244,7 +239,6 @@ func validateValueForOperator(op Operator, val interface{}) error {
 			if isJSONNumber(elem) {
 				continue
 			}
-			_ = arr
 		}
 		return nil
 	case booleanOperators[op]:

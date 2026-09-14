@@ -20,9 +20,10 @@ import (
 
 var (
 	ErrRuleAssignmentNotFound = errors.New("rule assignment not found")
-	ErrNoRuleAssignments      = errors.New("no rule assignments for this state")
 	ErrCaseNotFound           = errors.New("case not found")
 )
+
+const TriggerWorkflowTransition = "workflow_transition"
 
 type CaseRuleIntegrationService struct {
 	ruleSetRepo          rulesdomain.RuleSetRepository
@@ -31,11 +32,11 @@ type CaseRuleIntegrationService struct {
 	workflowInstanceRepo workflowdomain.WorkflowInstanceRepository
 	assignmentRepo       interface {
 		FindByWorkflowAndState(ctx context.Context, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error)
+		FindByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error)
 	}
-	submissionLister     shared.SubmissionLister
-	formSubmissionFinder shared.FormSubmissionFinder
-	formKeyResolver      shared.FormKeyResolver
-	auditor              auditdomain.EventRecorder
+	submissionLister shared.SubmissionLister
+	formKeyResolver  shared.FormKeyResolver
+	auditor          auditdomain.EventRecorder
 }
 
 func NewCaseRuleIntegrationService(
@@ -45,9 +46,9 @@ func NewCaseRuleIntegrationService(
 	workflowInstanceRepo workflowdomain.WorkflowInstanceRepository,
 	assignmentRepo interface {
 		FindByWorkflowAndState(ctx context.Context, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error)
+		FindByWorkflowAndStateTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error)
 	},
 	submissionLister shared.SubmissionLister,
-	formSubmissionFinder shared.FormSubmissionFinder,
 	formKeyResolver shared.FormKeyResolver,
 	auditor auditdomain.EventRecorder,
 ) *CaseRuleIntegrationService {
@@ -58,7 +59,6 @@ func NewCaseRuleIntegrationService(
 		workflowInstanceRepo: workflowInstanceRepo,
 		assignmentRepo:       assignmentRepo,
 		submissionLister:     submissionLister,
-		formSubmissionFinder: formSubmissionFinder,
 		formKeyResolver:      formKeyResolver,
 		auditor:              auditor,
 	}
@@ -70,6 +70,8 @@ type EvaluateCaseRulesParams struct {
 	ActorID        uuid.UUID
 	Facts          map[string]interface{}
 	Trigger        rulesdomain.Trigger
+	Event          string
+	Tx             *sql.Tx
 }
 
 type CaseRuleEvaluationResult struct {
@@ -101,10 +103,10 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		params.Trigger = rulesdomain.TriggerManual
 	}
 	if params.Trigger != rulesdomain.TriggerManual && params.Trigger != rulesdomain.TriggerAutomatic {
-		return nil, fmt.Errorf("invalid trigger: %w", ErrInvalidTrigger)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidTrigger, params.Trigger)
 	}
 
-	caseEntity, err := s.caseRepo.FindByID(ctx, params.OrganizationID, params.CaseID)
+	caseEntity, err := s.findCase(ctx, params.Tx, params.OrganizationID, params.CaseID)
 	if err != nil {
 		if errors.Is(err, casesdomain.ErrCaseNotFound) {
 			return nil, fmt.Errorf("case not found: %w", ErrCaseNotFound)
@@ -116,7 +118,7 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		return nil, fmt.Errorf("case has no workflow instance")
 	}
 
-	instance, err := s.workflowInstanceRepo.FindByCaseID(ctx, params.OrganizationID, params.CaseID)
+	instance, err := s.findWorkflowInstance(ctx, params.Tx, params.OrganizationID, params.CaseID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("workflow instance not found")
@@ -124,16 +126,14 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		return nil, fmt.Errorf("workflow instance lookup failed: %w", err)
 	}
 
-	assignments, err := s.assignmentRepo.FindByWorkflowAndState(ctx, params.OrganizationID, instance.WorkflowDefID, instance.CurrentState)
+	assignments, err := s.findAssignments(ctx, params.Tx, params.OrganizationID, instance.WorkflowDefID, instance.CurrentState)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rule assignments: %w", err)
 	}
 
-	// Assemble facts once, shared by all assigned rule sets, so the
-	// facts_snapshot stored with each evaluation is consistent.
 	facts := params.Facts
 	if facts == nil {
-		facts, err = s.AssembleFactsFromCase(ctx, params.OrganizationID, params.CaseID)
+		facts, err = s.AssembleFactsFromCase(ctx, params.Tx, params.OrganizationID, params.CaseID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to assemble facts: %w", err)
 		}
@@ -145,19 +145,30 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		EvaluatedAt:   time.Now().UTC(),
 	}
 
+	var evaluatedBy *uuid.UUID
+	if params.ActorID != uuid.Nil {
+		evaluatedBy = &params.ActorID
+	}
+
 	for _, assignment := range assignments {
 		if !assignment.Active {
 			continue
 		}
 		result.AssignedRuleSets = append(result.AssignedRuleSets, assignment.RuleSetID)
 
-		rs, err := s.ruleSetRepo.FindByID(ctx, params.OrganizationID, assignment.RuleSetID)
+		rs, err := s.findRuleSet(ctx, params.Tx, params.OrganizationID, assignment.RuleSetID)
 		if err != nil {
 			continue
 		}
 
-		// Validate the rule set before evaluation so an invalid rule set
-		// yields an ERROR evaluation rather than a panic or silent skip.
+		if rs.Status != rulesdomain.StatusPublished {
+			continue
+		}
+
+		if !triggersMatch(rs.Triggers, params.Event) {
+			continue
+		}
+
 		if err := rulesdomain.ValidateRuleSet(rs); err != nil {
 			eval := &rulesdomain.Evaluation{
 				ID:             uuid.New(),
@@ -170,11 +181,11 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 				Reason:         shared.StrPtr(fmt.Sprintf("rule set validation failed: %v", err)),
 				Trace:          []rulesdomain.TraceNode{},
 				Trigger:        params.Trigger,
-				EvaluatedBy:    &params.ActorID,
+				EvaluatedBy:    evaluatedBy,
 				EvaluatedAt:    time.Now().UTC(),
 				FactsSnapshot:  facts,
 			}
-			if err := s.saveEvaluation(ctx, eval); err != nil {
+			if err := s.saveEvaluation(ctx, params.Tx, eval); err != nil {
 				return nil, fmt.Errorf("failed to save evaluation: %w", err)
 			}
 			result.Evaluations = append(result.Evaluations, CaseRuleEvaluation{
@@ -194,7 +205,7 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		}
 
 		evaluatedAt := time.Now().UTC()
-		eval := rulesdomain.Evaluate(rs, facts, evaluatedAt, &params.ActorID, params.Trigger)
+		eval := rulesdomain.Evaluate(rs, facts, evaluatedAt, evaluatedBy, params.Trigger)
 		eval.CaseID = &params.CaseID
 
 		var missingFacts []string
@@ -218,7 +229,7 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		}
 		result.Evaluations = append(result.Evaluations, crEval)
 
-		if err := s.saveEvaluation(ctx, eval); err != nil {
+		if err := s.saveEvaluation(ctx, params.Tx, eval); err != nil {
 			return nil, fmt.Errorf("failed to save evaluation: %w", err)
 		}
 	}
@@ -226,6 +237,25 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 	result.HasMissingFacts = hasAnyMissing(result.Evaluations)
 
 	return result, nil
+}
+
+// triggersMatch reports whether a rule set's triggers match the given event.
+// Empty triggers mean the rule set evaluates on any event (default). Otherwise
+// the event must appear verbatim in the triggers list, or "workflow_transition"
+// must be listed (matching any transition event).
+func triggersMatch(triggers []string, event string) bool {
+	if len(triggers) == 0 {
+		return true
+	}
+	if event == "" {
+		return true
+	}
+	for _, t := range triggers {
+		if t == event || t == TriggerWorkflowTransition {
+			return true
+		}
+	}
+	return false
 }
 
 func hasAnyMissing(evals []CaseRuleEvaluation) bool {
@@ -267,40 +297,76 @@ func findMissingInCondition(c rulesdomain.Condition, facts map[string]interface{
 	}
 }
 
-func (s *CaseRuleIntegrationService) saveEvaluation(ctx context.Context, eval *rulesdomain.Evaluation) error {
-	return database.InTransaction(ctx, s.evalRepo.DB(), func(tx *sql.Tx) error {
+func (s *CaseRuleIntegrationService) findCase(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) (*casesdomain.Case, error) {
+	if tx != nil {
+		return s.caseRepo.FindByIDTx(ctx, tx, orgID, caseID)
+	}
+	return s.caseRepo.FindByID(ctx, orgID, caseID)
+}
+
+func (s *CaseRuleIntegrationService) findWorkflowInstance(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error) {
+	if tx != nil {
+		return s.workflowInstanceRepo.FindByCaseIDTx(ctx, tx, orgID, caseID)
+	}
+	return s.workflowInstanceRepo.FindByCaseID(ctx, orgID, caseID)
+}
+
+func (s *CaseRuleIntegrationService) findAssignments(ctx context.Context, tx *sql.Tx, orgID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error) {
+	if tx != nil {
+		return s.assignmentRepo.FindByWorkflowAndStateTx(ctx, tx, orgID, workflowDefID, stateKey)
+	}
+	return s.assignmentRepo.FindByWorkflowAndState(ctx, orgID, workflowDefID, stateKey)
+}
+
+func (s *CaseRuleIntegrationService) findRuleSet(ctx context.Context, tx *sql.Tx, orgID, ruleSetID uuid.UUID) (*rulesdomain.RuleSet, error) {
+	if tx != nil {
+		return s.ruleSetRepo.FindByIDTx(ctx, tx, orgID, ruleSetID)
+	}
+	return s.ruleSetRepo.FindByID(ctx, orgID, ruleSetID)
+}
+
+func (s *CaseRuleIntegrationService) saveEvaluation(ctx context.Context, tx *sql.Tx, eval *rulesdomain.Evaluation) error {
+	if tx != nil {
 		if err := s.evalRepo.SaveTx(ctx, tx, eval); err != nil {
 			return fmt.Errorf("failed to save evaluation: %w", err)
 		}
-		if s.auditor != nil {
-			auditAction := "evaluation.manual"
-			if eval.Trigger == rulesdomain.TriggerAutomatic {
-				auditAction = "evaluation.automatic"
-			}
-			metadata := map[string]interface{}{
-				"rule_set_id":      eval.RuleSetID.String(),
-				"rule_set_version": eval.RuleSetVersion,
-				"case_id":          eval.CaseID.String(),
-				"outcome":          string(eval.Outcome),
-				"status":           string(eval.Status),
-			}
-			if eval.MatchedRuleID != nil {
-				metadata["matched_rule_id"] = eval.MatchedRuleID.String()
-			}
-			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
-				OrganizationID: eval.OrganizationID,
-				ActorID:        eval.EvaluatedBy,
-				Action:         auditAction,
-				Resource:       "evaluation",
-				ResourceID:     shared.StrPtr(eval.ID.String()),
-				Outcome:        "success",
-				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
-				Metadata:       metadata,
-			}); err != nil {
-				return fmt.Errorf("failed to record audit event: %w", err)
-			}
+		return s.recordEvaluationAudit(ctx, tx, eval)
+	}
+	return database.InTransaction(ctx, s.evalRepo.DB(), func(innerTx *sql.Tx) error {
+		if err := s.evalRepo.SaveTx(ctx, innerTx, eval); err != nil {
+			return fmt.Errorf("failed to save evaluation: %w", err)
 		}
+		return s.recordEvaluationAudit(ctx, innerTx, eval)
+	})
+}
+
+func (s *CaseRuleIntegrationService) recordEvaluationAudit(ctx context.Context, tx *sql.Tx, eval *rulesdomain.Evaluation) error {
+	if s.auditor == nil {
 		return nil
+	}
+	auditAction := "evaluation.manual"
+	if eval.Trigger == rulesdomain.TriggerAutomatic {
+		auditAction = "evaluation.automatic"
+	}
+	metadata := map[string]interface{}{
+		"rule_set_id":      eval.RuleSetID.String(),
+		"rule_set_version": eval.RuleSetVersion,
+		"case_id":          eval.CaseID.String(),
+		"outcome":          string(eval.Outcome),
+		"status":           string(eval.Status),
+	}
+	if eval.MatchedRuleID != nil {
+		metadata["matched_rule_id"] = eval.MatchedRuleID.String()
+	}
+	return shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+		OrganizationID: eval.OrganizationID,
+		ActorID:        eval.EvaluatedBy,
+		Action:         auditAction,
+		Resource:       "evaluation",
+		ResourceID:     shared.StrPtr(eval.ID.String()),
+		Outcome:        "success",
+		RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+		Metadata:       metadata,
 	})
 }
 
@@ -317,15 +383,14 @@ func (s *CaseRuleIntegrationService) ListEvaluationsByCase(ctx context.Context, 
 	return s.evalRepo.ListByCase(ctx, orgID, caseID, limit, offset)
 }
 
-func (s *CaseRuleIntegrationService) AssembleFactsFromCase(ctx context.Context, orgID, caseID uuid.UUID) (map[string]interface{}, error) {
+func (s *CaseRuleIntegrationService) AssembleFactsFromCase(ctx context.Context, tx *sql.Tx, orgID, caseID uuid.UUID) (map[string]interface{}, error) {
 	facts := map[string]interface{}{}
 
-	caseEntity, err := s.caseRepo.FindByID(ctx, orgID, caseID)
+	caseEntity, err := s.findCase(ctx, tx, orgID, caseID)
 	if err != nil {
 		return nil, fmt.Errorf("case not found: %w", err)
 	}
 
-	// case.* attributes — the documented fact catalog (§11).
 	ageDays := 0.0
 	if !caseEntity.CreatedAt.IsZero() {
 		ageDays = caseEntity.CreatedAt.UTC().Sub(time.Now().UTC()).Hours() / -24.0
@@ -341,23 +406,27 @@ func (s *CaseRuleIntegrationService) AssembleFactsFromCase(ctx context.Context, 
 		"age_days":       ageDays,
 	}
 
-	// form.<key>.<field> — the latest submission for each form assigned to
-	// this case. Rules reference form keys (the stable identifier), so the
-	// facts document is keyed by form key, not by form ID.
 	facts["form"] = map[string]interface{}{}
 
-	submissions, err := s.submissionLister.ListByCase(ctx, orgID, caseID)
+	var submissions []*submissiondomain.FormSubmission
+	if tx != nil {
+		submissions, err = s.submissionLister.ListByCaseTx(ctx, tx, orgID, caseID)
+	} else {
+		submissions, err = s.submissionLister.ListByCase(ctx, orgID, caseID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to list submissions: %w", err)
 	}
 
-	// Keep only the latest submission per form key (most recent wins).
 	latestByKey := map[string]*submissiondomain.FormSubmission{}
 	for _, sub := range submissions {
-		formView, viewErr := s.formKeyResolver.FindByID(ctx, orgID, sub.FormID)
-		if viewErr != nil {
-			// Skip submissions whose form cannot be resolved rather than
-			// failing the whole fact assembly.
+		var formView *shared.FormView
+		if tx != nil {
+			formView, err = s.formKeyResolver.FindByIDTx(ctx, tx, orgID, sub.FormID)
+		} else {
+			formView, err = s.formKeyResolver.FindByID(ctx, orgID, sub.FormID)
+		}
+		if err != nil {
 			continue
 		}
 		existing, ok := latestByKey[formView.Key]
