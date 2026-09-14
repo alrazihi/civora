@@ -216,7 +216,7 @@ func main() {
 	rulesAssignmentService := rulesapp.NewRuleAssignmentService(ruleAssignmentRepo, ruleSetRepo, auditService)
 	rulesAssignmentHandler := rulesapi.NewAssignmentHandler(rulesAssignmentService)
 
-	ruleIntegration := rulesapp.NewCaseRuleIntegrationService(ruleSetRepo, evalRepo, caseRepo, workflowInstanceRepo, ruleAssignmentRepo, submissionpostgres.NewPostgresFormSubmissionRepository(db.DB), auditService)
+	ruleIntegration := rulesapp.NewCaseRuleIntegrationService(ruleSetRepo, evalRepo, caseRepo, workflowInstanceRepo, ruleAssignmentRepo, submissionpostgres.NewPostgresFormSubmissionRepository(db.DB), submissionpostgres.NewPostgresFormSubmissionRepository(db.DB), rulesapp.NewFormKeyResolverAdapter(formRepo), auditService)
 	caseService.SetRuleIntegration(ruleIntegration)
 
 	auditHandler := auditapi.NewHandler(auditService)

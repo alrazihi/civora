@@ -505,7 +505,7 @@ func (s *RuleSetService) ArchiveRuleSet(ctx context.Context, orgID, id uuid.UUID
 	return archived, nil
 }
 
-func (s *RuleSetService) DeleteRuleSet(ctx context.Context, orgID, id uuid.UUID) error {
+func (s *RuleSetService) DeleteRuleSet(ctx context.Context, orgID, id uuid.UUID, actorID uuid.UUID) error {
 	var rs *rulesdomain.RuleSet
 	var err error
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
@@ -525,7 +525,7 @@ func (s *RuleSetService) DeleteRuleSet(ctx context.Context, orgID, id uuid.UUID)
 		if s.auditor != nil {
 			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
 				OrganizationID: rs.OrganizationID,
-				ActorID:        &uuid.UUID{},
+				ActorID:        &actorID,
 				ResourceID:     shared.StrPtr(rs.ID.String()),
 				Action:         "ruleset.deleted",
 				Resource:       "ruleset",

@@ -10,6 +10,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	casesdomain "github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
+	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	intmid "github.com/alrazihi/civora/internal/middleware"
 	rulesdomain "github.com/alrazihi/civora/internal/rules/domain"
 	"github.com/alrazihi/civora/internal/shared"
@@ -31,8 +32,10 @@ type CaseRuleIntegrationService struct {
 	assignmentRepo       interface {
 		FindByWorkflowAndState(ctx context.Context, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error)
 	}
-	submissionLister shared.SubmissionLister
-	auditor          auditdomain.EventRecorder
+	submissionLister     shared.SubmissionLister
+	formSubmissionFinder shared.FormSubmissionFinder
+	formKeyResolver      shared.FormKeyResolver
+	auditor              auditdomain.EventRecorder
 }
 
 func NewCaseRuleIntegrationService(
@@ -44,6 +47,8 @@ func NewCaseRuleIntegrationService(
 		FindByWorkflowAndState(ctx context.Context, orgID uuid.UUID, workflowDefID uuid.UUID, stateKey string) ([]*rulesdomain.WorkflowStateRuleAssignment, error)
 	},
 	submissionLister shared.SubmissionLister,
+	formSubmissionFinder shared.FormSubmissionFinder,
+	formKeyResolver shared.FormKeyResolver,
 	auditor auditdomain.EventRecorder,
 ) *CaseRuleIntegrationService {
 	return &CaseRuleIntegrationService{
@@ -53,6 +58,8 @@ func NewCaseRuleIntegrationService(
 		workflowInstanceRepo: workflowInstanceRepo,
 		assignmentRepo:       assignmentRepo,
 		submissionLister:     submissionLister,
+		formSubmissionFinder: formSubmissionFinder,
+		formKeyResolver:      formKeyResolver,
 		auditor:              auditor,
 	}
 }
@@ -122,6 +129,16 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 		return nil, fmt.Errorf("failed to get rule assignments: %w", err)
 	}
 
+	// Assemble facts once, shared by all assigned rule sets, so the
+	// facts_snapshot stored with each evaluation is consistent.
+	facts := params.Facts
+	if facts == nil {
+		facts, err = s.AssembleFactsFromCase(ctx, params.OrganizationID, params.CaseID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to assemble facts: %w", err)
+		}
+	}
+
 	result := &CaseRuleEvaluationResult{
 		CaseID:        params.CaseID,
 		WorkflowState: instance.CurrentState,
@@ -139,9 +156,41 @@ func (s *CaseRuleIntegrationService) EvaluateCaseRules(ctx context.Context, para
 			continue
 		}
 
-		facts := params.Facts
-		if facts == nil {
-			facts = map[string]interface{}{}
+		// Validate the rule set before evaluation so an invalid rule set
+		// yields an ERROR evaluation rather than a panic or silent skip.
+		if err := rulesdomain.ValidateRuleSet(rs); err != nil {
+			eval := &rulesdomain.Evaluation{
+				ID:             uuid.New(),
+				RuleSetID:      rs.ID,
+				RuleSetVersion: rs.Version,
+				OrganizationID: params.OrganizationID,
+				CaseID:         &params.CaseID,
+				Status:         rulesdomain.StatusError,
+				Outcome:        rulesdomain.OutcomeError,
+				Reason:         shared.StrPtr(fmt.Sprintf("rule set validation failed: %v", err)),
+				Trace:          []rulesdomain.TraceNode{},
+				Trigger:        params.Trigger,
+				EvaluatedBy:    &params.ActorID,
+				EvaluatedAt:    time.Now().UTC(),
+				FactsSnapshot:  facts,
+			}
+			if err := s.saveEvaluation(ctx, eval); err != nil {
+				return nil, fmt.Errorf("failed to save evaluation: %w", err)
+			}
+			result.Evaluations = append(result.Evaluations, CaseRuleEvaluation{
+				RuleSetID:      rs.ID,
+				RuleSetKey:     rs.Key,
+				RuleSetName:    rs.Name,
+				RuleSetVersion: rs.Version,
+				Status:         eval.Status,
+				Outcome:        eval.Outcome,
+				Reason:         eval.Reason,
+				MatchedRuleID:  nil,
+				Trace:          eval.Trace,
+				EvaluatedAt:    eval.EvaluatedAt,
+				Trigger:        eval.Trigger,
+			})
+			continue
 		}
 
 		evaluatedAt := time.Now().UTC()
@@ -276,6 +325,11 @@ func (s *CaseRuleIntegrationService) AssembleFactsFromCase(ctx context.Context, 
 		return nil, fmt.Errorf("case not found: %w", err)
 	}
 
+	// case.* attributes — the documented fact catalog (§11).
+	ageDays := 0.0
+	if !caseEntity.CreatedAt.IsZero() {
+		ageDays = caseEntity.CreatedAt.UTC().Sub(time.Now().UTC()).Hours() / -24.0
+	}
 	facts["case"] = map[string]interface{}{
 		"id":             caseEntity.ID.String(),
 		"status":         string(caseEntity.Status),
@@ -284,24 +338,47 @@ func (s *CaseRuleIntegrationService) AssembleFactsFromCase(ctx context.Context, 
 		"title":          caseEntity.Title,
 		"service_type":   string(caseEntity.ServiceType),
 		"priority":       string(caseEntity.Priority),
+		"age_days":       ageDays,
 	}
+
+	// form.<key>.<field> — the latest submission for each form assigned to
+	// this case. Rules reference form keys (the stable identifier), so the
+	// facts document is keyed by form key, not by form ID.
+	facts["form"] = map[string]interface{}{}
 
 	submissions, err := s.submissionLister.ListByCase(ctx, orgID, caseID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list submissions: %w", err)
 	}
 
-	submissionList := make([]map[string]interface{}, 0, len(submissions))
+	// Keep only the latest submission per form key (most recent wins).
+	latestByKey := map[string]*submissiondomain.FormSubmission{}
 	for _, sub := range submissions {
-		submissionList = append(submissionList, map[string]interface{}{
-			"form_id":         sub.FormID.String(),
-			"form_version_id": sub.FormVersionID.String(),
-			"status":          string(sub.Status),
-			"submitted_at":    sub.SubmittedAt,
-			"data":            sub.Data,
-		})
+		formView, viewErr := s.formKeyResolver.FindByID(ctx, orgID, sub.FormID)
+		if viewErr != nil {
+			// Skip submissions whose form cannot be resolved rather than
+			// failing the whole fact assembly.
+			continue
+		}
+		existing, ok := latestByKey[formView.Key]
+		if !ok || sub.SubmittedAt.After(existing.SubmittedAt) {
+			latestByKey[formView.Key] = sub
+		}
 	}
-	facts["form_submissions"] = submissionList
+
+	for formKey, sub := range latestByKey {
+		formData := map[string]interface{}{
+			"submitted_at": sub.SubmittedAt,
+			"form_id":      sub.FormID.String(),
+			"status":       string(sub.Status),
+		}
+		if sub.Data != nil {
+			for k, v := range sub.Data {
+				formData[k] = v
+			}
+		}
+		facts["form"].(map[string]interface{})[formKey] = formData
+	}
 
 	return facts, nil
 }

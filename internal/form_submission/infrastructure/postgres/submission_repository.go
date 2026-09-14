@@ -128,6 +128,23 @@ func (r *PostgresFormSubmissionRepository) ListByCase(ctx context.Context, tenan
 	return submissions, nil
 }
 
+// FindLatestByFormAndCase returns the most recent submission for the given
+// form key within an organization and case. Used by the rules engine to
+// resolve `form.<key>.<field>` fact paths.
+func (r *PostgresFormSubmissionRepository) FindLatestByFormAndCase(ctx context.Context, tenantID, caseID uuid.UUID, formKey string) (*domain.FormSubmission, error) {
+	query := `
+		SELECT s.id, s.tenant_id, s.case_id, s.form_id, s.form_version_id,
+		       s.submitted_by, s.status, s.data, s.submitted_at, s.updated_at
+		FROM form_submissions s
+		JOIN forms f ON f.id = s.form_id
+		WHERE s.tenant_id = $1 AND s.case_id = $2 AND f.key = $3
+		ORDER BY s.submitted_at DESC
+		LIMIT 1
+	`
+	row := r.queryRow(ctx, nil, query, tenantID, caseID, formKey)
+	return r.scanSubmission(row)
+}
+
 func (r *PostgresFormSubmissionRepository) UpdateTx(ctx context.Context, tx *sql.Tx, submission *domain.FormSubmission) error {
 	query := `
 		UPDATE form_submissions

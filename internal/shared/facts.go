@@ -25,6 +25,10 @@ type SubmissionLister interface {
 // resolved form metadata.
 type FormKeyResolver interface {
 	FindByKey(ctx context.Context, orgID uuid.UUID, key string) (*FormView, error)
+	// FindByID resolves a form's read-only projection by its UUID, used to
+	// map form submission rows (which carry form IDs) to the form keys that
+	// rules reference.
+	FindByID(ctx context.Context, orgID, formID uuid.UUID) (*FormView, error)
 }
 
 // FormView is a read-only projection of a form used for fact resolution.

@@ -35,10 +35,9 @@ func (r *PostgresRuleSetRepository) SaveTx(ctx context.Context, tx *sql.Tx, rs *
 		return fmt.Errorf("failed to marshal triggers: %w", err)
 	}
 
-	var caseID uuid.UUID
-	hasCaseID := rs.CaseID != nil && *rs.CaseID != uuid.Nil
-	if hasCaseID {
-		caseID = *rs.CaseID
+	var caseIDArg interface{}
+	if rs.CaseID != nil && *rs.CaseID != uuid.Nil {
+		caseIDArg = *rs.CaseID
 	}
 
 	query := `
@@ -47,7 +46,7 @@ func (r *PostgresRuleSetRepository) SaveTx(ctx context.Context, tx *sql.Tx, rs *
 	`
 	execer := r.getExecer(tx)
 	_, err = execer.ExecContext(ctx, query,
-		rs.ID, rs.OrganizationID, caseID, rs.Key, rs.Name, rs.Description,
+		rs.ID, rs.OrganizationID, caseIDArg, rs.Key, rs.Name, rs.Description,
 		rs.Version, rs.Status, rs.DefaultOutcome, rulesJSON, rs.CreatedBy,
 		rs.CreatedAt, rs.UpdatedAt, triggersJSON,
 	)
@@ -407,22 +406,19 @@ func (r *PostgresEvaluationRepository) SaveTx(ctx context.Context, tx *sql.Tx, e
 		return fmt.Errorf("failed to marshal facts snapshot: %w", err)
 	}
 
-	var caseID uuid.UUID
-	hasCaseID := ev.CaseID != nil && *ev.CaseID != uuid.Nil
-	if hasCaseID {
-		caseID = *ev.CaseID
+	var caseIDArg interface{}
+	if ev.CaseID != nil && *ev.CaseID != uuid.Nil {
+		caseIDArg = *ev.CaseID
 	}
 
-	var matchedRuleID uuid.UUID
-	hasMatchedRuleID := ev.MatchedRuleID != nil && *ev.MatchedRuleID != uuid.Nil
-	if hasMatchedRuleID {
-		matchedRuleID = *ev.MatchedRuleID
+	var matchedRuleIDArg interface{}
+	if ev.MatchedRuleID != nil && *ev.MatchedRuleID != uuid.Nil {
+		matchedRuleIDArg = *ev.MatchedRuleID
 	}
 
-	var evalBy uuid.UUID
-	hasEvalBy := ev.EvaluatedBy != nil && *ev.EvaluatedBy != uuid.Nil
-	if hasEvalBy {
-		evalBy = *ev.EvaluatedBy
+	var evalByArg interface{}
+	if ev.EvaluatedBy != nil && *ev.EvaluatedBy != uuid.Nil {
+		evalByArg = *ev.EvaluatedBy
 	}
 
 	var reasonStr string
@@ -436,9 +432,9 @@ func (r *PostgresEvaluationRepository) SaveTx(ctx context.Context, tx *sql.Tx, e
 	`
 	execer := r.getExecer(tx)
 	_, err = execer.ExecContext(ctx, query,
-		ev.ID, ev.RuleSetID, ev.RuleSetVersion, ev.OrganizationID, caseID,
-		string(ev.Status), string(ev.Outcome), reasonStr, matchedRuleID,
-		traceJSON, string(ev.Trigger), evalBy, ev.EvaluatedAt, factsJSON,
+		ev.ID, ev.RuleSetID, ev.RuleSetVersion, ev.OrganizationID, caseIDArg,
+		string(ev.Status), string(ev.Outcome), reasonStr, matchedRuleIDArg,
+		traceJSON, string(ev.Trigger), evalByArg, ev.EvaluatedAt, factsJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save evaluation: %w", err)

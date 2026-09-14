@@ -34,7 +34,7 @@ type RuleSetService interface {
 	CreateVersion(ctx context.Context, orgID, id uuid.UUID, actorID uuid.UUID) (*rulesdomain.RuleSet, error)
 	PublishRuleSet(ctx context.Context, orgID, id uuid.UUID, actorID uuid.UUID) (*rulesdomain.RuleSet, error)
 	ArchiveRuleSet(ctx context.Context, orgID, id uuid.UUID, actorID uuid.UUID) (*rulesdomain.RuleSet, error)
-	DeleteRuleSet(ctx context.Context, orgID, id uuid.UUID) error
+	DeleteRuleSet(ctx context.Context, orgID, id, actorID uuid.UUID) error
 	ListVersions(ctx context.Context, orgID uuid.UUID, key string, limit, offset int) ([]*rulesdomain.RuleSet, int, error)
 	EvaluateRuleSet(ctx context.Context, params application.EvaluateRuleSetParams) (*rulesdomain.Evaluation, error)
 	GetEvaluation(ctx context.Context, orgID, id uuid.UUID) (*rulesdomain.Evaluation, error)
@@ -482,7 +482,7 @@ func (h *Handler) DeleteRuleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.svc.DeleteRuleSet(r.Context(), orgID, ruleSetID)
+	err := h.svc.DeleteRuleSet(r.Context(), orgID, ruleSetID, actorID)
 	if err != nil {
 		writeRuleSetError(w, err)
 		return

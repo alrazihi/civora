@@ -106,8 +106,12 @@ func Evaluate(rs *RuleSet, facts map[string]interface{}, evaluatedAt time.Time, 
 		ec.newTraceNode(TraceRoot, "evaluate rule set "+rs.Key),
 	}
 
-	sort.Slice(rs.Rules, func(i, j int) bool {
-		return rs.Rules[i].Priority < rs.Rules[j].Priority
+	// Copy the rules slice before sorting so the caller's RuleSet is never
+	// mutated — Evaluate is a pure function over its inputs.
+	rules := make([]Rule, len(rs.Rules))
+	copy(rules, rs.Rules)
+	sort.Slice(rules, func(i, j int) bool {
+		return rules[i].Priority < rules[j].Priority
 	})
 
 	var matchedRuleID *uuid.UUID
@@ -118,7 +122,7 @@ func Evaluate(rs *RuleSet, facts map[string]interface{}, evaluatedAt time.Time, 
 	anyUnknown := false
 	matched := false
 
-	for _, rule := range rs.Rules {
+	for _, rule := range rules {
 		ruleTrace := ec.newTraceNode(TraceRule, "rule priority "+strconv.Itoa(rule.Priority))
 		ruleTrace.Field = ""
 		result := evaluateCondition(rule.Conditions, facts, &ruleTrace, ec)

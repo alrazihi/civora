@@ -1,0 +1,4 @@
+-- v0.5: revert the triggers backfill.
+-- The column is left in place on downgrade so that re-applying 0019's
+-- original schema (which now also includes triggers) remains consistent.
+-- Dropping the column is intentionally deferred to a later migration.
