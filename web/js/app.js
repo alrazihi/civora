@@ -560,6 +560,334 @@ const app = {
     }
   },
 
+  async loadReviewerQueueList() {
+    const loadingEl = document.getElementById('reviewer-loading');
+    const errorEl = document.getElementById('reviewer-error');
+    const contentEl = document.getElementById('reviewer-content');
+    const subtitleEl = document.getElementById('reviewer-subtitle');
+
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
+    if (contentEl) contentEl.style.display = 'none';
+    if (subtitleEl) subtitleEl.textContent = 'Review Queue';
+
+    try {
+      const res = await listReviewQueue({ assigned_to_me: true, per_page: 50 });
+      const items = res.data || [];
+      const statusArea = document.getElementById('review-status-area');
+      if (!statusArea) throw new Error('Missing review-status-area element');
+
+      if (!items.length) {
+        statusArea.innerHTML = '<p class="empty">No reviews assigned to you.</p>';
+      } else {
+        statusArea.innerHTML = '<p style="margin:0 0 12px;color:var(--text-secondary);font-size:0.9rem">Select a review to begin:</p>' +
+          items.map(item => `<div class="card" style="padding:12px;margin-bottom:8px;cursor:pointer;border:1px solid var(--border)" onclick="router.navigate('reviewer','${escapeJS(item.id)}')">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <div><strong>Case:</strong> ${escapeHTML(item.case_id)}</div>
+              <span class="badge ${cssStateClass(item.status)}">${escapeHTML(item.status)}</span>
+            </div>
+            <div style="margin-top:4px;font-size:0.85rem;color:var(--text-secondary)">Workflow state: ${escapeHTML(item.workflow_state)} · Priority: ${escapeHTML(item.priority)}</div>
+          </div>`).join('');
+      }
+
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (contentEl) contentEl.style.display = 'block';
+    } catch (err) {
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (errorEl) {
+        errorEl.textContent = `Failed to load review queue: ${escapeHTML(err.message)}`;
+        errorEl.classList.remove('hidden');
+      }
+      if (contentEl) contentEl.style.display = 'none';
+    }
+  },
+
+  async loadReviewerWorkspace(reviewId) {
+    const loadingEl = document.getElementById('reviewer-loading');
+    const errorEl = document.getElementById('reviewer-error');
+    const contentEl = document.getElementById('reviewer-content');
+    const subtitleEl = document.getElementById('reviewer-subtitle');
+
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (errorEl) errorEl.classList.add('hidden');
+    if (contentEl) contentEl.style.display = 'none';
+
+    try {
+      const [reviewRes, caseRes, personRes, workflowRes, formsRes, evidenceRes, decisionsRes] = await Promise.all([
+        getReviewQueueEntry(reviewId),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ]);
+
+      const review = reviewRes;
+      if (!review) throw new Error('Review not found');
+
+      const caseId = review.case_id;
+      if (subtitleEl) subtitleEl.textContent = `Review ${escapeHTML(review.id)} · Case ${escapeHTML(caseId)}`;
+
+      const statusArea = document.getElementById('review-status-area');
+      if (statusArea) {
+        const statusBadge = `<span class="badge ${cssStateClass(review.status)}">${escapeHTML(review.status)}</span>`;
+        const assignedTo = review.assigned_to ? `Assigned to: ${escapeHTML(review.assigned_to)}` : 'Unassigned';
+        const priority = `<span class="badge" style="background:var(--bg);color:var(--text-secondary);border:1px solid var(--border)">${escapeHTML(review.priority)}</span>`;
+        statusArea.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">${statusBadge} ${priority}</div>
+          <div style="font-size:0.9rem;color:var(--text-secondary)">${assignedTo}</div>
+          <div style="font-size:0.85rem;color:var(--text-secondary);margin-top:4px">Workflow state: ${escapeHTML(review.workflow_state)}</div>
+          ${review.missing_information && review.missing_information.length ? `<div style="margin-top:8px;padding:8px;background:var(--warning-light);border-radius:var(--radius-sm);border:1px solid var(--warning);font-size:0.85rem"><strong>Missing:</strong> ${escapeHTML(review.missing_information.join(', '))}</div>` : ''}`;
+      }
+
+      const missingCard = document.getElementById('reviewer-card-missing');
+      if (missingCard) missingCard.classList.toggle('hidden', !(review.missing_information && review.missing_information.length));
+      const missingList = document.getElementById('review-missing-area');
+      if (missingList && review.missing_information) {
+        missingList.innerHTML = review.missing_information.map(m => `<li>${escapeHTML(m)}</li>`).join('');
+      }
+
+      const controlsCard = document.getElementById('reviewer-card-controls');
+      let controlsHTML = '';
+      if (review.status === 'PENDING') {
+        controlsHTML += `<button class="btn" onclick="app.reviewerClaim('${escapeJS(review.id)}')">Claim Review</button>`;
+      } else if (review.status === 'ASSIGNED' || review.status === 'IN_REVIEW') {
+        if (review.status === 'ASSIGNED') {
+          controlsHTML += `<button class="btn" onclick="app.reviewerStart('${escapeJS(review.id)}')">Start Review</button>`;
+        }
+        controlsHTML += `<button class="btn" onclick="app.showReviewDecisionModal('${escapeJS(review.id)}', 'APPROVED')">Approve</button>
+          <button class="btn secondary" onclick="app.showReviewDecisionModal('${escapeJS(review.id)}', 'REJECTED')">Reject</button>
+          <button class="btn secondary" onclick="app.showReviewEscalateModal('${escapeJS(review.id)}')">Escalate</button>
+          <button class="btn secondary" onclick="app.showReviewRequestInfoModal('${escapeJS(review.id)}')">Request Information</button>`;
+      }
+      const controlsArea = document.getElementById('review-controls-area');
+      if (controlsArea) controlsArea.innerHTML = controlsHTML;
+      if (controlsCard) controlsCard.classList.toggle('hidden', !controlsHTML);
+
+      let caseData = null;
+      let personData = null;
+      let workflowData = null;
+      let formsData = [];
+      let evidenceData = [];
+      let decisionsData = [];
+
+      try {
+        const caseResPromise = api('GET', this.orgPath(`/cases/${caseId}`));
+        const personResPromise = api('GET', this.orgPath(`/people?case_id=${caseId}`));
+        const workflowResPromise = api('GET', this.orgPath(`/cases/${caseId}/workflow`));
+        const formsResPromise = api('GET', this.orgPath(`/cases/${caseId}/workflow/form-submissions`));
+        const evidenceResPromise = api('GET', this.orgPath(`/evidence/by-service-request/${caseId}`));
+        const decisionsResPromise = api('GET', this.orgPath(`/decisions/by-service-request/${caseId}`));
+        const evaluationsResPromise = api('GET', this.orgPath(`/rules/cases/${caseId}/evaluations`));
+
+        const [cRes, pRes, wRes, fRes, eRes, dRes, evRes] = await Promise.all([
+          caseResPromise,
+          personResPromise,
+          workflowResPromise,
+          formsResPromise,
+          evidenceResPromise,
+          decisionsResPromise,
+          evaluationsResPromise,
+        ]);
+
+        caseData = cRes.data;
+        personData = (pRes.data || []).find(p => p.case_id === caseId) || pRes.data?.[0] || null;
+        workflowData = wRes.data;
+        formsData = fRes.data || {};
+        evidenceData = eRes.data || [];
+        decisionsData = dRes.data || [];
+        const evaluationsData = evRes.data || [];
+      } catch (err) {
+        console.warn('Failed to load some case details:', err);
+      }
+
+      const caseArea = document.getElementById('review-case-area');
+      if (caseArea && caseData) {
+        caseArea.innerHTML = `<dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px">
+          <dt>Case #</dt><dd>${escapeHTML(caseData.case_number || caseId)}</dd>
+          <dt>Title</dt><dd>${escapeHTML(caseData.title)}</dd>
+          <dt>Status</dt><dd><span class="badge ${cssStateClass(caseData.status)}">${escapeHTML(caseData.status)}</span></dd>
+          <dt>Service Type</dt><dd>${escapeHTML(caseData.service_type)}</dd>
+          <dt>Priority</dt><dd>${escapeHTML(caseData.priority)}</dd>
+          <dt>Description</dt><dd>${escapeHTML(caseData.description || 'No description provided.')}</dd>
+        </dl>`;
+      } else if (caseArea) {
+        caseArea.innerHTML = '<p class="empty">Case details unavailable.</p>';
+      }
+
+      const personArea = document.getElementById('review-person-area');
+      if (personArea && personData) {
+        personArea.innerHTML = `<dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px">
+          <dt>Name</dt><dd>${escapeHTML([personData.first_name, personData.last_name].filter(Boolean).join(' ') || 'N/A')}</dd>
+          ${personData.date_of_birth ? `<dt>Date of Birth</dt><dd>${escapeHTML(personData.date_of_birth)}</dd>` : ''}
+          ${personData.email ? `<dt>Email</dt><dd>${escapeHTML(personData.email)}</dd>` : ''}
+          ${personData.phone ? `<dt>Phone</dt><dd>${escapeHTML(personData.phone)}</dd>` : ''}
+          ${personData.address ? `<dt>Address</dt><dd>${escapeHTML(personData.address)}</dd>` : ''}
+          <dt>Language</dt><dd>${escapeHTML(personData.preferred_language || 'N/A')}</dd>
+        </dl>`;
+      } else if (personArea) {
+        personArea.innerHTML = '<p class="empty">No person information available.</p>';
+      }
+
+      const workflowArea = document.getElementById('review-workflow-area');
+      if (workflowArea && workflowData) {
+        const inst = workflowData.instance;
+        const def = workflowData.definition;
+        if (def && inst) {
+          const currentState = def.states ? def.states.find(s => s.key === inst.current_state) : null;
+          workflowArea.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <span class="badge ${cssStateClass(inst.current_state)}">${escapeHTML(inst.current_state)}</span>
+            <span style="color:var(--text-secondary)">${escapeHTML(currentState ? currentState.name : inst.current_state)}</span>
+          </div>
+          <div style="font-size:0.85rem;color:var(--text-secondary)">Workflow: ${escapeHTML(def.name)} (${escapeHTML(def.key)}) v${def.version || 1}</div>`;
+        } else {
+          workflowArea.innerHTML = '<p class="empty">No workflow instance linked.</p>';
+        }
+      } else if (workflowArea) {
+        workflowArea.innerHTML = '<p class="empty">Workflow information unavailable.</p>';
+      }
+
+      const formsArea = document.getElementById('review-forms-area');
+      if (formsArea) {
+        const entries = Object.entries(formsData);
+        if (!entries.length) {
+          formsArea.innerHTML = '<p class="empty">No form submissions found.</p>';
+        } else {
+          formsArea.innerHTML = entries.map(([key, sub]) => {
+            const status = sub && sub.status ? `<span class="badge">${escapeHTML(sub.status)}</span>` : '';
+            const submitted = sub && sub.submitted_at ? `<div style="font-size:0.8rem;color:var(--text-secondary)">Submitted: ${escapeHTML(sub.submitted_at)}</div>` : '';
+            return `<div style="padding:8px;border-bottom:1px solid var(--border)"><strong>${escapeHTML(key)}</strong> ${status}${submitted}</div>`;
+          }).join('');
+        }
+      }
+
+      const evidenceArea = document.getElementById('review-evidence-area');
+      if (evidenceArea) {
+        if (!evidenceData.length) {
+          evidenceArea.innerHTML = '<p class="empty">No evidence items found.</p>';
+        } else {
+          evidenceArea.innerHTML = evidenceData.map(ev => `<div style="padding:8px;border-bottom:1px solid var(--border)">
+            <strong>${escapeHTML(ev.type || 'Evidence')}</strong>
+            <div style="font-size:0.85rem;color:var(--text-secondary)">${escapeHTML(ev.description || '')}</div>
+            ${ev.storage_reference ? `<div style="font-size:0.8rem;color:var(--text-muted)">${escapeHTML(ev.storage_reference)}</div>` : ''}
+          </div>`).join('');
+        }
+      }
+
+      const rulesArea = document.getElementById('review-rules-area');
+      if (rulesArea) {
+        const evaluations = [];
+        try {
+          const evRes = await api('GET', this.orgPath(`/rules/cases/${caseId}/evaluations`));
+          evaluations.push(...(evRes.data || []));
+        } catch (err) {
+          console.warn('Failed to load evaluations:', err);
+        }
+
+        if (!evaluations.length) {
+          rulesArea.innerHTML = '<p class="empty">No rule evaluations found for this case.</p>';
+        } else {
+          rulesArea.innerHTML = evaluations.map(ev => {
+            const outcome = escapeHTML(ev.outcome || 'UNKNOWN');
+            const isAdvisory = true;
+            return `<div style="padding:12px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <strong>Rule Evaluation</strong>
+                <span class="badge ${outcome === 'ELIGIBLE' || outcome === 'PASS' ? 'case-status-approved' : outcome === 'INELIGIBLE' || outcome === 'FAIL' ? 'case-status-rejected' : ''}">${outcome}</span>
+              </div>
+              ${ev.explanation ? `<div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.9rem;line-height:1.6">${escapeHTML(ev.explanation)}</div>` : ''}
+              <div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Rule set: ${escapeHTML(ev.rule_set_id || 'N/A')} · Evaluated: ${ev.created_at ? escapeHTML(ev.created_at) : 'N/A'}</div>
+            </div>`;
+          }).join('');
+        }
+      }
+
+      const decisionsArea = document.getElementById('review-decisions-area');
+      if (decisionsArea) {
+        if (!decisionsData.length) {
+          decisionsArea.innerHTML = '<p class="empty">No previous decisions recorded.</p>';
+        } else {
+          decisionsArea.innerHTML = decisionsData.map(d => `<div style="padding:12px;border-bottom:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <strong>${escapeHTML(d.decision || 'Decision')}</strong>
+              <span class="badge ${cssStateClass(d.decision)}">${escapeHTML(d.decision)}</span>
+            </div>
+            ${d.reason ? `<div style="margin-top:6px;font-size:0.9rem">${escapeHTML(d.reason)}</div>` : ''}
+            <div style="margin-top:4px;font-size:0.8rem;color:var(--text-muted)">${d.created_at ? escapeHTML(d.created_at) : ''}</div>
+          </div>`).join('');
+        }
+      }
+
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (contentEl) contentEl.style.display = 'block';
+    } catch (err) {
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (errorEl) {
+        errorEl.textContent = `Failed to load reviewer workspace: ${escapeHTML(err.message)}`;
+        errorEl.classList.remove('hidden');
+      }
+      if (contentEl) contentEl.style.display = 'none';
+    }
+  },
+
+  async showReviewDecisionModal(reviewId, decision) {
+    const reason = prompt(`Reason for ${decision}:`);
+    if (reason === null) return;
+    try {
+      await completeReview(reviewId, decision, reason || '');
+      showToast(`Review ${decision.toLowerCase()} successfully`, 'success');
+      await this.loadReviewerWorkspace(reviewId);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async showReviewEscalateModal(reviewId) {
+    const reason = prompt('Reason for escalation:');
+    if (reason === null) return;
+    try {
+      await escalateReview(reviewId, reason || '');
+      showToast('Review escalated', 'success');
+      await this.loadReviewerWorkspace(reviewId);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async showReviewRequestInfoModal(reviewId) {
+    const missing = prompt('Missing fields (comma-separated):');
+    if (missing === null) return;
+    const reason = prompt('Reason:');
+    if (reason === null) return;
+    try {
+      await requestReviewInformation(reviewId, missing ? missing.split(',').map(s => s.trim()) : [], reason || '');
+      showToast('Information requested', 'success');
+      await this.loadReviewerWorkspace(reviewId);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async reviewerClaim(reviewId) {
+    try {
+      await claimReview(reviewId);
+      showToast('Review claimed', 'success');
+      await this.loadReviewerWorkspace(reviewId);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async reviewerStart(reviewId) {
+    try {
+      await startReview(reviewId);
+      showToast('Review started', 'success');
+      await this.loadReviewerWorkspace(reviewId);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
   async loadWorkflow(caseId) {
     try {
       const res = await api('GET', this.orgPath(`/cases/${caseId}/workflow`));
@@ -4007,4 +4335,53 @@ router.on('rule-set-edit', (id) => {
   document.getElementById('rule-editor-modal').classList.add('hidden');
   document.getElementById('rule-condition-modal').classList.add('hidden');
   document.getElementById('evaluation-modal').classList.add('hidden');
+});
+
+router.on('reviewer', async (reviewId) => {
+  if (!reviewId) { router.navigate('dashboard'); return; }
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-dashboard').classList.add('hidden');
+  document.getElementById('view-case').classList.add('hidden');
+  document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+  document.getElementById('view-reviewer').classList.remove('hidden');
+  await app.loadReviewerWorkspace(reviewId);
+});
+
+router.on('reviewer-queue', async () => {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-dashboard').classList.add('hidden');
+  document.getElementById('view-case').classList.add('hidden');
+  document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+  document.getElementById('view-reviewer').classList.remove('hidden');
+  await app.loadReviewerQueueList();
 });

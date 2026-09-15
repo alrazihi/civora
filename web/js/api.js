@@ -502,10 +502,98 @@ async function listDiscoverableFields() {
   return (res.data || []).filter(Boolean);
 }
 
+// ── Review Queue API ───────────────────────────────────────────────────
+
+/**
+ * List review queue entries for the organization.
+ * @param {object} [opts]
+ * @param {string} [opts.status]
+ * @param {boolean} [opts.assigned_to_me]
+ * @param {number} [opts.page]
+ * @param {number} [opts.per_page]
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listReviewQueue(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.status) params.set('status', opts.status);
+  if (opts.assigned_to_me) params.set('assigned_to_me', 'true');
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.per_page) params.set('per_page', String(opts.per_page));
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/review-queue${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * Get a single review queue entry.
+ * @param {string} reviewId
+ * @returns {Promise<object>}
+ */
+async function getReviewQueueEntry(reviewId) {
+  const res = await api('GET', `/organizations/${orgId}/review-queue/${reviewId}`);
+  return res.data || null;
+}
+
+/**
+ * Claim a review queue entry.
+ * @param {string} reviewId
+ * @returns {Promise<object>}
+ */
+async function claimReview(reviewId) {
+  const res = await api('POST', `/organizations/${orgId}/review-queue/${reviewId}/claim`);
+  return res.data || null;
+}
+
+/**
+ * Start reviewing a claim.
+ * @param {string} reviewId
+ * @returns {Promise<object>}
+ */
+async function startReview(reviewId) {
+  const res = await api('POST', `/organizations/${orgId}/review-queue/${reviewId}/start`);
+  return res.data || null;
+}
+
+/**
+ * Complete a review with a human decision.
+ * @param {string} reviewId
+ * @param {string} decision
+ * @param {string} [reason]
+ * @returns {Promise<object>}
+ */
+async function completeReview(reviewId, decision, reason) {
+  const res = await api('POST', `/organizations/${orgId}/review-queue/${reviewId}/complete`, { decision, reason });
+  return res.data || null;
+}
+
+/**
+ * Escalate a review for senior review.
+ * @param {string} reviewId
+ * @param {string} reason
+ * @returns {Promise<object>}
+ */
+async function escalateReview(reviewId, reason) {
+  const res = await api('POST', `/organizations/${orgId}/review-queue/${reviewId}/escalate`, { reason });
+  return res.data || null;
+}
+
+/**
+ * Request more information for a review.
+ * @param {string} reviewId
+ * @param {string[]} missingFields
+ * @param {string} reason
+ * @returns {Promise<object>}
+ */
+async function requestReviewInformation(reviewId, missingFields, reason) {
+  const res = await api('POST', `/organizations/${orgId}/review-queue/${reviewId}/request-information`, { missing_fields: missingFields, reason });
+  return res.data || null;
+}
+
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment, listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment, listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields, listReviewQueue, getReviewQueueEntry, claimReview, startReview, completeReview, escalateReview, requestReviewInformation };
 } else {
   window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment };
   window.RulesAPI = { listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields };
+  window.ReviewQueueAPI = { listReviewQueue, getReviewQueueEntry, claimReview, startReview, completeReview, escalateReview, requestReviewInformation };
 }

@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/google/uuid"
 )
 
 type ReviewStatus string
 
 const (
-	ReviewStatusPending          ReviewStatus = "PENDING"
-	ReviewStatusAssigned         ReviewStatus = "ASSIGNED"
-	ReviewStatusInReview         ReviewStatus = "IN_REVIEW"
-	ReviewStatusCompleted        ReviewStatus = "COMPLETED"
-	ReviewStatusEscalated        ReviewStatus = "ESCALATED"
-	ReviewStatusWaitingInfo      ReviewStatus = "WAITING_INFORMATION"
+	ReviewStatusPending     ReviewStatus = "PENDING"
+	ReviewStatusAssigned    ReviewStatus = "ASSIGNED"
+	ReviewStatusInReview    ReviewStatus = "IN_REVIEW"
+	ReviewStatusCompleted   ReviewStatus = "COMPLETED"
+	ReviewStatusEscalated   ReviewStatus = "ESCALATED"
+	ReviewStatusWaitingInfo ReviewStatus = "WAITING_INFORMATION"
 )
 
 var (
@@ -30,20 +30,20 @@ var (
 )
 
 type ReviewQueueEntry struct {
-	ID                  uuid.UUID
-	OrganizationID      uuid.UUID
-	CaseID              uuid.UUID
-	WorkflowInstanceID   uuid.UUID
-	Status              ReviewStatus
-	AssignedToID        *uuid.UUID
-	Priority            domain.Priority
-	WorkflowState       string
-	RuleEvaluationIDs   []uuid.UUID
-	MissingInformation  []string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	CompletedAt         *time.Time
-	Metadata            map[string]interface{}
+	ID                 uuid.UUID
+	OrganizationID     uuid.UUID
+	CaseID             uuid.UUID
+	WorkflowInstanceID uuid.UUID
+	Status             ReviewStatus
+	AssignedToID       *uuid.UUID
+	Priority           domain.Priority
+	WorkflowState      string
+	RuleEvaluationIDs  []uuid.UUID
+	MissingInformation []string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	CompletedAt        *time.Time
+	Metadata           map[string]interface{}
 }
 
 func NewReviewQueueEntry(orgID, caseID, workflowInstanceID uuid.UUID, workflowState string, priority domain.Priority, ruleEvalIDs []uuid.UUID) *ReviewQueueEntry {
@@ -55,7 +55,7 @@ func NewReviewQueueEntry(orgID, caseID, workflowInstanceID uuid.UUID, workflowSt
 		ID:                 uuid.New(),
 		OrganizationID:     orgID,
 		CaseID:             caseID,
-		WorkflowInstanceID:  workflowInstanceID,
+		WorkflowInstanceID: workflowInstanceID,
 		Status:             ReviewStatusPending,
 		Priority:           priority,
 		WorkflowState:      workflowState,

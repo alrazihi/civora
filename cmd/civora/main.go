@@ -52,6 +52,9 @@ import (
 	peopleapi "github.com/alrazihi/civora/internal/people/api"
 	peoplapp "github.com/alrazihi/civora/internal/people/application"
 	peoplepostgres "github.com/alrazihi/civora/internal/people/infrastructure/postgres"
+	reviewqueueapi "github.com/alrazihi/civora/internal/review_queue/api"
+	reviewqueueapp "github.com/alrazihi/civora/internal/review_queue/application"
+	reviewqueuepostgres "github.com/alrazihi/civora/internal/review_queue/infrastructure/postgres"
 	rulesapi "github.com/alrazihi/civora/internal/rules/api"
 	rulesapp "github.com/alrazihi/civora/internal/rules/application"
 	rulespostgres "github.com/alrazihi/civora/internal/rules/infrastructure/postgres"
@@ -219,6 +222,16 @@ func main() {
 	ruleIntegration := rulesapp.NewCaseRuleIntegrationService(ruleSetRepo, evalRepo, caseRepo, workflowInstanceRepo, ruleAssignmentRepo, submissionpostgres.NewPostgresFormSubmissionRepository(db.DB), rulesapp.NewFormKeyResolverAdapter(formRepo), auditService)
 	caseService.SetRuleIntegration(ruleIntegration)
 
+	reviewQueueRepo := reviewqueuepostgres.NewPostgresReviewQueueRepository(db.DB)
+	reviewQueueService := reviewqueueapp.NewReviewQueueService(
+		reviewQueueRepo,
+		caseRepo,
+		domain.NewOrganizationUserChecker(userRepo),
+		auditService,
+		workflowService,
+	)
+	reviewQueueHandler := reviewqueueapi.NewHandler(reviewQueueService)
+
 	auditHandler := auditapi.NewHandler(auditService)
 
 	workflowHandler := workflowapi.NewHandler(workflowService)
@@ -250,6 +263,7 @@ func main() {
 	auditHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	reviewQueueHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

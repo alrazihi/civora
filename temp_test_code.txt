@@ -1,0 +1,5 @@
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	fmt.Printf("DEBUG: About to call Save\n")
+	err := env.svc.Save(ctx, entry)
+	fmt.Printf("DEBUG: Save returned: %v\n", err)
+	require.NoError(t, err)

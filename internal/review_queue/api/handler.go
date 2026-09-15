@@ -123,12 +123,12 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		CaseID              string   `json:"case_id"`
-		WorkflowInstanceID   string   `json:"workflow_instance_id"`
-		Priority            string   `json:"priority"`
-		WorkflowState       string   `json:"workflow_state"`
-		RuleEvaluationIDs   []string `json:"rule_evaluation_ids"`
-		MissingInformation  []string `json:"missing_information"`
+		CaseID             string   `json:"case_id"`
+		WorkflowInstanceID string   `json:"workflow_instance_id"`
+		Priority           string   `json:"priority"`
+		WorkflowState      string   `json:"workflow_state"`
+		RuleEvaluationIDs  []string `json:"rule_evaluation_ids"`
+		MissingInformation []string `json:"missing_information"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
@@ -407,18 +407,18 @@ func getUserID(r *http.Request) uuid.UUID {
 
 func serializeReviewEntry(entry *reviewdomain.ReviewQueueEntry) map[string]interface{} {
 	result := map[string]interface{}{
-		"id":                  entry.ID,
-		"organization_id":     entry.OrganizationID,
-		"case_id":             entry.CaseID,
+		"id":                   entry.ID,
+		"organization_id":      entry.OrganizationID,
+		"case_id":              entry.CaseID,
 		"workflow_instance_id": entry.WorkflowInstanceID,
-		"status":              entry.Status,
-		"priority":            entry.Priority,
-		"workflow_state":      entry.WorkflowState,
-		"rule_evaluation_ids": entry.RuleEvaluationIDs,
-		"missing_information": entry.MissingInformation,
-		"created_at":          entry.CreatedAt,
-		"updated_at":          entry.UpdatedAt,
-		"metadata":            entry.Metadata,
+		"status":               entry.Status,
+		"priority":             entry.Priority,
+		"workflow_state":       entry.WorkflowState,
+		"rule_evaluation_ids":  entry.RuleEvaluationIDs,
+		"missing_information":  entry.MissingInformation,
+		"created_at":           entry.CreatedAt,
+		"updated_at":           entry.UpdatedAt,
+		"metadata":             entry.Metadata,
 	}
 	if entry.AssignedToID != nil {
 		result["assigned_to"] = entry.AssignedToID

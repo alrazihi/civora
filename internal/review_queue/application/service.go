@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/alrazihi/civora/internal/database"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database"
 	reviewdomain "github.com/alrazihi/civora/internal/review_queue/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
