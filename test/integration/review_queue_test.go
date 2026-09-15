@@ -133,8 +133,8 @@ func seedWorkflowInstance(t *testing.T, db *sql.DB, orgID, caseID uuid.UUID) uui
 	return instanceID
 }
 
-func newReviewEntry(orgID, caseID, instanceID uuid.UUID, workflowState string, priority string, ruleEvalIDs []uuid.UUID) *reviewdomain.ReviewQueueEntry {
-	entry := reviewdomain.NewReviewQueueEntry(orgID, caseID, instanceID, workflowState, casedomain.Priority(priority), ruleEvalIDs)
+func newReviewEntry(orgID, caseID, instanceID uuid.UUID, workflowState string, priority string, ruleEvalIDs []uuid.UUID, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) *reviewdomain.ReviewQueueEntry {
+	entry := reviewdomain.NewReviewQueueEntry(orgID, caseID, instanceID, workflowState, casedomain.Priority(priority), ruleEvalIDs, evidenceIDs, formSubmissionID)
 	if priority != "" {
 		entry.Priority = casedomain.Priority(priority)
 	}
@@ -151,7 +151,7 @@ func TestReviewQueueService_CreateAndGet(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 	require.NotNil(t, entry)
@@ -177,7 +177,7 @@ func TestReviewQueueService_ClaimAndStart(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "HIGH", []uuid.UUID{uuid.New()})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "HIGH", []uuid.UUID{uuid.New()}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -209,7 +209,7 @@ func TestReviewQueueService_CompleteReview(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -257,7 +257,7 @@ func TestReviewQueueService_EscalateReview(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "URGENT", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "URGENT", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -304,7 +304,7 @@ func TestReviewQueueService_RequestInformation(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -352,7 +352,7 @@ func TestReviewQueueService_CompleteReview_Rejection(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -399,7 +399,7 @@ func TestReviewQueueService_CompleteReview_InvalidDecision(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -438,7 +438,7 @@ func TestReviewQueueService_CompleteReview_Unauthorized(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -478,7 +478,7 @@ func TestReviewQueueService_CompleteReview_CrossTenant(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -504,7 +504,7 @@ func TestReviewQueueService_CompleteReview_StaleReview(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -560,7 +560,7 @@ func TestReviewQueueService_CompleteReview_RuleVersionProvenance(t *testing.T) {
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
 	ruleEvalIDs := []uuid.UUID{uuid.New(), uuid.New()}
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", ruleEvalIDs)
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", ruleEvalIDs, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -596,6 +596,53 @@ func TestReviewQueueService_CompleteReview_RuleVersionProvenance(t *testing.T) {
 	assert.Equal(t, 1, decision.Version)
 }
 
+func TestReviewQueueService_CompleteReview_EvidenceProvenance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	evidenceIDs := []uuid.UUID{uuid.New(), uuid.New()}
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, evidenceIDs, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "APPROVED",
+		Reason:         "Evidence supports approval",
+	})
+	require.NoError(t, err)
+
+	decision, err := env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.NoError(t, err)
+	require.NotNil(t, decision)
+	assert.Equal(t, 2, len(decision.EvidenceIDs))
+	assert.Equal(t, evidenceIDs[0], decision.EvidenceIDs[0])
+	assert.Equal(t, evidenceIDs[1], decision.EvidenceIDs[1])
+	assert.Equal(t, 1, decision.Version)
+}
+
 func TestReviewQueueService_CompleteReview_FormVersionProvenance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -606,7 +653,8 @@ func TestReviewQueueService_CompleteReview_FormVersionProvenance(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{})
+	formSubmissionID := uuid.New()
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, &formSubmissionID)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 
@@ -638,6 +686,124 @@ func TestReviewQueueService_CompleteReview_FormVersionProvenance(t *testing.T) {
 	require.NotNil(t, decision)
 	assert.Equal(t, 1, decision.Version)
 	assert.Equal(t, "DECISION_PENDING", decision.WorkflowState)
+	assert.NotNil(t, decision.FormSubmissionID)
+	assert.Equal(t, formSubmissionID, *decision.FormSubmissionID)
+}
+
+func TestReviewQueueService_CompleteReview_ReasonRequiredForRejection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "REJECTED",
+		Reason:         "",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, reviewqueueapp.ErrReviewInvalidInput)
+}
+
+func TestReviewQueueService_CompleteReview_ReasonRequiredForEscalation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.EscalateReview(ctx, reviewqueueapp.EscalateReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Reason:         "",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, reviewqueueapp.ErrReviewInvalidInput)
+}
+
+func TestReviewQueueService_CompleteReview_ReasonNotRequiredForApproval(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	completed, err := env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "APPROVED",
+		Reason:         "",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETED", string(completed.Status))
 }
 
 func TestReviewQueueService_ListByOrganization(t *testing.T) {
@@ -650,7 +816,7 @@ func TestReviewQueueService_ListByOrganization(t *testing.T) {
 	caseID := seedCase(t, env.db, env.orgID, env.userID)
 	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
 
-	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "HIGH", []uuid.UUID{})
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "HIGH", []uuid.UUID{}, nil, nil)
 	err := env.svc.Save(ctx, entry)
 	require.NoError(t, err)
 

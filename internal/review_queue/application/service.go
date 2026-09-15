@@ -266,7 +266,10 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 			if err := validateDecisionType(decisionType); err != nil {
 				return err
 			}
-			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionType, params.Reason, workflowState, entry.RuleEvaluationIDs, nil, nil); err != nil {
+			if decisionsdomain.ReasonRequired(decisionType) && params.Reason == "" {
+				return ErrReviewInvalidInput
+			}
+			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionType, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
 			}
 		}
@@ -345,7 +348,10 @@ func (s *ReviewQueueService) EscalateReview(ctx context.Context, params Escalate
 		}
 
 		if s.decisionSvc != nil {
-			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeEscalate, params.Reason, workflowState, entry.RuleEvaluationIDs, nil, nil); err != nil {
+			if decisionsdomain.ReasonRequired(decisionsdomain.DecisionTypeEscalate) && params.Reason == "" {
+				return ErrReviewInvalidInput
+			}
+			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeEscalate, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
 			}
 		}
@@ -416,7 +422,7 @@ func (s *ReviewQueueService) RequestInformation(ctx context.Context, params Requ
 		}
 
 		if s.decisionSvc != nil {
-			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeNeedsMoreInformation, params.Reason, workflowState, entry.RuleEvaluationIDs, nil, nil); err != nil {
+			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeNeedsMoreInformation, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
 			}
 		}

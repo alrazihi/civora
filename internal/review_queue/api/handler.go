@@ -128,6 +128,8 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		Priority           string   `json:"priority"`
 		WorkflowState      string   `json:"workflow_state"`
 		RuleEvaluationIDs  []string `json:"rule_evaluation_ids"`
+		EvidenceIDs        []string `json:"evidence_ids"`
+		FormSubmissionID   *string  `json:"form_submission_id"`
 		MissingInformation []string `json:"missing_information"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -157,7 +159,27 @@ func (h *Handler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		ruleEvalIDs = append(ruleEvalIDs, id)
 	}
 
-	entry := reviewdomain.NewReviewQueueEntry(orgID, caseID, workflowInstanceID, req.WorkflowState, domain.Priority(req.Priority), ruleEvalIDs)
+	var evidenceIDs []uuid.UUID
+	for _, idStr := range req.EvidenceIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid evidence ID")
+			return
+		}
+		evidenceIDs = append(evidenceIDs, id)
+	}
+
+	var formSubmissionID *uuid.UUID
+	if req.FormSubmissionID != nil && *req.FormSubmissionID != "" {
+		id, err := uuid.Parse(*req.FormSubmissionID)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid form submission ID")
+			return
+		}
+		formSubmissionID = &id
+	}
+
+	entry := reviewdomain.NewReviewQueueEntry(orgID, caseID, workflowInstanceID, req.WorkflowState, domain.Priority(req.Priority), ruleEvalIDs, evidenceIDs, formSubmissionID)
 	entry.MissingInformation = req.MissingInformation
 	if entry.Priority == "" {
 		entry.Priority = "NORMAL"
@@ -415,6 +437,7 @@ func serializeReviewEntry(entry *reviewdomain.ReviewQueueEntry) map[string]inter
 		"priority":             entry.Priority,
 		"workflow_state":       entry.WorkflowState,
 		"rule_evaluation_ids":  entry.RuleEvaluationIDs,
+		"evidence_ids":         entry.EvidenceIDs,
 		"missing_information":  entry.MissingInformation,
 		"created_at":           entry.CreatedAt,
 		"updated_at":           entry.UpdatedAt,
@@ -425,6 +448,9 @@ func serializeReviewEntry(entry *reviewdomain.ReviewQueueEntry) map[string]inter
 	}
 	if entry.CompletedAt != nil {
 		result["completed_at"] = entry.CompletedAt
+	}
+	if entry.FormSubmissionID != nil {
+		result["form_submission_id"] = entry.FormSubmissionID
 	}
 	return result
 }

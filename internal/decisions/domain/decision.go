@@ -55,8 +55,8 @@ func NewDecisionWithContext(orgID, serviceRequestID, decisionMaker uuid.UUID, de
 	if len(reason) > 5000 {
 		return nil, fmt.Errorf("%w: reason exceeds maximum length of 5000 characters", ErrDecisionInvalidInput)
 	}
-	if reason == "" {
-		return nil, fmt.Errorf("%w: reason is required", ErrDecisionInvalidInput)
+	if ReasonRequired(decision) && reason == "" {
+		return nil, fmt.Errorf("%w: reason is required for decision type %s", ErrDecisionInvalidInput, decision)
 	}
 	now := time.Now().UTC()
 	if version < 1 {
@@ -83,6 +83,17 @@ func NewDecisionWithContext(orgID, serviceRequestID, decisionMaker uuid.UUID, de
 		FormSubmissionID:  formSubmissionID,
 		Version:           version,
 	}, nil
+}
+
+func ReasonRequired(decision DecisionType) bool {
+	switch decision {
+	case DecisionTypeRejected, DecisionTypeEscalate, DecisionTypeNeedsMoreInformation:
+		return true
+	case DecisionTypeApproved:
+		return false
+	default:
+		return true
+	}
 }
 
 func NewSupersedingDecision(orgID, serviceRequestID, decisionMaker uuid.UUID, decision DecisionType, reason string, supersededDecision *Decision, workflowState string, ruleEvalIDs []uuid.UUID, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) (*Decision, error) {

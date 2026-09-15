@@ -17,7 +17,7 @@ func TestNewReviewQueueEntry(t *testing.T) {
 		wfInstanceID := uuid.New()
 		evalID := uuid.New()
 
-		entry := NewReviewQueueEntry(orgID, caseID, wfInstanceID, "DECISION_PENDING", domain.PriorityHigh, []uuid.UUID{evalID})
+		entry := NewReviewQueueEntry(orgID, caseID, wfInstanceID, "DECISION_PENDING", domain.PriorityHigh, []uuid.UUID{evalID}, nil, nil)
 
 		assert.Equal(t, orgID, entry.OrganizationID)
 		assert.Equal(t, caseID, entry.CaseID)
@@ -26,6 +26,8 @@ func TestNewReviewQueueEntry(t *testing.T) {
 		assert.Equal(t, domain.PriorityHigh, entry.Priority)
 		assert.Equal(t, "DECISION_PENDING", entry.WorkflowState)
 		assert.Equal(t, []uuid.UUID{evalID}, entry.RuleEvaluationIDs)
+		assert.Empty(t, entry.EvidenceIDs)
+		assert.Nil(t, entry.FormSubmissionID)
 		assert.Empty(t, entry.MissingInformation)
 		assert.Nil(t, entry.AssignedToID)
 		assert.Nil(t, entry.CompletedAt)

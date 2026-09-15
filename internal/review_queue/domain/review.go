@@ -39,17 +39,22 @@ type ReviewQueueEntry struct {
 	Priority           domain.Priority
 	WorkflowState      string
 	RuleEvaluationIDs  []uuid.UUID
+	EvidenceIDs        []uuid.UUID
 	MissingInformation []string
+	FormSubmissionID   *uuid.UUID
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CompletedAt        *time.Time
 	Metadata           map[string]interface{}
 }
 
-func NewReviewQueueEntry(orgID, caseID, workflowInstanceID uuid.UUID, workflowState string, priority domain.Priority, ruleEvalIDs []uuid.UUID) *ReviewQueueEntry {
+func NewReviewQueueEntry(orgID, caseID, workflowInstanceID uuid.UUID, workflowState string, priority domain.Priority, ruleEvalIDs []uuid.UUID, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) *ReviewQueueEntry {
 	now := time.Now().UTC()
 	if ruleEvalIDs == nil {
 		ruleEvalIDs = []uuid.UUID{}
+	}
+	if evidenceIDs == nil {
+		evidenceIDs = []uuid.UUID{}
 	}
 	return &ReviewQueueEntry{
 		ID:                 uuid.New(),
@@ -60,7 +65,9 @@ func NewReviewQueueEntry(orgID, caseID, workflowInstanceID uuid.UUID, workflowSt
 		Priority:           priority,
 		WorkflowState:      workflowState,
 		RuleEvaluationIDs:  ruleEvalIDs,
+		EvidenceIDs:        evidenceIDs,
 		MissingInformation: []string{},
+		FormSubmissionID:   formSubmissionID,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 		Metadata:           map[string]interface{}{},

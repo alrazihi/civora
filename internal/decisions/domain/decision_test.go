@@ -48,7 +48,7 @@ func TestNewDecision(t *testing.T) {
 	})
 
 	t.Run("empty reason", func(t *testing.T) {
-		_, err := NewDecision(uuid.New(), uuid.New(), uuid.New(), DecisionTypeApproved, "")
+		_, err := NewDecision(uuid.New(), uuid.New(), uuid.New(), DecisionTypeRejected, "")
 		assert.ErrorIs(t, err, ErrDecisionInvalidInput)
 	})
 
