@@ -6,6 +6,7 @@ import {
   orgPath,
   regex,
   ADMIN_TOKEN,
+  ORG_ID,
 } from './helpers';
 
 const REVIEW_ID = 'review-1';
@@ -53,7 +54,6 @@ const CASE_DATA = {
 const PERSON_DATA = {
   id: 'person-1',
   organization_id: 'org-test',
-  case_id: CASE_ID,
   first_name: 'Jane',
   last_name: 'Doe',
   preferred_language: 'en',
@@ -138,11 +138,17 @@ const EVALUATIONS_DATA = [
     id: 'eval-1',
     organization_id: 'org-test',
     rule_set_id: 'rs-eligibility',
+    rule_set_version: 1,
     case_id: CASE_ID,
+    status: 'ELIGIBLE',
     outcome: 'ELIGIBLE',
-    explanation: 'Income and household criteria satisfied. The applicant meets all eligibility requirements for emergency assistance.',
-    facts: {},
+    reason: 'Income and household criteria satisfied. The applicant meets all eligibility requirements for emergency assistance.',
+    matched_rule_id: null,
     trace: [],
+    trigger: 'manual',
+    evaluated_by: null,
+    evaluated_at: '2026-09-15T09:45:00Z',
+    facts_snapshot: {},
     created_at: '2026-09-15T09:45:00Z',
     updated_at: '2026-09-15T09:45:00Z',
   },
@@ -152,11 +158,13 @@ const DECISIONS_DATA = [
   {
     id: 'dec-1',
     organization_id: 'org-test',
-    case_id: CASE_ID,
+    service_request_id: CASE_ID,
     decision: 'NEEDS_MORE_INFORMATION',
     reason: 'Please provide proof of income.',
-    decided_by: 'reviewer-1',
+    decision_maker: 'reviewer-1',
     decided_at: '2026-09-15T10:30:00Z',
+    workflow_state: '',
+    version: 1,
     created_at: '2026-09-15T10:30:00Z',
     updated_at: '2026-09-15T10:30:00Z',
   },
@@ -219,24 +227,24 @@ function attachReviewerMocks(page: Page) {
     await route.fulfill({ json: { success: true, data: WORKFLOW_DATA } });
   });
 
-  page.route(orgPath(`/people?case_id=${CASE_ID}`), async (route) => {
-    await route.fulfill({ json: { success: true, data: [PERSON_DATA] } });
-  });
-
   page.route(orgPath(`/cases/${CASE_ID}/workflow/form-submissions`), async (route) => {
     await route.fulfill({ json: { success: true, data: FORM_SUBMISSIONS } });
   });
 
-  page.route(orgPath(`/evidence/by-service-request/${CASE_ID}`), async (route) => {
-    await route.fulfill({ json: { success: true, data: EVIDENCE_DATA } });
+  page.route(orgPath(`/people/${PERSON_DATA.id}`), async (route) => {
+    await route.fulfill({ json: { success: true, data: PERSON_DATA } });
   });
 
-  page.route(orgPath(`/decisions/by-service-request/${CASE_ID}`), async (route) => {
+  page.route(orgPath(`/evidence/by-service-request/${CASE_ID}`), async (route) => {
+    await route.fulfill({ json: { success: true, data: EVIDENCE_DATA, meta: { page: 1, per_page: 20, total: 1, total_pages: 1 } } });
+  });
+
+  page.route(orgPath(`/decisions/history/by-service-request/${CASE_ID}`), async (route) => {
     await route.fulfill({ json: { success: true, data: DECISIONS_DATA } });
   });
 
   page.route(orgPath(`/rules/cases/${CASE_ID}/evaluations`), async (route) => {
-    await route.fulfill({ json: { success: true, data: EVALUATIONS_DATA } });
+    await route.fulfill({ json: { success: true, data: EVALUATIONS_DATA, meta: { page: 1, per_page: 20, total: 1, total_pages: 1 } } });
   });
 }
 
@@ -292,7 +300,7 @@ test.describe('Reviewer Workspace', () => {
   test('shows empty state when no reviews assigned', async ({ page }) => {
     await openDashboard(page);
     attachReviewerMocks(page);
-    page.route(orgPath('/review-queue'), async (route) => {
+    page.route(regex(`organizations/${ORG_ID}/review-queue?`), async (route) => {
       await route.fulfill({ json: { success: true, data: [], meta: { page: 1, per_page: 50, total: 0, total_pages: 0 } } });
     });
     await page.evaluate(() => router.navigate('reviewer-queue'));

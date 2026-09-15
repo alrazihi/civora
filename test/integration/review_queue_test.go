@@ -54,14 +54,23 @@ type mockCaseFinder struct {
 
 func (m *mockCaseFinder) FindByID(ctx context.Context, orgID, caseID uuid.UUID) (*casedomain.Case, error) {
 	var c casedomain.Case
+	var workflowState sql.NullString
+	var workflowKey sql.NullString
+	var workflowIDBytes []byte
 	err := m.db.QueryRowContext(ctx, `
-		SELECT id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, assigned_to_id, created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id
+		SELECT id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, assigned_to, created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id
 		FROM cases WHERE id = $1 AND organization_id = $2
 	`, caseID, orgID).Scan(
-		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description, &c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID, &c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &c.WorkflowState, &c.WorkflowKey, &c.WorkflowID,
+		&c.ID, &c.OrganizationID, &c.CaseNumber, &c.Title, &c.Description, &c.Status, &c.ServiceType, &c.Priority, &c.PersonID, &c.CreatedByID, &c.AssignedToID, &c.CreatedAt, &c.UpdatedAt, &c.ClosedAt, &c.Version, &c.WorkflowInstanceID, &workflowState, &workflowKey, &workflowIDBytes,
 	)
 	if err != nil {
 		return nil, err
+	}
+	c.WorkflowState = workflowState.String
+	c.WorkflowKey = workflowKey.String
+	if workflowIDBytes != nil {
+		id := uuid.UUID(workflowIDBytes)
+		c.WorkflowID = &id
 	}
 	return &c, nil
 }

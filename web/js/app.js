@@ -613,17 +613,7 @@ const app = {
     if (contentEl) contentEl.style.display = 'none';
 
     try {
-      const [reviewRes, caseRes, personRes, workflowRes, formsRes, evidenceRes, decisionsRes] = await Promise.all([
-        getReviewQueueEntry(reviewId),
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ]);
-
-      const review = reviewRes;
+      const review = await getReviewQueueEntry(reviewId);
       if (!review) throw new Error('Review not found');
 
       const caseId = review.case_id;
@@ -667,36 +657,34 @@ const app = {
       let caseData = null;
       let personData = null;
       let workflowData = null;
-      let formsData = [];
+      let formsData = {};
       let evidenceData = [];
       let decisionsData = [];
+      let evaluationsData = [];
 
       try {
-        const caseResPromise = api('GET', this.orgPath(`/cases/${caseId}`));
-        const personResPromise = api('GET', this.orgPath(`/people?case_id=${caseId}`));
-        const workflowResPromise = api('GET', this.orgPath(`/cases/${caseId}/workflow`));
-        const formsResPromise = api('GET', this.orgPath(`/cases/${caseId}/workflow/form-submissions`));
-        const evidenceResPromise = api('GET', this.orgPath(`/evidence/by-service-request/${caseId}`));
-        const decisionsResPromise = api('GET', this.orgPath(`/decisions/by-service-request/${caseId}`));
-        const evaluationsResPromise = api('GET', this.orgPath(`/rules/cases/${caseId}/evaluations`));
+        const caseRes = await api('GET', this.orgPath(`/cases/${caseId}`)).catch(() => ({ data: null }));
+        caseData = caseRes.data;
 
-        const [cRes, pRes, wRes, fRes, eRes, dRes, evRes] = await Promise.all([
-          caseResPromise,
-          personResPromise,
-          workflowResPromise,
-          formsResPromise,
-          evidenceResPromise,
-          decisionsResPromise,
-          evaluationsResPromise,
-        ]);
+        if (caseData && caseData.person_id) {
+          const personRes = await api('GET', this.orgPath(`/people/${caseData.person_id}`)).catch(() => ({ data: null }));
+          personData = personRes.data;
+        }
 
-        caseData = cRes.data;
-        personData = (pRes.data || []).find(p => p.case_id === caseId) || pRes.data?.[0] || null;
-        workflowData = wRes.data;
-        formsData = fRes.data || {};
-        evidenceData = eRes.data || [];
-        decisionsData = dRes.data || [];
-        const evaluationsData = evRes.data || [];
+        const workflowRes = await api('GET', this.orgPath(`/cases/${caseId}/workflow`)).catch(() => ({ data: null }));
+        workflowData = workflowRes.data;
+
+        const formsRes = await api('GET', this.orgPath(`/cases/${caseId}/workflow/form-submissions`)).catch(() => ({ data: {} }));
+        formsData = formsRes.data || {};
+
+        const evidenceRes = await api('GET', this.orgPath(`/evidence/by-service-request/${caseId}`)).catch(() => ({ data: [] }));
+        evidenceData = evidenceRes.data || [];
+
+        const decisionsRes = await api('GET', this.orgPath(`/decisions/history/by-service-request/${caseId}`)).catch(() => ({ data: [] }));
+        decisionsData = decisionsRes.data || [];
+
+        const evaluationsRes = await api('GET', this.orgPath(`/rules/cases/${caseId}/evaluations`)).catch(() => ({ data: [] }));
+        evaluationsData = evaluationsRes.data || [];
       } catch (err) {
         console.warn('Failed to load some case details:', err);
       }
@@ -716,35 +704,40 @@ const app = {
       }
 
       const personArea = document.getElementById('review-person-area');
-      if (personArea && personData) {
-        personArea.innerHTML = `<dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px">
-          <dt>Name</dt><dd>${escapeHTML([personData.first_name, personData.last_name].filter(Boolean).join(' ') || 'N/A')}</dd>
-          ${personData.date_of_birth ? `<dt>Date of Birth</dt><dd>${escapeHTML(personData.date_of_birth)}</dd>` : ''}
-          ${personData.email ? `<dt>Email</dt><dd>${escapeHTML(personData.email)}</dd>` : ''}
-          ${personData.phone ? `<dt>Phone</dt><dd>${escapeHTML(personData.phone)}</dd>` : ''}
-          ${personData.address ? `<dt>Address</dt><dd>${escapeHTML(personData.address)}</dd>` : ''}
-          <dt>Language</dt><dd>${escapeHTML(personData.preferred_language || 'N/A')}</dd>
-        </dl>`;
-      } else if (personArea) {
-        personArea.innerHTML = '<p class="empty">No person information available.</p>';
+      if (personArea) {
+        if (!personData) {
+          personArea.innerHTML = '<p class="empty">No person information available.</p>';
+        } else {
+          const fullName = [personData.first_name, personData.last_name].filter(Boolean).join(' ') || 'N/A';
+          personArea.innerHTML = `<dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 16px">
+            <dt>Name</dt><dd>${escapeHTML(fullName)}</dd>
+            ${personData.date_of_birth ? `<dt>Date of Birth</dt><dd>${escapeHTML(personData.date_of_birth)}</dd>` : ''}
+            ${personData.email ? `<dt>Email</dt><dd>${escapeHTML(personData.email)}</dd>` : ''}
+            ${personData.phone ? `<dt>Phone</dt><dd>${escapeHTML(personData.phone)}</dd>` : ''}
+            ${personData.address ? `<dt>Address</dt><dd>${escapeHTML(personData.address)}</dd>` : ''}
+            <dt>Language</dt><dd>${escapeHTML(personData.preferred_language || 'N/A')}</dd>
+          </dl>`;
+        }
       }
 
       const workflowArea = document.getElementById('review-workflow-area');
-      if (workflowArea && workflowData) {
-        const inst = workflowData.instance;
-        const def = workflowData.definition;
-        if (def && inst) {
-          const currentState = def.states ? def.states.find(s => s.key === inst.current_state) : null;
-          workflowArea.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-            <span class="badge ${cssStateClass(inst.current_state)}">${escapeHTML(inst.current_state)}</span>
-            <span style="color:var(--text-secondary)">${escapeHTML(currentState ? currentState.name : inst.current_state)}</span>
-          </div>
-          <div style="font-size:0.85rem;color:var(--text-secondary)">Workflow: ${escapeHTML(def.name)} (${escapeHTML(def.key)}) v${def.version || 1}</div>`;
+      if (workflowArea) {
+        if (!workflowData) {
+          workflowArea.innerHTML = '<p class="empty">Workflow information unavailable.</p>';
         } else {
-          workflowArea.innerHTML = '<p class="empty">No workflow instance linked.</p>';
+          const inst = workflowData.instance;
+          const def = workflowData.definition;
+          if (def && inst) {
+            const currentState = def.states ? def.states.find(s => s.key === inst.current_state) : null;
+            workflowArea.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+              <span class="badge ${cssStateClass(inst.current_state)}">${escapeHTML(inst.current_state)}</span>
+              <span style="color:var(--text-secondary)">${escapeHTML(currentState ? currentState.name : inst.current_state)}</span>
+            </div>
+            <div style="font-size:0.85rem;color:var(--text-secondary)">Workflow: ${escapeHTML(def.name)} (${escapeHTML(def.key)}) v${def.version || 1}</div>`;
+          } else {
+            workflowArea.innerHTML = '<p class="empty">No workflow instance linked.</p>';
+          }
         }
-      } else if (workflowArea) {
-        workflowArea.innerHTML = '<p class="empty">Workflow information unavailable.</p>';
       }
 
       const formsArea = document.getElementById('review-forms-area');
@@ -763,7 +756,7 @@ const app = {
 
       const evidenceArea = document.getElementById('review-evidence-area');
       if (evidenceArea) {
-        if (!evidenceData.length) {
+        if (!evidenceData || !evidenceData.length) {
           evidenceArea.innerHTML = '<p class="empty">No evidence items found.</p>';
         } else {
           evidenceArea.innerHTML = evidenceData.map(ev => `<div style="padding:8px;border-bottom:1px solid var(--border)">
@@ -776,27 +769,29 @@ const app = {
 
       const rulesArea = document.getElementById('review-rules-area');
       if (rulesArea) {
-        const evaluations = [];
-        try {
-          const evRes = await api('GET', this.orgPath(`/rules/cases/${caseId}/evaluations`));
-          evaluations.push(...(evRes.data || []));
-        } catch (err) {
-          console.warn('Failed to load evaluations:', err);
-        }
-
-        if (!evaluations.length) {
+        if (!evaluationsData || !evaluationsData.length) {
           rulesArea.innerHTML = '<p class="empty">No rule evaluations found for this case.</p>';
         } else {
-          rulesArea.innerHTML = evaluations.map(ev => {
+          rulesArea.innerHTML = evaluationsData.map(ev => {
             const outcome = escapeHTML(ev.outcome || 'UNKNOWN');
-            const isAdvisory = true;
+            const outcomeClass = ev.outcome === 'ELIGIBLE' ? 'case-status-approved' : ev.outcome === 'INELIGIBLE' ? 'case-status-rejected' : 'case-status-pending';
+            const reasonText = escapeHTML(ev.reason || ev.explanation || '');
+            const trace = ev.trace || [];
+            let traceHTML = '';
+            if (trace.length) {
+              traceHTML = '<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.85rem">' +
+                trace.map(node => `<div style="font-size:0.85rem;color:var(--text-secondary)"><strong>${escapeHTML(node.description || node.node_type || '')}</strong>: ${escapeHTML(node.result || '')} ${node.reason ? escapeHTML(node.reason) : ''}</div>`).join('') +
+                '</div>';
+            }
             return `<div style="padding:12px;border-bottom:1px solid var(--border)">
               <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <strong>Rule Evaluation</strong>
-                <span class="badge ${outcome === 'ELIGIBLE' || outcome === 'PASS' ? 'case-status-approved' : outcome === 'INELIGIBLE' || outcome === 'FAIL' ? 'case-status-rejected' : ''}">${outcome}</span>
+                <span class="badge ${outcomeClass}">${outcome}</span>
               </div>
-              ${ev.explanation ? `<div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.9rem;line-height:1.6">${escapeHTML(ev.explanation)}</div>` : ''}
-              <div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Rule set: ${escapeHTML(ev.rule_set_id || 'N/A')} · Evaluated: ${ev.created_at ? escapeHTML(ev.created_at) : 'N/A'}</div>
+              <p style="font-size:0.8rem;color:var(--text-muted);margin:4px 0">Advisory result — human decision is authoritative</p>
+              ${reasonText ? `<div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.9rem;line-height:1.6">${reasonText}</div>` : ''}
+              ${traceHTML}
+              <div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Rule set: ${escapeHTML(ev.rule_set_id || 'N/A')} · Evaluated: ${ev.evaluated_at ? escapeHTML(ev.evaluated_at) : 'N/A'}</div>
             </div>`;
           }).join('');
         }
@@ -804,7 +799,7 @@ const app = {
 
       const decisionsArea = document.getElementById('review-decisions-area');
       if (decisionsArea) {
-        if (!decisionsData.length) {
+        if (!decisionsData || !decisionsData.length) {
           decisionsArea.innerHTML = '<p class="empty">No previous decisions recorded.</p>';
         } else {
           decisionsArea.innerHTML = decisionsData.map(d => `<div style="padding:12px;border-bottom:1px solid var(--border)">
@@ -813,7 +808,7 @@ const app = {
               <span class="badge ${cssStateClass(d.decision)}">${escapeHTML(d.decision)}</span>
             </div>
             ${d.reason ? `<div style="margin-top:6px;font-size:0.9rem">${escapeHTML(d.reason)}</div>` : ''}
-            <div style="margin-top:4px;font-size:0.8rem;color:var(--text-muted)">${d.created_at ? escapeHTML(d.created_at) : ''}</div>
+            <div style="margin-top:4px;font-size:0.8rem;color:var(--text-muted)">${d.decided_at ? escapeHTML(d.decided_at) : d.created_at ? escapeHTML(d.created_at) : ''}</div>
           </div>`).join('');
         }
       }

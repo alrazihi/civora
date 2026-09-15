@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -16,6 +17,17 @@ type PostgresDecisionRepository struct {
 
 type sqlExecer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func scanUUIDSlice(data []byte) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	if len(data) == 0 {
+		return []uuid.UUID{}, nil
+	}
+	if err := json.Unmarshal(data, &ids); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal uuid slice: %w", err)
+	}
+	return ids, nil
 }
 
 func NewPostgresDecisionRepository(db *sql.DB) *PostgresDecisionRepository {
@@ -35,6 +47,14 @@ func (r *PostgresDecisionRepository) SaveTx(ctx context.Context, tx *sql.Tx, d *
 }
 
 func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExecer, d *domain.Decision) error {
+	ruleEvalIDsJSON, err := json.Marshal(d.RuleEvaluationIDs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal rule evaluation IDs: %w", err)
+	}
+	evidenceIDsJSON, err := json.Marshal(d.EvidenceIDs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal evidence IDs: %w", err)
+	}
 	query := `
 		INSERT INTO decisions (
 			id, organization_id, service_request_id, decision, reason,
@@ -43,10 +63,10 @@ func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExe
 			superseded_by_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
-	_, err := ex.ExecContext(ctx, query,
+	_, err = ex.ExecContext(ctx, query,
 		d.ID, d.OrganizationID, d.ServiceRequestID, d.Decision, d.Reason,
 		d.DecisionMaker, d.DecidedAt, d.CreatedAt, d.WorkflowState,
-		d.RuleEvaluationIDs, d.EvidenceIDs, d.FormSubmissionID, d.Version,
+		ruleEvalIDsJSON, evidenceIDsJSON, d.FormSubmissionID, d.Version,
 		d.SupersededByID,
 	)
 	if err != nil {
@@ -158,10 +178,12 @@ func (r *PostgresDecisionRepository) scanDecision(row interface {
 	var d domain.Decision
 	var supersededByID sql.NullString
 	var formSubmissionID sql.NullString
+	var ruleEvalIDsJSON []byte
+	var evidenceIDsJSON []byte
 	if err := row.Scan(
 		&d.ID, &d.OrganizationID, &d.ServiceRequestID, &d.Decision, &d.Reason,
 		&d.DecisionMaker, &d.DecidedAt, &d.CreatedAt, &d.WorkflowState,
-		&d.RuleEvaluationIDs, &d.EvidenceIDs, &formSubmissionID, &d.Version,
+		&ruleEvalIDsJSON, &evidenceIDsJSON, &formSubmissionID, &d.Version,
 		&supersededByID,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -169,6 +191,8 @@ func (r *PostgresDecisionRepository) scanDecision(row interface {
 		}
 		return nil, fmt.Errorf("failed to scan decision: %w", err)
 	}
+	d.RuleEvaluationIDs, _ = scanUUIDSlice(ruleEvalIDsJSON)
+	d.EvidenceIDs, _ = scanUUIDSlice(evidenceIDsJSON)
 	if supersededByID.Valid {
 		id, err := uuid.Parse(supersededByID.String)
 		if err == nil {
@@ -188,14 +212,18 @@ func (r *PostgresDecisionRepository) scanDecisionFromRows(rows *sql.Rows) (*doma
 	var d domain.Decision
 	var supersededByID sql.NullString
 	var formSubmissionID sql.NullString
+	var ruleEvalIDsJSON []byte
+	var evidenceIDsJSON []byte
 	if err := rows.Scan(
 		&d.ID, &d.OrganizationID, &d.ServiceRequestID, &d.Decision, &d.Reason,
 		&d.DecisionMaker, &d.DecidedAt, &d.CreatedAt, &d.WorkflowState,
-		&d.RuleEvaluationIDs, &d.EvidenceIDs, &formSubmissionID, &d.Version,
+		&ruleEvalIDsJSON, &evidenceIDsJSON, &formSubmissionID, &d.Version,
 		&supersededByID,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan decision: %w", err)
 	}
+	d.RuleEvaluationIDs, _ = scanUUIDSlice(ruleEvalIDsJSON)
+	d.EvidenceIDs, _ = scanUUIDSlice(evidenceIDsJSON)
 	if supersededByID.Valid {
 		id, err := uuid.Parse(supersededByID.String)
 		if err == nil {
