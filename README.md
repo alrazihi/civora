@@ -22,8 +22,8 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.3** — Workflow engine + generic case lifecycle
-  (configurable workflow definitions, case binding, transitions, audit).
+Current focus: **Milestone 0.5** — Evidence & Documents
+  (document upload, evidence chains, audit integrity verification).
 
 ## Quick Start
 
@@ -111,7 +111,10 @@ Once the follow-up is complete and all obligations are satisfied, the case is mo
 
 ### Audit Trail
 
-Every state transition, evidence addition, assessment, decision, assistance action, and follow-up is recorded in an immutable, hash-chained audit log. The audit trail can be reviewed at any time to verify who did what, when, and why.
+Every state transition, evidence addition, assessment, decision, assistance action, and follow-up is recorded in a
+tamper-evident, hash-chained audit log. The audit trail can be verified at any
+time to confirm no event has been altered, and reviewed to verify who did what,
+when, and why.
 
 ## Configurable Workflow Engine
 
@@ -194,6 +197,7 @@ Workflow Definitions are versioned. When a new version is created, existing case
 | Project principles | [docs/principles.md](./docs/principles.md) |
 | Architecture overview | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Architecture decision records | [docs/decisions](./docs/decisions) |
+| Rules engine | [docs/architecture/rules-engine.md](./docs/architecture/rules-engine.md), [docs/product/rules.md](./docs/product/rules.md) |
 | Threat model | [docs/threat-model.md](./docs/threat-model.md) |
 | Hostile review | [docs/hostile-review.md](./docs/hostile-review.md) |
 | Development roadmap | [ROADMAP.md](./ROADMAP.md) |

@@ -17,7 +17,13 @@ technical decision must be recorded as an ADR.
 | [0002](0002-why-go.md) | Why Go for the Backend | Accepted | 2026-09-06 |
 | [0003](0003-why-postgresql.md) | Why PostgreSQL | Accepted | 2026-09-06 |
 | [0004](0004-why-rest-openapi.md) | Why REST and OpenAPI | Accepted | 2026-09-06 |
-| [0005](0005-why-react-typescript.md) | Why React and TypeScript for the Future Frontend | Proposed | 2026-09-06 |
+| [0005](0005-why-react-typescript.md) | Why React and TypeScript for the Frontend | Superseded | 2026-09-06 |
+| [0006](0006-configurable-workflow-engine.md) | Configurable Workflow Engine | Accepted | 2026-09-06 |
+| [0006-b](0006-public-interest-domain-model.md) | Public-Interest Domain Model | Accepted | 2026-09-06 |
+
+The second 0006 document uses the file `0006-public-interest-domain-model.md`;
+it is indexed here as `0006-b` to avoid a numbering collision while preserving
+the existing filename.
 
 ## ADR template
 
@@ -42,9 +48,11 @@ details.
 - [0002](0002-why-go.md) — Why Go for the Backend
 - [0003](0003-why-postgresql.md) — Why PostgreSQL
 - [0004](0004-why-rest-openapi.md) — Why REST and OpenAPI
+- [0006](0006-configurable-workflow-engine.md) — Configurable Workflow Engine
+- [0006-b](0006-public-interest-domain-model.md) — Public-Interest Domain Model
 
-### Proposed
-- [0005](0005-why-react-typescript.md) — Why React and TypeScript for the Future Frontend
+### Superseded
+- [0005](0005-why-react-typescript.md) — Why React and TypeScript for the Frontend (frontend implemented as a static HTML/CSS/JS SPA; React deferred)
 
 ### Rejected
 - (none)

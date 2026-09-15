@@ -1,8 +1,12 @@
-# ADR-0005: Why React and TypeScript for the Future Frontend
+# ADR-0005: Why React and TypeScript for the Frontend
 
 - **Date**: 2026-09-06
-- **Status**: Proposed
+- **Status**: Superseded
 - **Deciders**: CIVORA founding stewards
+
+> **Superseded.** The frontend is now implemented as a lightweight,
+> framework-free static HTML/CSS/JS SPA served from `web/` (see `ARCHITECTURE.md`).
+> React/TypeScript remains a candidate for future UI enhancement.
 
 ---
 

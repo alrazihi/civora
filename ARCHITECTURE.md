@@ -21,17 +21,17 @@ module boundaries, data flow, and deployment model.
 │                    Application Services                 │
 │                                                         │
 │  ┌────────┐ ┌───────────┐ ┌────────┐ ┌────────┐        │
-│  │ Ident. │ │ Org/Tenant│ │ Cases  │ │Workflow│        │
+│  │Ident.  │ │Org/Tenant │ │ Cases  │ │Workflow│        │
 │  └────────┘ └───────────┘ └────────┘ └────────┘        │
 │  ┌────────┐ ┌───────────┐ ┌────────┐ ┌────────┐        │
-│  │ Forms  │ │Documents  │ │ Tasks  │ │Notify. │        │
+│  │ Rules  │ │ Forms     │ │Eviden. │ │Audit   │        │
 │  └────────┘ └───────────┘ └────────┘ └────────┘        │
-│  ┌────────┐ ┌───────────┐ ┌────────┐                   │
-│  │ Audit  │ │  Policy   │ │  AI    │                   │
-│  └────────┘ └───────────┘ └────────┘                   │
-│  ┌────────┐                                             │
-│  │Integrat│                                             │
-│  └────────┘                                             │
+│  ┌────────┐ ┌───────────┐ ┌────────┐ ┌────────┐        │
+│  │Assess. │ │Decisions  │ │Assistan│ │People  │        │
+│  └────────┘ └───────────┘ └────────┘ └────────┘        │
+│  ┌────────┐ ┌───────────┐                            │
+│  │Followup│ │FormSubmit │                            │
+│  └────────┘ └───────────┘                            │
 ├─────────────────────────────────────────────────────────┤
 │                    Shared Infrastructure                │
 │   Config │ Logging │ Metrics    │
@@ -40,6 +40,7 @@ module boundaries, data flow, and deployment model.
 │  Primary DB (PostgreSQL) │ Object Storage (S3)   │
 └─────────────────────────────────────────────────────────┘
 ```
+
 
 ---
 
@@ -56,16 +57,18 @@ communicate through:
 |--------|------|-------------------|
 | **Identity** | Users, credentials, sessions, tokens, authz policies | Organizations (for tenant-scoped auth) |
 | **Organizations** | Tenants, settings, organization-level config | Identity (auth context) |
-| **Cases** | Cases, case status, case assignments | Workflow (state machine) |
-| **Workflow** | Workflow definitions, instances, state machines, transition history | Cases, Audit |
-| **Audit** | Immutable audit log, event records | All modules (writes); external consumers (reads) |
-| **Eligibility** | Eligibility assessments | Cases |
+| **Cases** | Cases, case status, assignments | Workflow (state machine) |
+| **Workflow** | Workflow definitions, instances, state machines, transitions, history | Cases, Audit |
+| **Rules** | Rule sets, rules, rule assignments, evaluations against facts | Cases, FormSubmission |
+| **Forms** | Form definitions (field schemas, field-type vocab) | Organizations |
+| **Form Submission** | Completed form submissions scoped to organizations | Cases, Rules (fact source) |
 | **Evidence** | Evidence items, document references | Cases |
 | **Assessments** | Needs assessments, recommendations | Cases |
 | **Decisions** | Human decisions, rationale | Cases, Workflow |
 | **Assistance** | Assistance actions, service delivery | Cases |
 | **Follow-ups** | Follow-up scheduling, completion | Cases |
 | **People** | Person records, contact details | Cases |
+| **Audit** | Tamper-evident hash-chained audit log, event records | All modules (writes); external consumers (reads) |
 
 ### Communication rules
 
@@ -106,21 +109,18 @@ The conceptual domain model distinguishes between **entities**,
    Associated with a Case. Retains the definition/version it started with.
 - **Workflow Transition History** — an immutable record of every transition
    executed on a workflow instance.
-- **Task** — a unit of work within a Workflow Instance. Has assignments,
-  deadlines, and status.
-- **Form Definition** — a schema for collecting structured data.
-- **Form Submission** — a completed form for a specific Task.
-- **Document** — a file with metadata, stored in object storage with
-  a reference in the database.
-- **Policy** — a rule or policy definition used for evaluation.
-- **Integration** — a configured external service connection.
+- **Form Definition** — a schema for collecting structured data (field-type vocabulary).
+- **Form Submission** — a completed form for a specific Case.
+- **Document** — a file with metadata, stored in object storage with a reference in the database.
+- **Evidence** — a Document with provenance metadata, linked to a Case.
+- **Rule Set** — a versioned, tenant-scoped collection of Rules evaluated against Case facts.
+- **Rule Assignment** — a Rule Set attached to an organization or case for evaluation.
 
 ### Value objects
 
 - **Role** — a named set of permissions within an organization.
 - **Evidence** — a reference to a Document with provenance metadata.
-- **Decision** — a recorded decision with rationale, timestamp, and
-  actor.
+- **Decision** — a recorded decision with rationale, timestamp, and actor.
 - **Comment** — a time-stamped annotation on a Case, Task, or Document.
 - **Audit Event** — an immutable record of an action.
 
@@ -133,9 +133,9 @@ Audit event types include:
 - `case.created`, `case.status_changed`, `case.closed`, `case.assigned`
 - `workflow.definition.created`, `workflow.definition.activated`, `workflow.definition.archived`
 - `workflow.instance.created`, `workflow.transitioned`, `workflow.completed`
-- `user.created`, `auth.success`, `auth.failed`
+- `ruleset.created`, `ruleset.versioned`, `rule.assigned`, `evaluation.created`
+- `user.created`, `auth.success`, `auth.failure`
 - `organization.created`
-- (Future) additional event types as features are implemented
 
 Note: An event bus is not currently implemented. Cross-module communication
 uses direct synchronous function calls. Future milestones may introduce
@@ -347,15 +347,20 @@ The following technology decisions have been finalized and recorded as ADRs:
 
 | Decision | ADR |
 |----------|-----|
+| Why Modular Monolith | [ADR-0001](docs/decisions/0001-initial-architecture.md) |
 | Why Go for the backend | [ADR-0002](docs/decisions/0002-why-go.md) |
 | Why PostgreSQL | [ADR-0003](docs/decisions/0003-why-postgresql.md) |
 | Why REST + OpenAPI | [ADR-0004](docs/decisions/0004-why-rest-openapi.md) |
-| Why React/TypeScript (future frontend) | [ADR-0005](docs/decisions/0005-why-react-typescript.md) |
+| Configurable Workflow Engine | [ADR-0006](docs/decisions/0006-configurable-workflow-engine.md) |
+| Public-Interest Domain Model | [ADR-0006](docs/decisions/0006-public-interest-domain-model.md) |
 
 **Backend**: Go 1.23+, compiled to a single static binary.
 **Database**: PostgreSQL 16.
 **API**: HTTP REST with JSON, OpenAPI 3.0 specification as the source of truth.
-**Frontend**: Not implemented in Milestone 0.1; React + TypeScript chosen for the future frontend (ADR-0005).
+**Frontend**: Implemented as a lightweight static HTML/CSS/JS SPA served from
+`web/` (no SPA framework). End-to-end coverage is provided by the Playwright
+suite under `web/e2e/`. React/TypeScript was the original proposed direction
+(ADR-0005) and is recorded as superseded.
 **Deployment**: Docker container image; Docker Compose for local development.
 
 ---

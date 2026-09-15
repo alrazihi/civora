@@ -9,10 +9,9 @@ your responsible disclosure.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, report by email to: **security@civora.org**
-
-If you do not receive a response within 48 hours, or if the matter is
-urgent, contact a project steward directly via GitHub.
+Instead, report using the GitHub Security Advisory "Report a vulnerability"
+form on the CIVORA repository, or contact a project steward directly via
+GitHub.
 
 When reporting, please include:
 
