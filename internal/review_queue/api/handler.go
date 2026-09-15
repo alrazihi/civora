@@ -431,15 +431,15 @@ func serializeReviewEntry(entry *reviewdomain.ReviewQueueEntry) map[string]inter
 
 func writeReviewError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, reviewdomain.ErrReviewNotFound):
+	case errors.Is(err, reviewapp.ErrReviewNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "review queue entry not found")
-	case errors.Is(err, reviewdomain.ErrReviewNotPending):
+	case errors.Is(err, reviewapp.ErrReviewNotPending):
 		shared.WriteError(w, http.StatusConflict, "CONFLICT", "review is not pending")
-	case errors.Is(err, reviewdomain.ErrReviewNotAssigned):
+	case errors.Is(err, reviewapp.ErrReviewNotAssigned):
 		shared.WriteError(w, http.StatusForbidden, "FORBIDDEN", "review is not assigned to you")
-	case errors.Is(err, reviewdomain.ErrReviewNotInReview):
+	case errors.Is(err, reviewapp.ErrReviewNotInReview):
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "review is not in review")
-	case errors.Is(err, reviewdomain.ErrReviewAlreadyFinal):
+	case errors.Is(err, reviewapp.ErrReviewAlreadyFinal):
 		shared.WriteError(w, http.StatusConflict, "CONFLICT", "review is already completed")
 	case errors.Is(err, reviewapp.ErrCaseNotFound):
 		shared.WriteError(w, http.StatusNotFound, shared.CodeNotFound, "case not found")

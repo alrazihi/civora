@@ -59,6 +59,7 @@ func TruncateTables(t *testing.T, db *sql.DB) {
 
 	_, err := db.Exec(`
 		TRUNCATE TABLE
+			review_queue,
 			follow_ups,
 			assistance,
 			decisions,

@@ -98,7 +98,12 @@ type ClaimReviewParams struct {
 }
 
 func (s *ReviewQueueService) ClaimReview(ctx context.Context, params ClaimReviewParams) (*reviewdomain.ReviewQueueEntry, error) {
-	c, err := s.caseFinder.FindByID(ctx, params.OrganizationID, params.ReviewID)
+	entry, err := s.repo.FindByID(ctx, params.OrganizationID, params.ReviewID)
+	if err != nil {
+		return nil, ErrReviewNotFound
+	}
+
+	c, err := s.caseFinder.FindByID(ctx, params.OrganizationID, entry.CaseID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
 	}
@@ -180,25 +185,31 @@ func (s *ReviewQueueService) StartReview(ctx context.Context, params StartReview
 		return nil, err
 	}
 
-	if err := s.repo.UpdateStatusTx(ctx, nil, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusInReview, entry.AssignedToID); err != nil {
-		return nil, fmt.Errorf("failed to update review status: %w", err)
-	}
-
-	if s.auditor != nil {
-		reviewIDStr := entry.ID.String()
-		if err := shared.RecordAuditEventInTx(ctx, nil, s.auditor, auditdomain.RecordEventParams{
-			OrganizationID: params.OrganizationID,
-			ActorID:        &params.ReviewerID,
-			Action:         "review.started",
-			Resource:       "review_queue",
-			ResourceID:     &reviewIDStr,
-			Outcome:        "success",
-			Metadata: map[string]interface{}{
-				"case_id": entry.CaseID.String(),
-			},
-		}); err != nil {
-			return nil, fmt.Errorf("failed to record audit event: %w", err)
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusInReview, entry.AssignedToID); err != nil {
+			return fmt.Errorf("failed to update review status: %w", err)
 		}
+
+		if s.auditor != nil {
+			reviewIDStr := entry.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: params.OrganizationID,
+				ActorID:        &params.ReviewerID,
+				Action:         "review.started",
+				Resource:       "review_queue",
+				ResourceID:     &reviewIDStr,
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"case_id": entry.CaseID.String(),
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return entry, nil
@@ -230,26 +241,32 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 		return nil, err
 	}
 
-	if err := s.repo.UpdateStatusTx(ctx, nil, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusCompleted, entry.AssignedToID); err != nil {
-		return nil, fmt.Errorf("failed to update review status: %w", err)
-	}
-
-	if s.auditor != nil {
-		reviewIDStr := entry.ID.String()
-		if err := shared.RecordAuditEventInTx(ctx, nil, s.auditor, auditdomain.RecordEventParams{
-			OrganizationID: params.OrganizationID,
-			ActorID:        &params.ReviewerID,
-			Action:         "review.completed",
-			Resource:       "review_queue",
-			ResourceID:     &reviewIDStr,
-			Outcome:        "success",
-			Metadata: map[string]interface{}{
-				"case_id":  entry.CaseID.String(),
-				"decision": params.Decision,
-			},
-		}); err != nil {
-			return nil, fmt.Errorf("failed to record audit event: %w", err)
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusCompleted, entry.AssignedToID); err != nil {
+			return fmt.Errorf("failed to update review status: %w", err)
 		}
+
+		if s.auditor != nil {
+			reviewIDStr := entry.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: params.OrganizationID,
+				ActorID:        &params.ReviewerID,
+				Action:         "review.completed",
+				Resource:       "review_queue",
+				ResourceID:     &reviewIDStr,
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"case_id":  entry.CaseID.String(),
+					"decision": params.Decision,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return entry, nil
@@ -280,26 +297,32 @@ func (s *ReviewQueueService) EscalateReview(ctx context.Context, params Escalate
 		return nil, err
 	}
 
-	if err := s.repo.UpdateStatusTx(ctx, nil, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusEscalated, entry.AssignedToID); err != nil {
-		return nil, fmt.Errorf("failed to update review status: %w", err)
-	}
-
-	if s.auditor != nil {
-		reviewIDStr := entry.ID.String()
-		if err := shared.RecordAuditEventInTx(ctx, nil, s.auditor, auditdomain.RecordEventParams{
-			OrganizationID: params.OrganizationID,
-			ActorID:        &params.ReviewerID,
-			Action:         "review.escalated",
-			Resource:       "review_queue",
-			ResourceID:     &reviewIDStr,
-			Outcome:        "success",
-			Metadata: map[string]interface{}{
-				"case_id": entry.CaseID.String(),
-				"reason":  params.Reason,
-			},
-		}); err != nil {
-			return nil, fmt.Errorf("failed to record audit event: %w", err)
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusEscalated, entry.AssignedToID); err != nil {
+			return fmt.Errorf("failed to update review status: %w", err)
 		}
+
+		if s.auditor != nil {
+			reviewIDStr := entry.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: params.OrganizationID,
+				ActorID:        &params.ReviewerID,
+				Action:         "review.escalated",
+				Resource:       "review_queue",
+				ResourceID:     &reviewIDStr,
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"case_id": entry.CaseID.String(),
+					"reason":  params.Reason,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return entry, nil
@@ -332,27 +355,33 @@ func (s *ReviewQueueService) RequestInformation(ctx context.Context, params Requ
 	}
 	entry.MissingInformation = params.MissingFields
 
-	if err := s.repo.UpdateStatusTx(ctx, nil, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusWaitingInfo, entry.AssignedToID); err != nil {
-		return nil, fmt.Errorf("failed to update review status: %w", err)
-	}
-
-	if s.auditor != nil {
-		reviewIDStr := entry.ID.String()
-		if err := shared.RecordAuditEventInTx(ctx, nil, s.auditor, auditdomain.RecordEventParams{
-			OrganizationID: params.OrganizationID,
-			ActorID:        &params.ReviewerID,
-			Action:         "review.requested_information",
-			Resource:       "review_queue",
-			ResourceID:     &reviewIDStr,
-			Outcome:        "success",
-			Metadata: map[string]interface{}{
-				"case_id":        entry.CaseID.String(),
-				"missing_fields": params.MissingFields,
-				"reason":         params.Reason,
-			},
-		}); err != nil {
-			return nil, fmt.Errorf("failed to record audit event: %w", err)
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusWaitingInfo, entry.AssignedToID); err != nil {
+			return fmt.Errorf("failed to update review status: %w", err)
 		}
+
+		if s.auditor != nil {
+			reviewIDStr := entry.ID.String()
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: params.OrganizationID,
+				ActorID:        &params.ReviewerID,
+				Action:         "review.requested_information",
+				Resource:       "review_queue",
+				ResourceID:     &reviewIDStr,
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"case_id":        entry.CaseID.String(),
+					"missing_fields": params.MissingFields,
+					"reason":         params.Reason,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return entry, nil

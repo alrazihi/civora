@@ -67,6 +67,8 @@ tags:
   description: Configurable forms for data collection
 - name: Rules
   description: Deterministic eligibility rules engine configuration and evaluation
+- name: ReviewQueue
+  description: Human reviewer work queue and decision tracking
 - name: System
   description: Health and readiness checks
 components:
@@ -2168,6 +2170,112 @@ components:
           type: string
         label:
           type: string
+    ReviewQueueEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        case_id:
+          type: string
+          format: uuid
+        workflow_instance_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, ASSIGNED, IN_REVIEW, COMPLETED, ESCALATED, WAITING_INFORMATION]
+        priority:
+          type: string
+          enum: [LOW, NORMAL, HIGH, URGENT]
+        workflow_state:
+          type: string
+        rule_evaluation_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        missing_information:
+          type: array
+          items:
+            type: string
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+    CreateReviewQueueEntryRequest:
+      type: object
+      required:
+        - case_id
+        - workflow_instance_id
+        - workflow_state
+      properties:
+        case_id:
+          type: string
+          format: uuid
+        workflow_instance_id:
+          type: string
+          format: uuid
+        priority:
+          type: string
+          enum: [LOW, NORMAL, HIGH, URGENT]
+          default: NORMAL
+        workflow_state:
+          type: string
+        rule_evaluation_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        missing_information:
+          type: array
+          items:
+            type: string
+    CompleteReviewRequest:
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+        reason:
+          type: string
+          nullable: true
+    EscalateReviewRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+    RequestInformationRequest:
+      type: object
+      required:
+        - missing_fields
+        - reason
+      properties:
+        missing_fields:
+          type: array
+          items:
+            type: string
+        reason:
+          type: string
 
   responses:
     BadRequest:
@@ -2205,8 +2313,394 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+             $ref: '#/components/schemas/Error'
 paths:
+  /organizations/{orgId}/review-queue:
+    get:
+      operationId: listReviewQueue
+      tags:
+        - ReviewQueue
+      summary: List review queue entries
+      description: Returns paginated review queue entries for the organization.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, ASSIGNED, IN_REVIEW, COMPLETED, ESCALATED, WAITING_INFORMATION]
+        - name: assigned_to_me
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Paginated review queue entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReviewQueueEntry'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createReviewQueueEntry
+      tags:
+        - ReviewQueue
+      summary: Create a review queue entry
+      description: Creates a new review queue entry for manual human review.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReviewQueueEntryRequest'
+      responses:
+        '201':
+          description: Review queue entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organizations/{orgId}/review-queue/{reviewId}:
+    get:
+      operationId: getReviewQueueEntry
+      tags:
+        - ReviewQueue
+      summary: Get review queue entry
+      description: Returns a single review queue entry by ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review queue entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/review-queue/{reviewId}/claim:
+    post:
+      operationId: claimReview
+      tags:
+        - ReviewQueue
+      summary: Claim a review queue entry
+      description: Assigns the review queue entry to the authenticated user.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review queue entry claimed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Review is not pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /organizations/{orgId}/review-queue/{reviewId}/start:
+    post:
+      operationId: startReview
+      tags:
+        - ReviewQueue
+      summary: Start reviewing
+      description: Marks the review queue entry as in review for the assigned user.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/review-queue/{reviewId}/complete:
+    post:
+      operationId: completeReview
+      tags:
+        - ReviewQueue
+      summary: Complete a review
+      description: Marks the review as completed with a human decision.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteReviewRequest'
+      responses:
+        '200':
+          description: Review completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Review is not in review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /organizations/{orgId}/review-queue/{reviewId}/escalate:
+    post:
+      operationId: escalateReview
+      tags:
+        - ReviewQueue
+      summary: Escalate a review
+      description: Marks the review as escalated for senior review.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalateReviewRequest'
+      responses:
+        '200':
+          description: Review escalated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/review-queue/{reviewId}/request-information:
+    post:
+      operationId: requestInformation
+      tags:
+        - ReviewQueue
+      summary: Request more information
+      description: Marks the review as waiting for additional information.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestInformationRequest'
+      responses:
+        '200':
+          description: Information requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ReviewQueueEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /health:
     get:
       operationId: getHealth
@@ -6600,11 +7094,11 @@ paths:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: '#/components/schemas/Rule'
+                   success:
+                     type: boolean
+                     example: true
+                   data:
+                     $ref: '#/components/schemas/Rule'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
