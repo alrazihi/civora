@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
@@ -14,6 +15,13 @@ import (
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
+
+func isPostgresUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "SQLSTATE 23505")
+}
 
 var (
 	ErrRuleSetNotFound       = errors.New("rule set not found")
@@ -148,6 +156,9 @@ func (s *RuleSetService) CreateRuleSet(ctx context.Context, params CreateRuleSet
 	var saved *rulesdomain.RuleSet
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		if err := s.repo.SaveTx(ctx, tx, rs); err != nil {
+			if isPostgresUniqueViolation(err) {
+				return fmt.Errorf("%w: key %s", ErrRuleSetKeyExists, rs.Key)
+			}
 			return fmt.Errorf("failed to save rule set: %w", err)
 		}
 
