@@ -53,6 +53,18 @@ func (m *mockDecisionRepo) FindByOrganization(ctx context.Context, orgID uuid.UU
 func (m *mockDecisionRepo) CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error) {
 	return 0, nil
 }
+func (m *mockDecisionRepo) ListByServiceRequest(ctx context.Context, orgID, serviceRequestID uuid.UUID) ([]*decisionsdomain.Decision, error) {
+	var result []*decisionsdomain.Decision
+	for _, d := range m.items {
+		if d.ServiceRequestID == serviceRequestID && d.OrganizationID == orgID {
+			result = append(result, d)
+		}
+	}
+	if len(result) == 0 {
+		return nil, errors.New("not found")
+	}
+	return result, nil
+}
 
 type mockCaseFinder struct {
 	cases map[uuid.UUID]*domain.Case
@@ -294,4 +306,122 @@ func TestMakeDecision_DuplicateDecision(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrDecisionInput)
+}
+
+func TestMakeDecision_TransitionsToEscalate(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	wf := newMockWorkflowService("DECISION_PENDING")
+	wf.addTransition("escalate", "DECISION_PENDING", "ESCALATED")
+	userChecker := newMockUserChecker()
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil, wf)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	_, err := svc.MakeDecision(context.Background(), MakeDecisionParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeEscalate,
+		Reason:           "Escalated to senior review",
+		ActorID:          actorID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ESCALATED", wf.state)
+}
+
+func TestSupersedeDecision_CreatesNewVersion(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	wf := newMockWorkflowService("APPROVED")
+	wf.addTransition("approve", "DECISION_PENDING", "APPROVED")
+	userChecker := newMockUserChecker()
+	repo := newMockDecisionRepo()
+	svc := NewDecisionService(repo, caseFinder, userChecker, nil, wf)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+	prevDecisionID := uuid.New()
+
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	prev := &decisionsdomain.Decision{
+		ID:               prevDecisionID,
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeApproved,
+		DecisionMaker:    actorID,
+		Version:          1,
+	}
+	repo.items[prevDecisionID] = prev
+
+	_, err := svc.SupersedeDecision(context.Background(), SupersedeDecisionParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeRejected,
+		Reason:           "Reversed after review",
+		ActorID:          actorID,
+	})
+	require.NoError(t, err)
+
+	assert.Len(t, repo.items, 2)
+	for _, d := range repo.items {
+		if d.ID != prevDecisionID {
+			assert.Equal(t, 2, d.Version)
+			assert.Equal(t, decisionsdomain.DecisionTypeRejected, d.Decision)
+			assert.NotNil(t, d.SupersededByID)
+			assert.Equal(t, d.ID, *d.SupersededByID)
+		}
+	}
+}
+
+func TestSupersedeDecision_NoExistingDecision(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	wf := newMockWorkflowService("DECISION_PENDING")
+	userChecker := newMockUserChecker()
+	svc := NewDecisionService(newMockDecisionRepo(), caseFinder, userChecker, nil, wf)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	caseFinder.addCase(c)
+	userChecker.addMember(orgID, actorID)
+
+	_, err := svc.SupersedeDecision(context.Background(), SupersedeDecisionParams{
+		OrganizationID:   orgID,
+		ServiceRequestID: c.ID,
+		Decision:         decisionsdomain.DecisionTypeRejected,
+		Reason:           "Reversed",
+		ActorID:          actorID,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrDecisionInput)
+}
+
+func TestGetDecisionHistory(t *testing.T) {
+	caseFinder := newMockCaseFinder()
+	wf := newMockWorkflowService("DECISION_PENDING")
+	userChecker := newMockUserChecker()
+	repo := newMockDecisionRepo()
+	svc := NewDecisionService(repo, caseFinder, userChecker, nil, wf)
+
+	orgID := uuid.New()
+	actorID := uuid.New()
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	caseFinder.addCase(c)
+
+	first := &decisionsdomain.Decision{ID: uuid.New(), OrganizationID: orgID, ServiceRequestID: c.ID, Decision: decisionsdomain.DecisionTypeApproved, DecisionMaker: actorID, Version: 1}
+	second := &decisionsdomain.Decision{ID: uuid.New(), OrganizationID: orgID, ServiceRequestID: c.ID, Decision: decisionsdomain.DecisionTypeRejected, DecisionMaker: actorID, Version: 2}
+	repo.items[first.ID] = first
+	repo.items[second.ID] = second
+
+	history, err := svc.GetDecisionHistory(context.Background(), orgID, c.ID)
+	require.NoError(t, err)
+	assert.Len(t, history, 2)
+	assert.Equal(t, first.ID, history[0].ID)
+	assert.Equal(t, second.ID, history[1].ID)
 }

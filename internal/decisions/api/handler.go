@@ -25,8 +25,10 @@ func NewHandler(svc DecisionService) *Handler {
 
 type DecisionService interface {
 	MakeDecision(ctx context.Context, params application.MakeDecisionParams) (*domain.Decision, error)
+	SupersedeDecision(ctx context.Context, params application.SupersedeDecisionParams) (*domain.Decision, error)
 	GetDecision(ctx context.Context, orgID, id uuid.UUID) (*domain.Decision, error)
 	GetDecisionByServiceRequest(ctx context.Context, orgID, serviceRequestID uuid.UUID) (*domain.Decision, error)
+	GetDecisionHistory(ctx context.Context, orgID, serviceRequestID uuid.UUID) ([]*domain.Decision, error)
 	ListDecisions(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.Decision, int, error)
 }
 
@@ -37,9 +39,11 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAnyRole("admin", "staff"))
 			r.Post("/", h.MakeDecision)
+			r.Post("/supersede", h.SupersedeDecision)
 			r.Get("/", h.ListDecisions)
 			r.Get("/{decisionId}", h.GetDecision)
 			r.Get("/by-service-request/{serviceRequestId}", h.GetByServiceRequest)
+			r.Get("/history/by-service-request/{serviceRequestId}", h.GetHistoryByServiceRequest)
 		})
 	})
 }
@@ -58,9 +62,13 @@ func (h *Handler) MakeDecision(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		ServiceRequestID string              `json:"service_request_id"`
-		Decision         domain.DecisionType `json:"decision"`
-		Reason           string              `json:"reason"`
+		ServiceRequestID  string              `json:"service_request_id"`
+		Decision          domain.DecisionType `json:"decision"`
+		Reason            string              `json:"reason"`
+		WorkflowState     string              `json:"workflow_state"`
+		RuleEvaluationIDs []string            `json:"rule_evaluation_ids"`
+		EvidenceIDs       []string            `json:"evidence_ids"`
+		FormSubmissionID  *string             `json:"form_submission_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
@@ -73,13 +81,47 @@ func (h *Handler) MakeDecision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var ruleEvalIDs []uuid.UUID
+	for _, idStr := range req.RuleEvaluationIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid rule evaluation ID")
+			return
+		}
+		ruleEvalIDs = append(ruleEvalIDs, id)
+	}
+
+	var evidenceIDs []uuid.UUID
+	for _, idStr := range req.EvidenceIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid evidence ID")
+			return
+		}
+		evidenceIDs = append(evidenceIDs, id)
+	}
+
+	var formSubmissionID *uuid.UUID
+	if req.FormSubmissionID != nil && *req.FormSubmissionID != "" {
+		id, err := uuid.Parse(*req.FormSubmissionID)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid form submission ID")
+			return
+		}
+		formSubmissionID = &id
+	}
+
 	d, err := h.svc.MakeDecision(r.Context(), application.MakeDecisionParams{
-		OrganizationID:   orgID,
-		ServiceRequestID: serviceRequestID,
-		Decision:         req.Decision,
-		Reason:           req.Reason,
-		ActorID:          actorID,
-		ActorRole:        middleware.GetUserRole(r),
+		OrganizationID:    orgID,
+		ServiceRequestID:  serviceRequestID,
+		Decision:          req.Decision,
+		Reason:            req.Reason,
+		ActorID:           actorID,
+		ActorRole:         middleware.GetUserRole(r),
+		WorkflowState:     req.WorkflowState,
+		RuleEvaluationIDs: ruleEvalIDs,
+		EvidenceIDs:       evidenceIDs,
+		FormSubmissionID:  formSubmissionID,
 	})
 	if err != nil {
 		writeDecisionError(w, err)
@@ -87,6 +129,115 @@ func (h *Handler) MakeDecision(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shared.WriteSuccess(w, http.StatusCreated, serializeDecision(d), nil)
+}
+
+func (h *Handler) SupersedeDecision(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	var req struct {
+		ServiceRequestID  string              `json:"service_request_id"`
+		Decision          domain.DecisionType `json:"decision"`
+		Reason            string              `json:"reason"`
+		WorkflowState     string              `json:"workflow_state"`
+		RuleEvaluationIDs []string            `json:"rule_evaluation_ids"`
+		EvidenceIDs       []string            `json:"evidence_ids"`
+		FormSubmissionID  *string             `json:"form_submission_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	serviceRequestID, err := uuid.Parse(req.ServiceRequestID)
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid service request ID")
+		return
+	}
+
+	var ruleEvalIDs []uuid.UUID
+	for _, idStr := range req.RuleEvaluationIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid rule evaluation ID")
+			return
+		}
+		ruleEvalIDs = append(ruleEvalIDs, id)
+	}
+
+	var evidenceIDs []uuid.UUID
+	for _, idStr := range req.EvidenceIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid evidence ID")
+			return
+		}
+		evidenceIDs = append(evidenceIDs, id)
+	}
+
+	var formSubmissionID *uuid.UUID
+	if req.FormSubmissionID != nil && *req.FormSubmissionID != "" {
+		id, err := uuid.Parse(*req.FormSubmissionID)
+		if err != nil {
+			shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid form submission ID")
+			return
+		}
+		formSubmissionID = &id
+	}
+
+	d, err := h.svc.SupersedeDecision(r.Context(), application.SupersedeDecisionParams{
+		OrganizationID:    orgID,
+		ServiceRequestID:  serviceRequestID,
+		Decision:          req.Decision,
+		Reason:            req.Reason,
+		ActorID:           actorID,
+		WorkflowState:     req.WorkflowState,
+		RuleEvaluationIDs: ruleEvalIDs,
+		EvidenceIDs:       evidenceIDs,
+		FormSubmissionID:  formSubmissionID,
+	})
+	if err != nil {
+		writeDecisionError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusCreated, serializeDecision(d), nil)
+}
+
+func (h *Handler) GetHistoryByServiceRequest(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	serviceRequestID, ok := parseUUID(r, "serviceRequestId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid service request ID")
+		return
+	}
+
+	items, err := h.svc.GetDecisionHistory(r.Context(), orgID, serviceRequestID)
+	if err != nil {
+		writeDecisionError(w, err)
+		return
+	}
+
+	result := make([]map[string]interface{}, len(items))
+	for i, d := range items {
+		result[i] = serializeDecision(d)
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, result, nil)
 }
 
 func (h *Handler) GetDecision(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +350,7 @@ func getUserID(r *http.Request) uuid.UUID {
 }
 
 func serializeDecision(d *domain.Decision) map[string]interface{} {
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"id":                 d.ID,
 		"organization_id":    d.OrganizationID,
 		"service_request_id": d.ServiceRequestID,
@@ -208,7 +359,22 @@ func serializeDecision(d *domain.Decision) map[string]interface{} {
 		"decision_maker":     d.DecisionMaker,
 		"decided_at":         d.DecidedAt,
 		"created_at":         d.CreatedAt,
+		"workflow_state":     d.WorkflowState,
+		"version":            d.Version,
 	}
+	if d.SupersededByID != nil {
+		result["superseded_by_id"] = d.SupersededByID
+	}
+	if len(d.RuleEvaluationIDs) > 0 {
+		result["rule_evaluation_ids"] = d.RuleEvaluationIDs
+	}
+	if len(d.EvidenceIDs) > 0 {
+		result["evidence_ids"] = d.EvidenceIDs
+	}
+	if d.FormSubmissionID != nil {
+		result["form_submission_id"] = d.FormSubmissionID
+	}
+	return result
 }
 
 func writeDecisionError(w http.ResponseWriter, err error) {

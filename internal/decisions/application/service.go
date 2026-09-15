@@ -60,12 +60,16 @@ func NewDecisionService(
 }
 
 type MakeDecisionParams struct {
-	OrganizationID   uuid.UUID
-	ServiceRequestID uuid.UUID
-	Decision         decisionsdomain.DecisionType
-	Reason           string
-	ActorID          uuid.UUID
-	ActorRole        string
+	OrganizationID    uuid.UUID
+	ServiceRequestID  uuid.UUID
+	Decision          decisionsdomain.DecisionType
+	Reason            string
+	ActorID           uuid.UUID
+	ActorRole         string
+	WorkflowState     string
+	RuleEvaluationIDs []uuid.UUID
+	EvidenceIDs       []uuid.UUID
+	FormSubmissionID  *uuid.UUID
 }
 
 func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionParams) (*decisionsdomain.Decision, error) {
@@ -107,6 +111,8 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 	transitionKey := "approve"
 	if params.Decision == decisionsdomain.DecisionTypeRejected {
 		transitionKey = "reject"
+	} else if params.Decision == decisionsdomain.DecisionTypeEscalate {
+		transitionKey = "escalate"
 	}
 
 	var targetTransition *workflowdomain.WorkflowTransition
@@ -120,7 +126,23 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 		return nil, fmt.Errorf("%w: no valid transition for decision %s from state %s", ErrCaseTransition, params.Decision, instance.CurrentState)
 	}
 
-	d, err := decisionsdomain.NewDecision(params.OrganizationID, params.ServiceRequestID, params.ActorID, params.Decision, params.Reason)
+	workflowState := instance.CurrentState
+	if params.WorkflowState != "" {
+		workflowState = params.WorkflowState
+	}
+
+	d, err := decisionsdomain.NewDecisionWithContext(
+		params.OrganizationID,
+		params.ServiceRequestID,
+		params.ActorID,
+		params.Decision,
+		params.Reason,
+		workflowState,
+		params.RuleEvaluationIDs,
+		params.EvidenceIDs,
+		params.FormSubmissionID,
+		1,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrDecisionInput, err)
 	}
@@ -155,6 +177,8 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 				Metadata: map[string]interface{}{
 					"service_request_id": d.ServiceRequestID.String(),
 					"decision":           string(d.Decision),
+					"workflow_state":     d.WorkflowState,
+					"version":            d.Version,
 				},
 			}); err != nil {
 				return fmt.Errorf("failed to record audit event: %w", err)
@@ -169,6 +193,102 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 	}
 
 	return result, nil
+}
+
+func (s *DecisionService) SupersedeDecision(ctx context.Context, params SupersedeDecisionParams) (*decisionsdomain.Decision, error) {
+	c, err := s.caseFinder.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrCaseNotFound, err)
+	}
+	if c.OrganizationID != params.OrganizationID {
+		return nil, ErrCaseNotFound
+	}
+
+	existing, err := s.repo.FindByServiceRequest(ctx, params.OrganizationID, params.ServiceRequestID)
+	if err != nil || existing == nil {
+		return nil, fmt.Errorf("%w: no existing decision to supersede", ErrDecisionInput)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, ErrUserNotFound
+	}
+
+	d, err := decisionsdomain.NewSupersedingDecision(
+		params.OrganizationID,
+		params.ServiceRequestID,
+		params.ActorID,
+		params.Decision,
+		params.Reason,
+		existing,
+		params.WorkflowState,
+		params.RuleEvaluationIDs,
+		params.EvidenceIDs,
+		params.FormSubmissionID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrDecisionInput, err)
+	}
+
+	var result *decisionsdomain.Decision
+	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		if err := s.repo.SaveTx(ctx, tx, d); err != nil {
+			return fmt.Errorf("failed to save superseding decision: %w", err)
+		}
+
+		if s.auditor != nil {
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: d.OrganizationID,
+				ActorID:        &params.ActorID,
+				Action:         "decision.superseded",
+				Resource:       "decision",
+				ResourceID:     shared.StrPtr(d.ID.String()),
+				Outcome:        "success",
+				RequestID:      shared.StrPtr(intmid.RequestIDFromContext(ctx)),
+				Metadata: map[string]interface{}{
+					"service_request_id":   d.ServiceRequestID.String(),
+					"decision":             string(d.Decision),
+					"supersedes_version":   existing.Version,
+					"new_version":          d.Version,
+					"previous_decision_id": existing.ID.String(),
+					"workflow_state":       d.WorkflowState,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		result = d
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+type SupersedeDecisionParams struct {
+	OrganizationID    uuid.UUID
+	ServiceRequestID  uuid.UUID
+	Decision          decisionsdomain.DecisionType
+	Reason            string
+	ActorID           uuid.UUID
+	WorkflowState     string
+	RuleEvaluationIDs []uuid.UUID
+	EvidenceIDs       []uuid.UUID
+	FormSubmissionID  *uuid.UUID
+}
+
+func (s *DecisionService) GetDecisionHistory(ctx context.Context, orgID, serviceRequestID uuid.UUID) ([]*decisionsdomain.Decision, error) {
+	items, err := s.repo.ListByServiceRequest(ctx, orgID, serviceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list decision history: %w", err)
+	}
+	return items, nil
 }
 
 func (s *DecisionService) GetDecision(ctx context.Context, orgID, id uuid.UUID) (*decisionsdomain.Decision, error) {

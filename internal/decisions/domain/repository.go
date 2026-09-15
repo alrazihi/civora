@@ -15,4 +15,5 @@ type DecisionRepository interface {
 	FindByServiceRequest(ctx context.Context, orgID, serviceRequestID uuid.UUID) (*Decision, error)
 	FindByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*Decision, error)
 	CountByOrganization(ctx context.Context, orgID uuid.UUID) (int, error)
+	ListByServiceRequest(ctx context.Context, orgID, serviceRequestID uuid.UUID) ([]*Decision, error)
 }
