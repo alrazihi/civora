@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alrazihi/civora/internal/config"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/alrazihi/civora/internal/identity/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -74,7 +75,7 @@ type mockRoleRepo struct {
 }
 
 func (m *mockRoleRepo) DB() *sql.DB {
-	return nil
+	return testdb.NewDB()
 }
 
 func (m *mockRoleRepo) Save(ctx context.Context, role *domain.Role) error {
@@ -161,7 +162,7 @@ type mockUserRepo struct {
 }
 
 func (m *mockUserRepo) DB() *sql.DB {
-	return nil
+	return testdb.NewDB()
 }
 
 func (m *mockUserRepo) Save(ctx context.Context, u *domain.User) error {
@@ -341,7 +342,7 @@ type roleRepoWithError struct {
 }
 
 func (r *roleRepoWithError) DB() *sql.DB {
-	return nil
+	return testdb.NewDB()
 }
 
 func (r *roleRepoWithError) Save(ctx context.Context, role *domain.Role) error {

@@ -56,7 +56,7 @@ func BuildDSN(host, port, user, password, dbName, sslMode string) string {
 
 func InTransaction(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
 	if db == nil {
-		return fn(nil)
+		return fmt.Errorf("database connection is nil")
 	}
 
 	tx, err := db.BeginTx(ctx, nil)

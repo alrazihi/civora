@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
@@ -23,7 +24,7 @@ func newMockDecisionRepo() *mockDecisionRepo {
 	return &mockDecisionRepo{items: make(map[uuid.UUID]*decisionsdomain.Decision)}
 }
 
-func (m *mockDecisionRepo) DB() *sql.DB { return nil }
+func (m *mockDecisionRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockDecisionRepo) Save(ctx context.Context, d *decisionsdomain.Decision) error {
 	m.items[d.ID] = d
 	return nil

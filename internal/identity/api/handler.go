@@ -183,7 +183,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	orgID := middleware.GetTenantID(r)
+	orgID, err := mustParseUUID(middleware.GetTenantID(r))
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 
 	page, parseErr := strconv.Atoi(r.URL.Query().Get("page"))
 	if parseErr != nil {
@@ -204,7 +208,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * perPage
 
-	users, total, err := h.svc.ListUsers(r.Context(), mustParseUUID(orgID), perPage, offset)
+	users, total, err := h.svc.ListUsers(r.Context(), orgID, perPage, offset)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to list users")
 		return
@@ -225,7 +229,11 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
-	orgID := mustParseUUID(middleware.GetTenantID(r))
+	orgID, err := mustParseUUID(middleware.GetTenantID(r))
+	if err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
 	userIDStr := chi.URLParam(r, "userId")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -249,12 +257,12 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	}, nil)
 }
 
-func mustParseUUID(s string) uuid.UUID {
+func mustParseUUID(s string) (uuid.UUID, error) {
 	id, err := uuid.Parse(s)
 	if err != nil {
-		return uuid.Nil
+		return uuid.Nil, err
 	}
-	return id
+	return id, nil
 }
 
 func writeDomainError(w http.ResponseWriter, err error) {

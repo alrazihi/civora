@@ -9,6 +9,7 @@ import (
 	"github.com/alrazihi/civora/internal/audit/application"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/config"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/alrazihi/civora/internal/workflow/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ type stubDefRepo struct {
 	defs map[uuid.UUID]*domain.WorkflowDefinition
 }
 
-func (s *stubDefRepo) DB() *sql.DB { return nil }
+func (s *stubDefRepo) DB() *sql.DB { return testdb.NewDB() }
 func (s *stubDefRepo) Save(ctx context.Context, def *domain.WorkflowDefinition) error {
 	s.defs[def.ID] = def
 	return nil
@@ -124,7 +125,7 @@ type stubStateRepo struct {
 	states map[uuid.UUID][]domain.WorkflowState
 }
 
-func (s *stubStateRepo) DB() *sql.DB { return nil }
+func (s *stubStateRepo) DB() *sql.DB { return testdb.NewDB() }
 func (s *stubStateRepo) SaveBatch(ctx context.Context, states []domain.WorkflowState) error {
 	for _, st := range states {
 		s.states[st.WorkflowDefID] = append(s.states[st.WorkflowDefID], st)
@@ -153,7 +154,7 @@ type stubTransitionRepo struct {
 	transitions map[uuid.UUID][]domain.WorkflowTransition
 }
 
-func (s *stubTransitionRepo) DB() *sql.DB { return nil }
+func (s *stubTransitionRepo) DB() *sql.DB { return testdb.NewDB() }
 func (s *stubTransitionRepo) SaveBatch(ctx context.Context, transitions []domain.WorkflowTransition) error {
 	for _, t := range transitions {
 		s.transitions[t.WorkflowDefID] = append(s.transitions[t.WorkflowDefID], t)
@@ -192,7 +193,7 @@ type stubInstanceRepo struct {
 	byCase    map[uuid.UUID]*domain.WorkflowInstance
 }
 
-func (s *stubInstanceRepo) DB() *sql.DB { return nil }
+func (s *stubInstanceRepo) DB() *sql.DB { return testdb.NewDB() }
 func (s *stubInstanceRepo) Save(ctx context.Context, instance *domain.WorkflowInstance) error {
 	s.instances[instance.ID] = instance
 	s.byCase[instance.CaseID] = instance
@@ -256,7 +257,7 @@ type stubHistoryRepo struct {
 	histories []domain.WorkflowTransitionHistory
 }
 
-func (s *stubHistoryRepo) DB() *sql.DB { return nil }
+func (s *stubHistoryRepo) DB() *sql.DB { return testdb.NewDB() }
 func (s *stubHistoryRepo) Save(ctx context.Context, history *domain.WorkflowTransitionHistory) error {
 	s.histories = append(s.histories, *history)
 	return nil
@@ -287,7 +288,7 @@ type stubAuditRepo struct {
 	events []*auditdomain.AuditEvent
 }
 
-func (s *stubAuditRepo) DB() *sql.DB { return nil }
+func (s *stubAuditRepo) DB() *sql.DB { return testdb.NewDB() }
 func (s *stubAuditRepo) Save(ctx context.Context, event *auditdomain.AuditEvent) error {
 	s.events = append(s.events, event)
 	return nil

@@ -8,6 +8,7 @@ import (
 
 	assistancedomain "github.com/alrazihi/civora/internal/assistance/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func newMockAssistanceRepo() *mockAssistanceRepo {
 	return &mockAssistanceRepo{items: make(map[uuid.UUID]*assistancedomain.Assistance)}
 }
 
-func (m *mockAssistanceRepo) DB() *sql.DB { return nil }
+func (m *mockAssistanceRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockAssistanceRepo) Save(ctx context.Context, a *assistancedomain.Assistance) error {
 	m.items[a.ID] = a
 	return nil

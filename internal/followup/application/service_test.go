@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	followupdomain "github.com/alrazihi/civora/internal/followup/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func newMockFollowUpRepo() *mockFollowUpRepo {
 	return &mockFollowUpRepo{items: make(map[uuid.UUID]*followupdomain.FollowUp)}
 }
 
-func (m *mockFollowUpRepo) DB() *sql.DB { return nil }
+func (m *mockFollowUpRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockFollowUpRepo) Save(ctx context.Context, f *followupdomain.FollowUp) error {
 	m.items[f.ID] = f
 	return nil

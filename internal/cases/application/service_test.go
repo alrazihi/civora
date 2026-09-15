@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	submissiondomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	peopleDomain "github.com/alrazihi/civora/internal/people/domain"
 	rulesintegration "github.com/alrazihi/civora/internal/rules/application"
@@ -55,7 +56,7 @@ func newMockCaseRepo() *mockCaseRepository {
 }
 
 func (m *mockCaseRepository) DB() *sql.DB {
-	return nil
+	return testdb.NewDB()
 }
 
 func (m *mockCaseRepository) Save(ctx context.Context, c *domain.Case) error {
@@ -248,7 +249,7 @@ func newMockAssignmentRepo() *mockAssignmentRepo {
 	}
 }
 
-func (m *mockAssignmentRepo) DB() *sql.DB { return nil }
+func (m *mockAssignmentRepo) DB() *sql.DB { return testdb.NewDB() }
 
 func (m *mockAssignmentRepo) Save(ctx context.Context, a *assignmentdomain.WorkflowStateFormAssignment) error {
 	return m.SaveTx(ctx, nil, a)
@@ -338,7 +339,7 @@ func newMockSubmissionRepo() *mockSubmissionRepo {
 	}
 }
 
-func (m *mockSubmissionRepo) DB() *sql.DB { return nil }
+func (m *mockSubmissionRepo) DB() *sql.DB { return testdb.NewDB() }
 
 func (m *mockSubmissionRepo) Save(ctx context.Context, s *submissiondomain.FormSubmission) error {
 	return m.SaveTx(ctx, nil, s)

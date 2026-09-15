@@ -8,6 +8,7 @@ import (
 
 	assessmentdomain "github.com/alrazihi/civora/internal/assessment/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func newMockAssessmentRepo() *mockAssessmentRepo {
 	return &mockAssessmentRepo{items: make(map[uuid.UUID]*assessmentdomain.Assessment)}
 }
 
-func (m *mockAssessmentRepo) DB() *sql.DB { return nil }
+func (m *mockAssessmentRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockAssessmentRepo) Save(ctx context.Context, a *assessmentdomain.Assessment) error {
 	m.items[a.ID] = a
 	return nil

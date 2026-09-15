@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/alrazihi/civora/internal/organizations/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,7 @@ func (m *mockOrgRepo) SaveTx(ctx context.Context, tx *sql.Tx, org *domain.Organi
 }
 
 func (m *mockOrgRepo) DB() *sql.DB {
-	return nil
+	return testdb.NewDB()
 }
 
 func (m *mockOrgRepo) FindBySlug(ctx context.Context, slug string) (*domain.Organization, error) {

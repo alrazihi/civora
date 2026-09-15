@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/alrazihi/civora/internal/forms/domain"
 	workflowdomain "github.com/alrazihi/civora/internal/workflow/domain"
 	assignmentdomain "github.com/alrazihi/civora/internal/workflow_form_assignment/domain"
@@ -22,7 +23,7 @@ func newMockWorkflowDefRepo() *mockWorkflowDefRepo {
 	return &mockWorkflowDefRepo{defs: make(map[uuid.UUID]*workflowdomain.WorkflowDefinition)}
 }
 
-func (m *mockWorkflowDefRepo) DB() *sql.DB { return nil }
+func (m *mockWorkflowDefRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockWorkflowDefRepo) Save(ctx context.Context, def *workflowdomain.WorkflowDefinition) error {
 	m.defs[def.ID] = def
 	return nil
@@ -96,7 +97,7 @@ func newMockWorkflowStateRepo() *mockWorkflowStateRepo {
 	return &mockWorkflowStateRepo{states: make(map[uuid.UUID][]workflowdomain.WorkflowState)}
 }
 
-func (m *mockWorkflowStateRepo) DB() *sql.DB { return nil }
+func (m *mockWorkflowStateRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockWorkflowStateRepo) SaveBatch(ctx context.Context, states []workflowdomain.WorkflowState) error {
 	return nil
 }
@@ -125,7 +126,7 @@ func newMockFormRepo() *mockFormRepo {
 	return &mockFormRepo{forms: make(map[uuid.UUID]*domain.Form)}
 }
 
-func (m *mockFormRepo) DB() *sql.DB { return nil }
+func (m *mockFormRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockFormRepo) Save(ctx context.Context, tx *sql.Tx, form *domain.Form) error {
 	m.forms[form.ID] = form
 	return nil
@@ -185,7 +186,7 @@ func newMockFormVersionRepo() *mockFormVersionRepo {
 	return &mockFormVersionRepo{versions: make(map[uuid.UUID]*domain.FormVersion)}
 }
 
-func (m *mockFormVersionRepo) DB() *sql.DB { return nil }
+func (m *mockFormVersionRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockFormVersionRepo) Save(ctx context.Context, tx *sql.Tx, version *domain.FormVersion) error {
 	m.versions[version.ID] = version
 	return nil
@@ -245,7 +246,7 @@ func newMockAssignmentRepo() *mockAssignmentRepo {
 	return &mockAssignmentRepo{assignments: make(map[uuid.UUID]*assignmentdomain.WorkflowStateFormAssignment)}
 }
 
-func (m *mockAssignmentRepo) DB() *sql.DB { return nil }
+func (m *mockAssignmentRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockAssignmentRepo) Save(ctx context.Context, assignment *assignmentdomain.WorkflowStateFormAssignment) error {
 	m.assignments[assignment.ID] = assignment
 	return nil

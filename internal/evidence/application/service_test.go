@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	evidencedomain "github.com/alrazihi/civora/internal/evidence/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ func newMockEvidenceRepo() *mockEvidenceRepo {
 	return &mockEvidenceRepo{items: make(map[uuid.UUID]*evidencedomain.Evidence)}
 }
 
-func (m *mockEvidenceRepo) DB() *sql.DB { return nil }
+func (m *mockEvidenceRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockEvidenceRepo) Save(ctx context.Context, e *evidencedomain.Evidence) error {
 	m.items[e.ID] = e
 	return nil

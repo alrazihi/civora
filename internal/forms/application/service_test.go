@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
+	"github.com/alrazihi/civora/internal/database/testdb"
 	"github.com/alrazihi/civora/internal/forms/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,7 @@ func (m *mockFormRepo) Save(ctx context.Context, tx *sql.Tx, form *domain.Form) 
 	return m.SaveTx(ctx, tx, form)
 }
 
-func (m *mockFormRepo) DB() *sql.DB { return nil }
+func (m *mockFormRepo) DB() *sql.DB { return testdb.NewDB() }
 
 func (m *mockFormRepo) SaveTx(ctx context.Context, tx *sql.Tx, form *domain.Form) error {
 	m.forms[form.Key] = form
