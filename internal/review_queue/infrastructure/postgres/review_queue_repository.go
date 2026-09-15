@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -35,18 +36,36 @@ func (r *PostgresReviewQueueRepository) SaveTx(ctx context.Context, tx *sql.Tx, 
 func (r *PostgresReviewQueueRepository) saveReview(ctx context.Context, ex interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }, entry *reviewdomain.ReviewQueueEntry) error {
+	ruleEvalIDsJSON, err := json.Marshal(entry.RuleEvaluationIDs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal rule evaluation IDs: %w", err)
+	}
+	missingInfoJSON, err := json.Marshal(entry.MissingInformation)
+	if err != nil {
+		return fmt.Errorf("failed to marshal missing information: %w", err)
+	}
+	var assignedToIDArg any = entry.AssignedToID
+	if entry.AssignedToID == nil {
+		assignedToIDArg = nil
+	}
+	var completedAtArg any = entry.CompletedAt
+	if entry.CompletedAt == nil {
+		completedAtArg = nil
+	}
 	query := `
 		INSERT INTO review_queue (
 			id, organization_id, case_id, workflow_instance_id, status,
 			assigned_to, priority, workflow_state, rule_evaluation_ids,
 			missing_information, created_at, updated_at, completed_at, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+		)
 	`
-	_, err := ex.ExecContext(ctx, query,
+	_, err = ex.ExecContext(ctx, query,
 		entry.ID, entry.OrganizationID, entry.CaseID, entry.WorkflowInstanceID,
-		entry.Status, entry.AssignedToID, string(entry.Priority), entry.WorkflowState,
-		entry.RuleEvaluationIDs, entry.MissingInformation,
-		entry.CreatedAt, entry.UpdatedAt, entry.CompletedAt, entry.Metadata,
+		entry.Status, assignedToIDArg, string(entry.Priority), entry.WorkflowState,
+		ruleEvalIDsJSON, missingInfoJSON,
+		entry.CreatedAt, entry.UpdatedAt, completedAtArg, entry.Metadata,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert review queue entry: %w", err)
@@ -202,11 +221,14 @@ func (r *PostgresReviewQueueRepository) scanReview(row interface {
 	var priorityStr string
 	var assignedToStr sql.NullString
 	var completedAt sql.NullTime
+	var ruleEvalIDsJSON []byte
+	var missingInfoJSON []byte
+	var metadataJSON []byte
 	if err := row.Scan(
 		&entry.ID, &entry.OrganizationID, &entry.CaseID, &entry.WorkflowInstanceID,
 		&entry.Status, &assignedToStr, &priorityStr, &entry.WorkflowState,
-		&entry.RuleEvaluationIDs, &entry.MissingInformation,
-		&entry.CreatedAt, &entry.UpdatedAt, &completedAt, &entry.Metadata,
+		&ruleEvalIDsJSON, &missingInfoJSON,
+		&entry.CreatedAt, &entry.UpdatedAt, &completedAt, &metadataJSON,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, reviewdomain.ErrReviewNotFound
@@ -224,6 +246,15 @@ func (r *PostgresReviewQueueRepository) scanReview(row interface {
 		t := completedAt.Time
 		entry.CompletedAt = &t
 	}
+	if err := json.Unmarshal(ruleEvalIDsJSON, &entry.RuleEvaluationIDs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rule evaluation IDs: %w", err)
+	}
+	if err := json.Unmarshal(missingInfoJSON, &entry.MissingInformation); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal missing information: %w", err)
+	}
+	if err := json.Unmarshal(metadataJSON, &entry.Metadata); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+	}
 	return &entry, nil
 }
 
@@ -232,11 +263,14 @@ func (r *PostgresReviewQueueRepository) scanReviewFromRows(rows *sql.Rows) (*rev
 	var priorityStr string
 	var assignedToStr sql.NullString
 	var completedAt sql.NullTime
+	var ruleEvalIDsJSON []byte
+	var missingInfoJSON []byte
+	var metadataJSON []byte
 	if err := rows.Scan(
 		&entry.ID, &entry.OrganizationID, &entry.CaseID, &entry.WorkflowInstanceID,
 		&entry.Status, &assignedToStr, &priorityStr, &entry.WorkflowState,
-		&entry.RuleEvaluationIDs, &entry.MissingInformation,
-		&entry.CreatedAt, &entry.UpdatedAt, &completedAt, &entry.Metadata,
+		&ruleEvalIDsJSON, &missingInfoJSON,
+		&entry.CreatedAt, &entry.UpdatedAt, &completedAt, &metadataJSON,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan review queue entry: %w", err)
 	}
@@ -250,6 +284,15 @@ func (r *PostgresReviewQueueRepository) scanReviewFromRows(rows *sql.Rows) (*rev
 	if completedAt.Valid {
 		t := completedAt.Time
 		entry.CompletedAt = &t
+	}
+	if err := json.Unmarshal(ruleEvalIDsJSON, &entry.RuleEvaluationIDs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rule evaluation IDs: %w", err)
+	}
+	if err := json.Unmarshal(missingInfoJSON, &entry.MissingInformation); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal missing information: %w", err)
+	}
+	if err := json.Unmarshal(metadataJSON, &entry.Metadata); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 	return &entry, nil
 }

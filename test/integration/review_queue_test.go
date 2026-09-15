@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"testing"
 
-	reviewqueueapp "github.com/alrazihi/civora/internal/review_queue/application"
-	reviewqueuepostgres "github.com/alrazihi/civora/internal/review_queue/infrastructure/postgres"
-	reviewdomain "github.com/alrazihi/civora/internal/review_queue/domain"
 	casedomain "github.com/alrazihi/civora/internal/cases/domain"
+	reviewqueueapp "github.com/alrazihi/civora/internal/review_queue/application"
+	reviewdomain "github.com/alrazihi/civora/internal/review_queue/domain"
+	reviewqueuepostgres "github.com/alrazihi/civora/internal/review_queue/infrastructure/postgres"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -89,11 +89,24 @@ func seedCase(t *testing.T, db *sql.DB, orgID, actorID uuid.UUID) uuid.UUID {
 func seedWorkflowInstance(t *testing.T, db *sql.DB, orgID, caseID uuid.UUID) uuid.UUID {
 	t.Helper()
 	instanceID := uuid.New()
+	wfDefID := uuid.New()
+	wfDefVer := 1
+	// Create workflow definition
 	_, err := db.Exec(`
-		INSERT INTO workflow_instances (id, organization_id, case_id, current_state, started_at, metadata, version)
-		VALUES ($1, $2, $3, 'DECISION_PENDING', NOW(), '{}', 1)
-	`, instanceID, orgID, caseID)
-	require.NoError(t, err)
+		INSERT INTO workflow_definitions (id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+	`, wfDefID, orgID, "wf-default", "Default Workflow", "Default workflow for testing", 1, "ACTIVE", "NEW", "{}")
+	if err != nil {
+		return uuid.Nil
+	}
+	// Create workflow instance
+	_, err = db.Exec(`
+		INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version)
+		VALUES ($1, $2, $3, $4, $5, 'DECISION_PENDING', NOW(), NULL, '{}', 1)
+	`, instanceID, orgID, wfDefID, wfDefVer, caseID)
+	if err != nil {
+		return uuid.Nil
+	}
 	return instanceID
 }
 
