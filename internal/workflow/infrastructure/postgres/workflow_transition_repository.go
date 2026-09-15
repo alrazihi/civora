@@ -40,8 +40,8 @@ func (r *PostgresWorkflowTransitionRepository) saveBatch(ctx context.Context, e 
 	query := `
 		INSERT INTO workflow_transitions (
 			id, workflow_definition_id, organization_id, key, name, from_state, to_state,
-			description, conditions, allowed_roles, active, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			description, conditions, allowed_roles, active, decision_type, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 
 	for _, t := range transitions {
@@ -57,7 +57,7 @@ func (r *PostgresWorkflowTransitionRepository) saveBatch(ctx context.Context, e 
 		_, err = e.ExecContext(ctx, query,
 			t.ID, t.WorkflowDefID, t.TenantID, t.Key, t.Name,
 			t.FromState, t.ToState, t.Description, conditionsJSON,
-			allowedRolesJSON, t.Active, t.CreatedAt,
+			allowedRolesJSON, t.Active, t.DecisionType, t.CreatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert workflow transition %s: %w", t.Key, err)
@@ -91,7 +91,7 @@ func (r *PostgresWorkflowTransitionRepository) deleteBatchByDefinitionID(ctx con
 func (r *PostgresWorkflowTransitionRepository) FindByDefinitionID(ctx context.Context, tenantID, defID uuid.UUID) ([]domain.WorkflowTransition, error) {
 	query := `
 		SELECT id, workflow_definition_id, organization_id, key, name, from_state, to_state,
-			   description, conditions, allowed_roles, active, created_at
+			   description, conditions, allowed_roles, active, decision_type, created_at
 		FROM workflow_transitions
 		WHERE workflow_definition_id = $1 AND organization_id = $2
 		ORDER BY key
@@ -106,13 +106,15 @@ func (r *PostgresWorkflowTransitionRepository) FindByDefinitionID(ctx context.Co
 	for rows.Next() {
 		var t domain.WorkflowTransition
 		var conditionsJSON, allowedRolesJSON []byte
+		var decisionTypeStr sql.NullString
 		if err := rows.Scan(
 			&t.ID, &t.WorkflowDefID, &t.TenantID, &t.Key, &t.Name,
 			&t.FromState, &t.ToState, &t.Description, &conditionsJSON,
-			&allowedRolesJSON, &t.Active, &t.CreatedAt,
+			&allowedRolesJSON, &t.Active, &decisionTypeStr, &t.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan workflow transition: %w", err)
 		}
+		t.DecisionType = decisionTypeStr.String
 		if len(conditionsJSON) > 0 {
 			if err := json.Unmarshal(conditionsJSON, &t.Conditions); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal transition conditions: %w", err)
@@ -134,7 +136,7 @@ func (r *PostgresWorkflowTransitionRepository) FindByDefinitionID(ctx context.Co
 func (r *PostgresWorkflowTransitionRepository) FindByFromState(ctx context.Context, tenantID uuid.UUID, defID uuid.UUID, fromState string) ([]domain.WorkflowTransition, error) {
 	query := `
 		SELECT id, workflow_definition_id, organization_id, key, name, from_state, to_state,
-			   description, conditions, allowed_roles, active, created_at
+			   description, conditions, allowed_roles, active, decision_type, created_at
 		FROM workflow_transitions
 		WHERE workflow_definition_id = $1 AND organization_id = $2 AND from_state = $3 AND active = true
 	`
@@ -148,13 +150,15 @@ func (r *PostgresWorkflowTransitionRepository) FindByFromState(ctx context.Conte
 	for rows.Next() {
 		var t domain.WorkflowTransition
 		var conditionsJSON, allowedRolesJSON []byte
+		var decisionTypeStr sql.NullString
 		if err := rows.Scan(
 			&t.ID, &t.WorkflowDefID, &t.TenantID, &t.Key, &t.Name,
 			&t.FromState, &t.ToState, &t.Description, &conditionsJSON,
-			&allowedRolesJSON, &t.Active, &t.CreatedAt,
+			&allowedRolesJSON, &t.Active, &decisionTypeStr, &t.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan workflow transition: %w", err)
 		}
+		t.DecisionType = decisionTypeStr.String
 		if len(conditionsJSON) > 0 {
 			if err := json.Unmarshal(conditionsJSON, &t.Conditions); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal transition conditions: %w", err)

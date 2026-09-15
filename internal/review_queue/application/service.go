@@ -39,6 +39,7 @@ type CaseFinder interface {
 type WorkflowExecutor interface {
 	GetInstanceByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) (*workflowdomain.WorkflowInstance, error)
 	GetValidTransitions(ctx context.Context, tenantID, instanceID uuid.UUID) ([]workflowdomain.WorkflowTransition, error)
+	GetTransitionForDecision(ctx context.Context, tenantID, instanceID uuid.UUID, decisionType string) (*workflowdomain.WorkflowTransition, error)
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 }
 
@@ -261,16 +262,36 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 			return fmt.Errorf("failed to update review status: %w", err)
 		}
 
+		decisionType := decisionsdomain.DecisionType(params.Decision)
+		if err := validateDecisionType(decisionType); err != nil {
+			return err
+		}
+		if decisionsdomain.ReasonRequired(decisionType) && params.Reason == "" {
+			return ErrReviewInvalidInput
+		}
+
 		if s.decisionSvc != nil {
-			decisionType := decisionsdomain.DecisionType(params.Decision)
-			if err := validateDecisionType(decisionType); err != nil {
-				return err
-			}
-			if decisionsdomain.ReasonRequired(decisionType) && params.Reason == "" {
-				return ErrReviewInvalidInput
-			}
 			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionType, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
+			}
+		}
+
+		if s.workflowSvc != nil {
+			inst, wfErr := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, entry.CaseID)
+			if wfErr == nil && inst != nil {
+				transition, transErr := s.workflowSvc.GetTransitionForDecision(ctx, params.OrganizationID, inst.ID, string(decisionType))
+				if transErr == nil && transition != nil {
+					if _, execErr := s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+						TenantID:      params.OrganizationID,
+						InstanceID:    inst.ID,
+						TransitionKey: transition.Key,
+						ActorID:       params.ReviewerID,
+						ActorRole:     "",
+						Reason:        params.Reason,
+					}); execErr != nil {
+						return fmt.Errorf("failed to execute workflow transition: %w", execErr)
+					}
+				}
 			}
 		}
 
@@ -356,6 +377,25 @@ func (s *ReviewQueueService) EscalateReview(ctx context.Context, params Escalate
 			}
 		}
 
+		if s.workflowSvc != nil {
+			inst, wfErr := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, entry.CaseID)
+			if wfErr == nil && inst != nil {
+				transition, transErr := s.workflowSvc.GetTransitionForDecision(ctx, params.OrganizationID, inst.ID, string(decisionsdomain.DecisionTypeEscalate))
+				if transErr == nil && transition != nil {
+					if _, execErr := s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+						TenantID:      params.OrganizationID,
+						InstanceID:    inst.ID,
+						TransitionKey: transition.Key,
+						ActorID:       params.ReviewerID,
+						ActorRole:     "",
+						Reason:        params.Reason,
+					}); execErr != nil {
+						return fmt.Errorf("failed to execute workflow transition: %w", execErr)
+					}
+				}
+			}
+		}
+
 		if s.auditor != nil {
 			reviewIDStr := entry.ID.String()
 			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
@@ -424,6 +464,25 @@ func (s *ReviewQueueService) RequestInformation(ctx context.Context, params Requ
 		if s.decisionSvc != nil {
 			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeNeedsMoreInformation, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
+			}
+		}
+
+		if s.workflowSvc != nil {
+			inst, wfErr := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, entry.CaseID)
+			if wfErr == nil && inst != nil {
+				transition, transErr := s.workflowSvc.GetTransitionForDecision(ctx, params.OrganizationID, inst.ID, string(decisionsdomain.DecisionTypeNeedsMoreInformation))
+				if transErr == nil && transition != nil {
+					if _, execErr := s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
+						TenantID:      params.OrganizationID,
+						InstanceID:    inst.ID,
+						TransitionKey: transition.Key,
+						ActorID:       params.ReviewerID,
+						ActorRole:     "",
+						Reason:        params.Reason,
+					}); execErr != nil {
+						return fmt.Errorf("failed to execute workflow transition: %w", execErr)
+					}
+				}
 			}
 		}
 

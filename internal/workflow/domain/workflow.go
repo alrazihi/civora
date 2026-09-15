@@ -63,6 +63,7 @@ type WorkflowTransition struct {
 	Conditions    []TransitionCondition
 	AllowedRoles  []string
 	Active        bool
+	DecisionType  string
 	CreatedAt     time.Time
 }
 

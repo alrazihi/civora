@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
 	casedomain "github.com/alrazihi/civora/internal/cases/domain"
@@ -12,6 +13,8 @@ import (
 	reviewqueueapp "github.com/alrazihi/civora/internal/review_queue/application"
 	reviewdomain "github.com/alrazihi/civora/internal/review_queue/domain"
 	reviewqueuepostgres "github.com/alrazihi/civora/internal/review_queue/infrastructure/postgres"
+	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
+	workflowpostgres "github.com/alrazihi/civora/internal/workflow/infrastructure/postgres"
 	"github.com/alrazihi/civora/test/helpers"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -44,12 +47,18 @@ func setupReviewQueueEnv(t *testing.T) *reviewQueueEnv {
 		nil,
 		nil,
 	)
+	wfDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db)
+	wfStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db)
+	wfTransRepo := workflowpostgres.NewPostgresWorkflowTransitionRepository(db)
+	wfInstanceRepo := workflowpostgres.NewPostgresWorkflowInstanceRepository(db)
+	wfHistoryRepo := workflowpostgres.NewPostgresWorkflowTransitionHistoryRepository(db)
+	workflowSvc := workflowapp.NewWorkflowService(wfDefRepo, wfStateRepo, wfTransRepo, wfInstanceRepo, wfHistoryRepo, nil)
 	svc := reviewqueueapp.NewReviewQueueService(
 		repo,
 		&mockCaseFinder{db: db},
 		&mockUserChecker{orgID: orgID, userID: userID},
 		nil,
-		nil,
+		workflowSvc,
 		decisionSvc,
 	)
 
@@ -114,22 +123,45 @@ func seedWorkflowInstance(t *testing.T, db *sql.DB, orgID, caseID uuid.UUID) uui
 	instanceID := uuid.New()
 	wfDefID := uuid.New()
 	wfDefVer := 1
+	ctx := context.Background()
+
 	// Create workflow definition
-	_, err := db.Exec(`
+	_, err := db.ExecContext(ctx, `
 		INSERT INTO workflow_definitions (id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-	`, wfDefID, orgID, "wf-default", "Default Workflow", "Default workflow for testing", 1, "ACTIVE", "NEW", "{}")
-	if err != nil {
-		return uuid.Nil
-	}
+	`, wfDefID, orgID, "wf-default", "Default Workflow", "Default workflow for testing", 1, "ACTIVE", "DECISION_PENDING", "{}")
+	require.NoError(t, err)
+
+	// Create workflow states
+	stateIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO workflow_states (id, workflow_definition_id, organization_id, key, name, description, category, terminal, display_order, responsible_role, created_at)
+		VALUES
+			($1, $2, $3, 'DECISION_PENDING', 'Decision Pending', '', 'initial', false, 0, '', NOW()),
+			($4, $5, $6, 'APPROVED', 'Approved', '', 'terminal', true, 1, '', NOW()),
+			($7, $8, $9, 'REJECTED', 'Rejected', '', 'terminal', true, 2, '', NOW()),
+			($10, $11, $12, 'ESCALATED', 'Escalated', '', 'terminal', true, 3, '', NOW())
+	`, stateIDs[0], wfDefID, orgID, stateIDs[1], wfDefID, orgID, stateIDs[2], wfDefID, orgID, stateIDs[3], wfDefID, orgID)
+	require.NoError(t, err)
+
+	// Create workflow transitions with decision_type
+	transitionIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO workflow_transitions (id, workflow_definition_id, organization_id, key, name, from_state, to_state, description, conditions, allowed_roles, active, decision_type, created_at)
+		VALUES
+			($1, $2, $3, 'approve', 'Approve', 'DECISION_PENDING', 'APPROVED', '', '[]', '[]', true, 'APPROVED', NOW()),
+			($4, $5, $6, 'reject', 'Reject', 'DECISION_PENDING', 'REJECTED', '', '[]', '[]', true, 'REJECTED', NOW()),
+			($7, $8, $9, 'escalate', 'Escalate', 'DECISION_PENDING', 'ESCALATED', '', '[]', '[]', true, 'ESCALATE', NOW())
+	`, transitionIDs[0], wfDefID, orgID, transitionIDs[1], wfDefID, orgID, transitionIDs[2], wfDefID, orgID)
+	require.NoError(t, err)
+
 	// Create workflow instance
-	_, err = db.Exec(`
+	_, err = db.ExecContext(ctx, `
 		INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version)
 		VALUES ($1, $2, $3, $4, $5, 'DECISION_PENDING', NOW(), NULL, '{}', 1)
 	`, instanceID, orgID, wfDefID, wfDefVer, caseID)
-	if err != nil {
-		return uuid.Nil
-	}
+	require.NoError(t, err)
+
 	return instanceID
 }
 
@@ -829,4 +861,335 @@ func TestReviewQueueService_ListByOrganization(t *testing.T) {
 	assert.Equal(t, 1, total)
 	assert.Len(t, items, 1)
 	assert.Equal(t, "PENDING", string(items[0].Status))
+}
+
+func seedWorkflowInstanceWithTransitions(t *testing.T, db *sql.DB, orgID, caseID uuid.UUID, initialState string, states []struct {
+	key, name string
+	terminal  bool
+}, transitions []struct{ from, to, key, decisionType string }) uuid.UUID {
+	t.Helper()
+	instanceID := uuid.New()
+	wfDefID := uuid.New()
+	wfDefVer := 1
+	ctx := context.Background()
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO workflow_definitions (id, organization_id, key, name, description, version, status, initial_state, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+	`, wfDefID, orgID, "wf-custom", "Custom Workflow", "Custom workflow for testing", 1, "ACTIVE", initialState, "{}")
+	require.NoError(t, err)
+
+	stateIDs := make([]uuid.UUID, len(states))
+	for i := range states {
+		stateIDs[i] = uuid.New()
+	}
+	stateQuery := `
+		INSERT INTO workflow_states (id, workflow_definition_id, organization_id, key, name, description, category, terminal, display_order, responsible_role, created_at)
+		VALUES
+	`
+	stateArgs := []interface{}{}
+	for i, s := range states {
+		if i > 0 {
+			stateQuery += ","
+		}
+		stateQuery += fmt.Sprintf(" ($%d, $%d, $%d, $%d, $%d, '', 'initial', %t, %d, '', NOW())", len(stateArgs)+1, len(stateArgs)+2, len(stateArgs)+3, len(stateArgs)+4, len(stateArgs)+5, s.terminal, i)
+		stateArgs = append(stateArgs, stateIDs[i], wfDefID, orgID, s.key, s.name)
+	}
+	_, err = db.ExecContext(ctx, stateQuery, stateArgs...)
+	require.NoError(t, err)
+
+	transitionIDs := make([]uuid.UUID, len(transitions))
+	for i := range transitions {
+		transitionIDs[i] = uuid.New()
+	}
+	transQuery := `
+		INSERT INTO workflow_transitions (id, workflow_definition_id, organization_id, key, name, from_state, to_state, description, conditions, allowed_roles, active, decision_type, created_at)
+		VALUES
+	`
+	transArgs := []interface{}{}
+	for i, tr := range transitions {
+		if i > 0 {
+			transQuery += ","
+		}
+		transQuery += fmt.Sprintf(" ($%d, $%d, $%d, $%d, $%d, $%d, $%d, '', '[]', '[]', true, $%d, NOW())", len(transArgs)+1, len(transArgs)+2, len(transArgs)+3, len(transArgs)+4, len(transArgs)+5, len(transArgs)+6, len(transArgs)+7, len(transArgs)+8)
+		transArgs = append(transArgs, transitionIDs[i], wfDefID, orgID, tr.key, tr.key, tr.from, tr.to, tr.decisionType)
+	}
+	_, err = db.ExecContext(ctx, transQuery, transArgs...)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO workflow_instances (id, organization_id, workflow_definition_id, workflow_definition_version, case_id, current_state, started_at, completed_at, metadata, version)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NULL, '{}', 1)
+	`, instanceID, orgID, wfDefID, wfDefVer, caseID, initialState)
+	require.NoError(t, err)
+
+	return instanceID
+}
+
+func TestReviewQueueService_CompleteReview_WorkflowTransitionApproval(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	completed, err := env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "APPROVED",
+		Reason:         "Meets criteria",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETED", string(completed.Status))
+
+	var currentState string
+	err = env.db.QueryRowContext(ctx, `
+		SELECT current_state FROM workflow_instances WHERE id = $1
+	`, instanceID).Scan(&currentState)
+	require.NoError(t, err)
+	assert.Equal(t, "APPROVED", currentState)
+
+	decision, err := env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.NoError(t, err)
+	require.NotNil(t, decision)
+	assert.Equal(t, decisionsdomain.DecisionTypeApproved, decision.Decision)
+}
+
+func TestReviewQueueService_CompleteReview_WorkflowTransitionRejection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	completed, err := env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "REJECTED",
+		Reason:         "Does not meet criteria",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETED", string(completed.Status))
+
+	var currentState string
+	err = env.db.QueryRowContext(ctx, `
+		SELECT current_state FROM workflow_instances WHERE id = $1
+	`, instanceID).Scan(&currentState)
+	require.NoError(t, err)
+	assert.Equal(t, "REJECTED", currentState)
+
+	decision, err := env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.NoError(t, err)
+	require.NotNil(t, decision)
+	assert.Equal(t, decisionsdomain.DecisionTypeRejected, decision.Decision)
+}
+
+func TestReviewQueueService_CompleteReview_WorkflowTransitionEscalation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	escalated, err := env.svc.EscalateReview(ctx, reviewqueueapp.EscalateReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Reason:         "Requires senior review",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ESCALATED", string(escalated.Status))
+
+	var currentState string
+	err = env.db.QueryRowContext(ctx, `
+		SELECT current_state FROM workflow_instances WHERE id = $1
+	`, instanceID).Scan(&currentState)
+	require.NoError(t, err)
+	assert.Equal(t, "ESCALATED", currentState)
+
+	decision, err := env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.NoError(t, err)
+	require.NotNil(t, decision)
+	assert.Equal(t, decisionsdomain.DecisionTypeEscalate, decision.Decision)
+}
+
+func TestReviewQueueService_CompleteReview_WorkflowTransitionSecondWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+
+	// Second workflow: Education Assistance with different state names
+	instanceID := seedWorkflowInstanceWithTransitions(t, env.db, env.orgID, caseID,
+		"ASSESSMENT",
+		[]struct {
+			key, name string
+			terminal  bool
+		}{
+			{key: "ASSESSMENT", name: "Assessment", terminal: false},
+			{key: "APPROVED", name: "Approved", terminal: true},
+			{key: "REJECTED", name: "Rejected", terminal: true},
+		},
+		[]struct{ from, to, key, decisionType string }{
+			{from: "ASSESSMENT", to: "APPROVED", key: "approve", decisionType: "APPROVED"},
+			{from: "ASSESSMENT", to: "REJECTED", key: "reject", decisionType: "REJECTED"},
+		},
+	)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "ASSESSMENT", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	completed, err := env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "APPROVED",
+		Reason:         "Meets criteria",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETED", string(completed.Status))
+
+	var currentState string
+	err = env.db.QueryRowContext(ctx, `
+		SELECT current_state FROM workflow_instances WHERE id = $1
+	`, instanceID).Scan(&currentState)
+	require.NoError(t, err)
+	assert.Equal(t, "APPROVED", currentState)
+
+	decision, err := env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.NoError(t, err)
+	require.NotNil(t, decision)
+	assert.Equal(t, decisionsdomain.DecisionTypeApproved, decision.Decision)
+}
+
+func TestReviewQueueService_CompleteReview_WorkflowTransitionAtomicity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	env := setupReviewQueueEnv(t)
+	ctx := context.Background()
+
+	caseID := seedCase(t, env.db, env.orgID, env.userID)
+	instanceID := seedWorkflowInstance(t, env.db, env.orgID, caseID)
+
+	entry := newReviewEntry(env.orgID, caseID, instanceID, "DECISION_PENDING", "NORMAL", []uuid.UUID{}, nil, nil)
+	err := env.svc.Save(ctx, entry)
+	require.NoError(t, err)
+
+	_, err = env.svc.ClaimReview(ctx, reviewqueueapp.ClaimReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	_, err = env.svc.StartReview(ctx, reviewqueueapp.StartReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+	})
+	require.NoError(t, err)
+
+	// Try to complete with invalid decision type - should fail and not change workflow state
+	_, err = env.svc.CompleteReview(ctx, reviewqueueapp.CompleteReviewParams{
+		OrganizationID: env.orgID,
+		ReviewID:       entry.ID,
+		ReviewerID:     env.userID,
+		Decision:       "INVALID",
+		Reason:         "Should fail",
+	})
+	require.Error(t, err)
+
+	var currentState string
+	err = env.db.QueryRowContext(ctx, `
+		SELECT current_state FROM workflow_instances WHERE id = $1
+	`, instanceID).Scan(&currentState)
+	require.NoError(t, err)
+	assert.Equal(t, "DECISION_PENDING", currentState)
+
+	_, err = env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.Error(t, err)
 }

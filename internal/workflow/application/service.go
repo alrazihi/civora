@@ -842,6 +842,22 @@ func (s *WorkflowService) GetValidTransitions(ctx context.Context, tenantID, ins
 	return valid, nil
 }
 
+// GetTransitionForDecision returns the transition matching the given decision type
+// from the current state of the workflow instance. Returns nil if no matching
+// transition is found.
+func (s *WorkflowService) GetTransitionForDecision(ctx context.Context, tenantID, instanceID uuid.UUID, decisionType string) (*domain.WorkflowTransition, error) {
+	valid, err := s.GetValidTransitions(ctx, tenantID, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range valid {
+		if valid[i].DecisionType == decisionType {
+			return &valid[i], nil
+		}
+	}
+	return nil, nil
+}
+
 // GetWorkflowHistoryByCaseID returns workflow transition history for a case.
 func (s *WorkflowService) GetWorkflowHistoryByCaseID(ctx context.Context, tenantID, caseID uuid.UUID) ([]domain.WorkflowTransitionHistory, error) {
 	histories, err := s.historyRepo.FindByCaseID(ctx, tenantID, caseID, 100, 0)
