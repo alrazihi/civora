@@ -130,7 +130,7 @@ const app = {
   },
 
   init() {
-    if (token) router.navigate('dashboard');
+    if (token && token.length > 0) router.navigate('dashboard');
     else router.navigate('login');
     router.start();
 
@@ -3079,9 +3079,9 @@ async loadSection(name, path) {
     const ruleCount = (rs.rules || []).length;
     const triggers = (rs.triggers || []).join(', ');
     const updatedAt = rs.updated_at ? new Date(rs.updated_at).toLocaleDateString() : '-';
-      let actions = '<button class="btn sm" onclick="app.showRuleSetDetail(\'' + escapeJS(rs.id) + '\')"><span class="icon">' + icon('eye') + '</span> View</button>';
+      let actions = `<button class="btn sm" onclick="app.showRuleSetDetail('${escapeJS(rs.id)}')"><span class="icon">${icon('eye')}</span> View</button>`;
     if (rs.status === 'DRAFT') {
-      actions += '<button class="btn sm danger" onclick="app.deleteRuleSet(\'' + escapeJS(rs.id) + '\')"><span class="icon">' + icon('trash') + '</span> Delete</button>';
+      actions += `<button class="btn sm danger" onclick="app.deleteRuleSet('${escapeJS(rs.id)}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
     }
     return `<tr>
       <td><code>${escapeHTML(rs.key)}</code></td>
