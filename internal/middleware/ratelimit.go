@@ -62,16 +62,30 @@ func (rl *RateLimiter) runCleanup() {
 	}
 }
 
-func (rl *RateLimiter) getVisitor(ip string) *visitor {
+func (rl *RateLimiter) checkRate(ip string) (allowed bool, retryAfter time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	now := time.Now()
 	v, exists := rl.visitors[ip]
 	if !exists {
-		v = &visitor{tokens: rl.burst, lastReq: time.Now()}
+		v = &visitor{tokens: rl.burst, lastReq: now}
 		rl.visitors[ip] = v
 	}
-	return v
+
+	elapsed := now.Sub(v.lastReq)
+	v.tokens += int(elapsed.Seconds() * float64(rl.limit))
+	if v.tokens > rl.burst {
+		v.tokens = rl.burst
+	}
+	v.lastReq = now
+
+	if v.tokens < 1 {
+		return false, time.Second
+	}
+
+	v.tokens--
+	return true, 0
 }
 
 func (rl *RateLimiter) cleanup() {
@@ -89,20 +103,8 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := realIP(r, rl.trustedProxies)
-			v := rl.getVisitor(ip)
-
-			rl.mu.Lock()
-			defer rl.mu.Unlock()
-
-			now := time.Now()
-			elapsed := now.Sub(v.lastReq)
-			v.tokens += int(elapsed.Seconds() * float64(rl.limit))
-			if v.tokens > rl.burst {
-				v.tokens = rl.burst
-			}
-			v.lastReq = now
-
-			if v.tokens < 1 {
+			allowed, _ := rl.checkRate(ip)
+			if !allowed {
 				body := []byte(`{"success":false,"error":{"code":"RATE_LIMITED","message":"Too many requests"}}`)
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Retry-After", "1")
@@ -111,7 +113,6 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 				return
 			}
 
-			v.tokens--
 			next.ServeHTTP(w, r)
 		})
 	}
