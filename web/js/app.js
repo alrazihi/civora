@@ -44,6 +44,22 @@ function escapeHTML(str) {
     .replace(/'/g, '&#039;');
 }
 
+function escapeJS(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/`/g, '\\`')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/</g, '\\x3c')
+    .replace(/>/g, '\\x3e')
+    .replace(/\&/g, '\\x26')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 function icon(name) {
   const size = 'width="16" height="16"';
   const base = 'svg';
@@ -312,7 +328,7 @@ const app = {
     const transitions = (d.transitions || []).length;
     const selectedMark = selected ? ' selected' : '';
     const disabledAttr = usable ? '' : 'disabled';
-    return `<div class="wf-option-card${selectedMark}${usable ? '' : ' wf-unusable'}" data-wf-id="${escapeHTML(d.id)}" onclick="${usable ? `app.selectWorkflow('${d.id}')` : ''}">
+    return `<div class="wf-option-card${selectedMark}${usable ? '' : ' wf-unusable'}" data-wf-id="${escapeHTML(d.id)}" onclick="${usable ? `app.selectWorkflow('${escapeJS(d.id)}')` : ''}">
       <div class="wf-option-header">
         <span class="wf-option-name">${escapeHTML(d.name)} <span class="text-muted" style="font-weight:400">(${escapeHTML(d.key)})</span></span>
         <span class="badge wf-status-${(d.status || 'DRAFT').toLowerCase()}">${escapeHTML(d.status || 'DRAFT')}</span>
@@ -400,7 +416,7 @@ const app = {
       } else {
         if (tbody) {
           tbody.innerHTML = recentCases.map(c => `
-            <tr style="cursor:pointer" onclick="router.navigate('case','${c.id}')">
+            <tr style="cursor:pointer" onclick="router.navigate('case','${escapeJS(c.id)}')">
               <td>${escapeHTML(c.case_number)}</td>
               <td>${escapeHTML(c.title)}</td>
               <td><span class="badge case-status ${cssStateClass(c.status)}">${escapeHTML(c.status)}</span></td>
@@ -964,7 +980,7 @@ async loadSection(name, path) {
               <div style="margin-top:4px">Required information missing: ${formList}</div>
             </div>`;
         } else {
-          html += this.btn(t.name || t.key, `workflowTransition('${t.key}')`);
+          html += this.btn(t.name || t.key, `workflowTransition('${escapeJS(t.key)}')`);
         }
       }
       html += '</div>';
@@ -1250,18 +1266,18 @@ async loadSection(name, path) {
     const canArchive = d.status === 'ACTIVE';
     const canEdit = d.status === 'DRAFT';
     const canDelete = d.status === 'DRAFT';
-    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${d.id}')"><span class="icon">${icon('eye')}</span> View</button>`;
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showWorkflowDetail('${escapeJS(d.id)}')"><span class="icon">${icon('eye')}</span> View</button>`;
     if (canEdit) {
-      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${d.id}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="app.showWorkflowEditView('${escapeJS(d.id)}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
     }
     if (canActivate) {
-      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${d.id}')"><span class="icon">${icon('play')}</span> Activate</button>`;
+      actionBtns += ` <button class="btn sm" style="font-size:0.8rem;margin-left:4px" onclick="app.activateWorkflow('${escapeJS(d.id)}')"><span class="icon">${icon('play')}</span> Activate</button>`;
     }
     if (canArchive) {
-      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${d.id}')"><span class="icon">${icon('archive')}</span> Archive</button>`;
+      actionBtns += ` <button class="btn warning sm" style="font-size:0.8rem;margin-left:4px" onclick="app.archiveWorkflow('${escapeJS(d.id)}')"><span class="icon">${icon('archive')}</span> Archive</button>`;
     }
     if (canDelete) {
-      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${d.id}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
+      actionBtns += ` <button class="btn danger sm" style="font-size:0.8rem;margin-left:4px" onclick="app.deleteWorkflow('${escapeJS(d.id)}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
     }
     return `<tr>
       <td>${escapeHTML(d.name)} <span class="text-muted" style="font-size:0.8rem">(${escapeHTML(d.key)})</span></td>
@@ -1364,10 +1380,10 @@ async loadSection(name, path) {
     const statusBadge = (status, text) => `<span class="badge wf-status-${status.toLowerCase()}" style="text-transform:none">${escapeHTML(text)}</span>`;
     let actions = `<button class="btn secondary sm" onclick="app.showWorkflowsView()"><span class="icon">←</span> Back to Workflows</button>`;
     if (isDraft) {
-      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${def.id}')"><span class="icon">${icon('play')}</span> Activate</button>`;
+      actions += ` <button class="btn sm" onclick="app.activateWorkflow('${escapeJS(def.id)}')"><span class="icon">${icon('play')}</span> Activate</button>`;
     } else if (isActive) {
-      actions += ` <button class="btn sm" onclick="router.navigate('new-case', '${def.id}')"><span class="icon">${icon('plus')}</span> Use for New Case</button>`;
-      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${def.id}')"><span class="icon">${icon('archive')}</span> Archive</button>`;
+      actions += ` <button class="btn sm" onclick="router.navigate('new-case', '${escapeJS(def.id)}')"><span class="icon">${icon('plus')}</span> Use for New Case</button>`;
+      actions += ` <button class="btn warning sm" onclick="app.archiveWorkflow('${escapeJS(def.id)}')"><span class="icon">${icon('archive')}</span> Archive</button>`;
     }
     const badge = statusBadge(def.status, def.status);
 
@@ -2003,7 +2019,7 @@ async loadSection(name, path) {
 
      return `
        <li style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;cursor:pointer;transition:background 0.2s"
-           onclick="app.openFormForCaseById('${escapeHTML(formDef.id || '')}')"
+            onclick="app.openFormForCaseById('${escapeJS(formDef.id || '')}')"
            data-form-id="${escapeHTML(formDef.id || '')}">
          <div style="display:flex;justify-content:space-between;align-items:center">
            <div>
@@ -2315,9 +2331,9 @@ async loadSection(name, path) {
     const statusBadge = `<span class="badge wf-status-${statusClass}" style="text-transform:none">${escapeHTML(status)}</span>`;
     const fieldCount = (f.fields || []).length;
     const canEdit = status === 'DRAFT';
-    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showFormDetail('${f.id}')"><span class="icon">${icon('eye')}</span> View</button>`;
+    let actionBtns = `<button class="btn secondary sm" style="font-size:0.8rem" onclick="app.showFormDetail('${escapeJS(f.id)}')"><span class="icon">${icon('eye')}</span> View</button>`;
     if (canEdit) {
-      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="router.navigate('form-design', '${f.id}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
+      actionBtns += ` <button class="btn secondary sm" style="font-size:0.8rem;margin-left:4px" onclick="router.navigate('form-design', '${escapeJS(f.id)}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
     }
     return `<tr>
       <td>${escapeHTML(f.name || f.key)}</td>
@@ -2430,7 +2446,7 @@ async loadSection(name, path) {
                    <span class="text-muted" style="font-size:0.85rem"> → State: ${escapeHTML(a.workflow_state_key || a.state_key || '')}</span>
                   ${a.required ? '<span class="badge" style="font-size:0.7rem">Required</span>' : ''}
                 </div>
-                <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${a.workflow_id}', '${a.id}')">Remove</button>
+                <button class="btn danger sm" style="font-size:0.8rem" onclick="app.removeFormAssignment('${escapeJS(a.workflow_id)}', '${escapeJS(a.id)}')">Remove</button>
               </div>
             `).join('');
           } else {
@@ -3063,9 +3079,9 @@ async loadSection(name, path) {
     const ruleCount = (rs.rules || []).length;
     const triggers = (rs.triggers || []).join(', ');
     const updatedAt = rs.updated_at ? new Date(rs.updated_at).toLocaleDateString() : '-';
-     let actions = '<button class="btn sm" onclick="app.showRuleSetDetail(\'' + rs.id + '\')"><span class="icon">' + icon('eye') + '</span> View</button>';
+      let actions = '<button class="btn sm" onclick="app.showRuleSetDetail(\'' + escapeJS(rs.id) + '\')"><span class="icon">' + icon('eye') + '</span> View</button>';
     if (rs.status === 'DRAFT') {
-       actions += '<button class="btn sm danger" onclick="app.deleteRuleSet(\'' + rs.id + '\')"><span class="icon">' + icon('trash') + '</span> Delete</button>';
+      actions += '<button class="btn sm danger" onclick="app.deleteRuleSet(\'' + escapeJS(rs.id) + '\')"><span class="icon">' + icon('trash') + '</span> Delete</button>';
     }
     return `<tr>
       <td><code>${escapeHTML(rs.key)}</code></td>
@@ -3319,8 +3335,8 @@ async loadSection(name, path) {
       }
 
       parts.push(`<div style="display:flex;gap:4px;margin-top:8px">
-       <button class="btn sm" onclick="app.addChildCondition('${path}')"><span class="icon">${icon('plus')}</span> Add Child</button>
-       <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon">${icon('trash')}</span> Remove</button>
+        <button class="btn sm" onclick="app.addChildCondition('${escapeJS(path)}')"><span class="icon">${icon('plus')}</span> Add Child</button>
+        <button class="btn sm danger" onclick="app.removeChildCondition('${escapeJS(path)}')"><span class="icon">${icon('trash')}</span> Remove</button>
       </div>`);
       parts.push(`</div>`);
     } else {
@@ -3331,8 +3347,8 @@ async loadSection(name, path) {
           <select id="cond-${path}-op" onchange="app.updateConditionOp('${path}','leaf')" style="flex:1;min-width:120px">
             ${this.renderOperatorOptions(cond.Operator)}
           </select>
-          <input type="text" id="cond-${path}-value" placeholder="Value" value="${escapeHTML(valStr)}" onchange="app.updateConditionValue('${path}')" style="flex:2;min-width:150px" ${this.isValueLessOperator(cond.Operator) ? 'disabled' : ''}>
-           <button class="btn sm danger" onclick="app.removeChildCondition('${path}')"><span class="icon">${icon('trash')}</span></button>
+            <input type="text" id="cond-${path}-value" placeholder="Value" value="${escapeHTML(valStr)}" onchange="app.updateConditionValue('${escapeJS(path)}')" style="flex:2;min-width:150px" ${this.isValueLessOperator(cond.Operator) ? 'disabled' : ''}>
+            <button class="btn sm danger" onclick="app.removeChildCondition('${escapeJS(path)}')"><span class="icon">${icon('trash')}</span></button>
         </div>
       </div>`);
     }
@@ -3679,7 +3695,7 @@ async loadSection(name, path) {
     return `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <h2 style="margin:0">Evaluation Result</h2>
-        <button class="btn sm" onclick="app.showRuleSetDetail('${ev.rule_set_id}')"><span class="icon" aria-hidden="true">←</span> Back to Rule Set</button>
+        <button class="btn sm" onclick="app.showRuleSetDetail('${escapeJS(ev.rule_set_id)}')"><span class="icon" aria-hidden="true">←</span> Back to Rule Set</button>
       </div>
       <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">
         <span class="badge" style="font-size:1.2rem;padding:8px 16px;background:var(--${ev.status === 'ELIGIBLE' ? 'success' : ev.status === 'INELIGIBLE' ? 'danger' : 'info'}-light);color:var(--${ev.status === 'ELIGIBLE' ? 'success' : ev.status === 'INELIGIBLE' ? 'danger' : 'info'})">
@@ -3737,9 +3753,9 @@ async loadSection(name, path) {
 
     let actionBtns = '';
     if (rs.status === 'DRAFT') {
-       actionBtns += `<button class="btn" onclick="app.showRuleSetEditView('${rs.id}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
-       actionBtns += `<button class="btn secondary" onclick="app.publishRuleSetEdit()"><span class="icon">${icon('upload')}</span> Publish</button>`;
-       actionBtns += `<button class="btn danger" onclick="app.deleteRuleSet('${rs.id}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
+        actionBtns += `<button class="btn" onclick="app.showRuleSetEditView('${escapeJS(rs.id)}')"><span class="icon">${icon('edit')}</span> Edit</button>`;
+        actionBtns += `<button class="btn secondary" onclick="app.publishRuleSetEdit()"><span class="icon">${icon('upload')}</span> Publish</button>`;
+        actionBtns += `<button class="btn danger" onclick="app.deleteRuleSet('${escapeJS(rs.id)}')"><span class="icon">${icon('trash')}</span> Delete</button>`;
     } else if (rs.status === 'PUBLISHED') {
        actionBtns += `<button class="btn secondary" onclick="app.createRuleSetVersionFromDetail()"><span class="icon">${icon('save')}</span> New Version</button>`;
        actionBtns += `<button class="btn secondary" onclick="app.archiveRuleSetFromDetail()"><span class="icon">${icon('archive')}</span> Archive</button>`;
@@ -3764,7 +3780,7 @@ async loadSection(name, path) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn secondary" onclick="router.navigate('rules')">← Rules</button>
         ${actionBtns}
-        <button class="btn secondary" onclick="app.showEvaluateModal('${rs.id}')"><span class="icon">${icon('play')}</span> Evaluate</button>
+        <button class="btn secondary" onclick="app.showEvaluateModal('${escapeJS(rs.id)}')"><span class="icon">${icon('play')}</span> Evaluate</button>
       </div>
     </div>
 

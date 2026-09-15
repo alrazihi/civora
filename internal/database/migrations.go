@@ -172,13 +172,18 @@ func (m *Migrator) runMigration(ctx context.Context, mg Migration) error {
 // escape for an embedded quote) so that semicolons inside them are not
 // treated as statement boundaries. It also skips SQL line comments
 // (`-- ...`) and block comments (`/* ... */`) so semicolons inside
-// comments do not corrupt the statement stream.
+// comments do not corrupt the statement stream. Dollar-quoted string
+// literals (`$$ ... $$` and `$tag$ ... $tag$`, including nested forms)
+// are likewise treated as atomic — semicolons inside them do not
+// trigger a split.
 func splitSQL(sql string) []string {
 	var stmts []string
 	var cur strings.Builder
 	inString := false
 	inLineComment := false
 	inBlockComment := false
+	inDollarQuote := false
+	dollarQuoteTag := ""
 
 	chars := []rune(sql)
 	n := len(chars)
@@ -212,6 +217,20 @@ func splitSQL(sql string) []string {
 				}
 			}
 			continue
+
+		case inDollarQuote:
+			// Inside a dollar-quoted string; look for the closing tag.
+			closing := "$" + dollarQuoteTag + "$"
+			rest := string(chars[i:])
+			if idx := strings.Index(rest, closing); idx >= 0 {
+				cur.WriteString(rest[:idx+len(closing)])
+				i += idx + len(closing) - 1
+				dollarQuoteTag = ""
+				inDollarQuote = false
+			} else {
+				cur.WriteRune(r)
+			}
+			continue
 		}
 
 		switch {
@@ -226,6 +245,17 @@ func splitSQL(sql string) []string {
 		case r == '/' && i+1 < n && chars[i+1] == '*':
 			inBlockComment = true
 			i++
+
+		case r == '$':
+			tag, ok := parseDollarQuoteTag(chars[i:])
+			if ok {
+				inDollarQuote = true
+				dollarQuoteTag = tag
+				cur.WriteString("$" + tag + "$")
+				i += len(tag) + 1
+				continue
+			}
+			cur.WriteRune(r)
 
 		case r == ';':
 			if stmt := strings.TrimSpace(cur.String()); stmt != "" {
@@ -242,6 +272,45 @@ func splitSQL(sql string) []string {
 		stmts = append(stmts, stmt)
 	}
 	return stmts
+}
+
+// parseDollarQuoteTag extracts the identifier inside a dollar-quote
+// start token at the beginning of chars. A dollar-quote start has the
+// form $<identifier>$ where <identifier> starts with a letter or
+// underscore and contains only letters, digits, and underscores. The
+// empty-tag form `$$` (no identifier) is also valid. If chars does not
+// start with a valid dollar-quote tag, ok is false. The returned tag
+// does NOT include the surrounding "$" characters.
+func parseDollarQuoteTag(chars []rune) (tag string, ok bool) {
+	if len(chars) < 3 || chars[0] != '$' {
+		return "", false
+	}
+	if chars[1] == '$' {
+		return "", true
+	}
+	if !isDollarQuoteStartChar(chars[1]) {
+		return "", false
+	}
+	tb := strings.Builder{}
+	for i := 1; i < len(chars); i++ {
+		c := chars[i]
+		if c == '$' {
+			return tb.String(), true
+		}
+		if !isDollarQuoteIdentChar(c) {
+			return "", false
+		}
+		tb.WriteRune(c)
+	}
+	return "", false
+}
+
+func isDollarQuoteStartChar(c rune) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+}
+
+func isDollarQuoteIdentChar(c rune) bool {
+	return isDollarQuoteStartChar(c) || (c >= '0' && c <= '9')
 }
 
 func parseMigrationFilename(name string) (int, string, error) {
