@@ -229,6 +229,7 @@ func main() {
 		domain.NewOrganizationUserChecker(userRepo),
 		auditService,
 		workflowService,
+		decisionService,
 	)
 	reviewQueueHandler := reviewqueueapi.NewHandler(reviewQueueService)
 

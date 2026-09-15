@@ -195,6 +195,50 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 	return result, nil
 }
 
+func (s *DecisionService) CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgID, serviceRequestID, decisionMaker uuid.UUID, decision decisionsdomain.DecisionType, reason, workflowState string, ruleEvalIDs, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) (*decisionsdomain.Decision, error) {
+	d, err := decisionsdomain.NewDecisionWithContext(
+		orgID,
+		serviceRequestID,
+		decisionMaker,
+		decision,
+		reason,
+		workflowState,
+		ruleEvalIDs,
+		evidenceIDs,
+		formSubmissionID,
+		1,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrDecisionInput, err)
+	}
+
+	if err := s.repo.SaveTx(ctx, tx, d); err != nil {
+		return nil, fmt.Errorf("failed to save decision: %w", err)
+	}
+
+	if s.auditor != nil {
+		decisionIDStr := d.ID.String()
+		if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			OrganizationID: d.OrganizationID,
+			ActorID:        &decisionMaker,
+			Action:         "decision.made",
+			Resource:       "decision",
+			ResourceID:     shared.StrPtr(decisionIDStr),
+			Outcome:        "success",
+			Metadata: map[string]interface{}{
+				"service_request_id": d.ServiceRequestID.String(),
+				"decision":           string(d.Decision),
+				"workflow_state":     d.WorkflowState,
+				"version":            d.Version,
+			},
+		}); err != nil {
+			return nil, fmt.Errorf("failed to record audit event: %w", err)
+		}
+	}
+
+	return d, nil
+}
+
 func (s *DecisionService) SupersedeDecision(ctx context.Context, params SupersedeDecisionParams) (*decisionsdomain.Decision, error) {
 	c, err := s.caseFinder.FindByID(ctx, params.OrganizationID, params.ServiceRequestID)
 	if err != nil {

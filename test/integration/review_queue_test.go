@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	casedomain "github.com/alrazihi/civora/internal/cases/domain"
+	decisionsapp "github.com/alrazihi/civora/internal/decisions/application"
+	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
+	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
 	reviewqueueapp "github.com/alrazihi/civora/internal/review_queue/application"
 	reviewdomain "github.com/alrazihi/civora/internal/review_queue/domain"
 	reviewqueuepostgres "github.com/alrazihi/civora/internal/review_queue/infrastructure/postgres"
@@ -16,10 +19,11 @@ import (
 )
 
 type reviewQueueEnv struct {
-	svc    *reviewqueueapp.ReviewQueueService
-	db     *sql.DB
-	orgID  uuid.UUID
-	userID uuid.UUID
+	svc        *reviewqueueapp.ReviewQueueService
+	db         *sql.DB
+	orgID      uuid.UUID
+	userID     uuid.UUID
+	decisionDB *decisionspostgres.PostgresDecisionRepository
 }
 
 func setupReviewQueueEnv(t *testing.T) *reviewQueueEnv {
@@ -32,19 +36,29 @@ func setupReviewQueueEnv(t *testing.T) *reviewQueueEnv {
 	helpers.SeedDefaultRoles(db, orgID)
 
 	repo := reviewqueuepostgres.NewPostgresReviewQueueRepository(db)
+	decisionRepo := decisionspostgres.NewPostgresDecisionRepository(db)
+	decisionSvc := decisionsapp.NewDecisionService(
+		decisionRepo,
+		&mockCaseFinder{db: db},
+		&mockUserChecker{orgID: orgID, userID: userID},
+		nil,
+		nil,
+	)
 	svc := reviewqueueapp.NewReviewQueueService(
 		repo,
 		&mockCaseFinder{db: db},
 		&mockUserChecker{orgID: orgID, userID: userID},
 		nil,
 		nil,
+		decisionSvc,
 	)
 
 	return &reviewQueueEnv{
-		svc:    svc,
-		db:     db,
-		orgID:  orgID,
-		userID: userID,
+		svc:        svc,
+		db:         db,
+		orgID:      orgID,
+		userID:     userID,
+		decisionDB: decisionRepo,
 	}
 }
 
@@ -223,6 +237,14 @@ func TestReviewQueueService_CompleteReview(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "COMPLETED", string(completed.Status))
 	assert.NotNil(t, completed.CompletedAt)
+
+	decision, err := env.decisionDB.FindByServiceRequest(ctx, env.orgID, caseID)
+	require.NoError(t, err)
+	require.NotNil(t, decision)
+	assert.Equal(t, decisionsdomain.DecisionTypeApproved, decision.Decision)
+	assert.Equal(t, "All criteria met", decision.Reason)
+	assert.Equal(t, env.userID, decision.DecisionMaker)
+	assert.Equal(t, caseID, decision.ServiceRequestID)
 }
 
 func TestReviewQueueService_EscalateReview(t *testing.T) {

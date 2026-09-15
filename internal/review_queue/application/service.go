@@ -9,6 +9,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/cases/domain"
 	"github.com/alrazihi/civora/internal/database"
+	decisionsdomain "github.com/alrazihi/civora/internal/decisions/domain"
 	reviewdomain "github.com/alrazihi/civora/internal/review_queue/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	workflowapp "github.com/alrazihi/civora/internal/workflow/application"
@@ -41,12 +42,17 @@ type WorkflowExecutor interface {
 	ExecuteTransitionInTx(ctx context.Context, tx *sql.Tx, params workflowapp.ExecuteTransitionParams) (*workflowdomain.WorkflowInstance, error)
 }
 
+type DecisionCreator interface {
+	CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgID, serviceRequestID, decisionMaker uuid.UUID, decision decisionsdomain.DecisionType, reason, workflowState string, ruleEvalIDs, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) (*decisionsdomain.Decision, error)
+}
+
 type ReviewQueueService struct {
 	repo        reviewdomain.ReviewQueueRepository
 	caseFinder  CaseFinder
 	userChecker UserChecker
 	auditor     auditdomain.EventRecorder
 	workflowSvc WorkflowExecutor
+	decisionSvc DecisionCreator
 }
 
 func NewReviewQueueService(
@@ -55,6 +61,7 @@ func NewReviewQueueService(
 	userChecker UserChecker,
 	auditor auditdomain.EventRecorder,
 	workflowSvc WorkflowExecutor,
+	decisionSvc DecisionCreator,
 ) *ReviewQueueService {
 	return &ReviewQueueService{
 		repo:        repo,
@@ -62,6 +69,7 @@ func NewReviewQueueService(
 		userChecker: userChecker,
 		auditor:     auditor,
 		workflowSvc: workflowSvc,
+		decisionSvc: decisionSvc,
 	}
 }
 
@@ -241,9 +249,26 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 		return nil, err
 	}
 
+	workflowState := entry.WorkflowState
+	if s.workflowSvc != nil {
+		if inst, wfErr := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, entry.CaseID); wfErr == nil && inst != nil {
+			workflowState = inst.CurrentState
+		}
+	}
+
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusCompleted, entry.AssignedToID); err != nil {
 			return fmt.Errorf("failed to update review status: %w", err)
+		}
+
+		if s.decisionSvc != nil {
+			decisionType := decisionsdomain.DecisionType(params.Decision)
+			if err := validateDecisionType(decisionType); err != nil {
+				return err
+			}
+			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionType, params.Reason, workflowState, entry.RuleEvaluationIDs, nil, nil); err != nil {
+				return fmt.Errorf("failed to create decision: %w", err)
+			}
 		}
 
 		if s.auditor != nil {
@@ -270,6 +295,16 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 	}
 
 	return entry, nil
+}
+
+func validateDecisionType(d decisionsdomain.DecisionType) error {
+	switch d {
+	case decisionsdomain.DecisionTypeApproved, decisionsdomain.DecisionTypeRejected,
+		decisionsdomain.DecisionTypeNeedsMoreInformation, decisionsdomain.DecisionTypeEscalate:
+		return nil
+	default:
+		return fmt.Errorf("%w: invalid decision type %q", ErrReviewInvalidInput, d)
+	}
 }
 
 type EscalateReviewParams struct {
