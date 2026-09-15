@@ -1,0 +1,24 @@
+# Enforce LF line endings for text files to prevent CRLF issues on CI
+# (gofmt on Linux requires LF; Windows autocrlf converts LF->CRLF on checkout)
+
+# Go source files
+*.go text eol=lf
+
+# YAML configs
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# SQL migrations
+*.sql text eol=lf
+
+# Markdown docs
+*.md text eol=lf
+
+# JSON
+*.json text eol=lf
+
+# TOML
+*.toml text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
