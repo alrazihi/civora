@@ -48,6 +48,21 @@ TestRunner.add('escapeHTML utility', () => {
   TestRunner.assertEqual(escapeHTML(undefined), '', 'handles undefined');
 });
 
+// Test escapeJS
+TestRunner.add('escapeJS utility', () => {
+  const { escapeJS } = window;
+  TestRunner.assertEqual(escapeJS("abc'--"), "abc\\'--", 'escapes single quotes');
+  TestRunner.assertEqual(escapeJS('back\\slash'), 'back\\\\slash', 'escapes backslashes');
+  TestRunner.assertEqual(escapeJS('"double"'), '\\"double\\"', 'escapes double quotes');
+  TestRunner.assertEqual(escapeJS('back`tick'), 'back\\`tick', 'escapes backticks');
+  TestRunner.assertEqual(escapeJS('line\nbreak'), 'line\\nbreak', 'escapes newlines');
+  TestRunner.assertEqual(escapeJS('carriage\rreturn'), 'carriage\\rreturn', 'escapes carriage returns');
+  TestRunner.assertEqual(escapeJS('<script>'), '\\x3cscript\\x3e', 'escapes angle brackets to hex');
+  TestRunner.assertEqual(escapeJS(null), '', 'handles null');
+  TestRunner.assertEqual(escapeJS(undefined), '', 'handles undefined');
+  TestRunner.assertEqual(escapeJS('normal-id-123'), 'normal-id-123', 'passes through normal strings');
+});
+
 // Test getTerminalStates
 TestRunner.add('getTerminalStates utility', () => {
   const { getTerminalStates } = window;

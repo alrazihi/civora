@@ -56,6 +56,31 @@ func TestSplitSQL(t *testing.T) {
 			in:   "SELECT 'it''s a test' AS foo; SELECT 2;",
 			want: []string{"SELECT 'it''s a test' AS foo", "SELECT 2"},
 		},
+		{
+			name: "dollar-quoted string with semicolons is atomic",
+			in:   "CREATE FUNCTION example() RETURNS void AS $$ BEGIN SELECT 1; SELECT 2; END; $$ LANGUAGE plpgsql;",
+			want: []string{"CREATE FUNCTION example() RETURNS void AS $$ BEGIN SELECT 1; SELECT 2; END; $$ LANGUAGE plpgsql"},
+		},
+		{
+			name: "tagged dollar-quoted string with semicolons is atomic",
+			in:   "CREATE FUNCTION example() RETURNS void AS $body$ BEGIN SELECT 1; END; $body$ LANGUAGE plpgsql;",
+			want: []string{"CREATE FUNCTION example() RETURNS void AS $body$ BEGIN SELECT 1; END; $body$ LANGUAGE plpgsql"},
+		},
+		{
+			name: "dollar-quoted strings with single quotes are unaffected",
+			in:   "SELECT $$it's a test$$ AS foo; SELECT 2;",
+			want: []string{"SELECT $$it's a test$$ AS foo", "SELECT 2"},
+		},
+		{
+			name: "nested dollar-quoted strings with different tags",
+			in:   "CREATE FUNCTION example() RETURNS void AS $outer$ BEGIN $inner$ SELECT 1; SELECT 2; $inner$ END; $outer$ LANGUAGE plpgsql;",
+			want: []string{"CREATE FUNCTION example() RETURNS void AS $outer$ BEGIN $inner$ SELECT 1; SELECT 2; $inner$ END; $outer$ LANGUAGE plpgsql"},
+		},
+		{
+			name: "dollar sign not part of a tag is treated as literal",
+			in:   "SELECT price = $100; SELECT 2;",
+			want: []string{"SELECT price = $100", "SELECT 2"},
+		},
 	}
 
 	for _, tt := range tests {
