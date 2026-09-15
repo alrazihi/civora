@@ -1,18 +1,30 @@
 openapi: 3.0.3
 info:
   title: CIVORA API
-  description: "CIVORA API - open digital infrastructure for public-interest service\
-    \ delivery.\n\nVersion: 0.5.0\n\n## Configurable Workflow-Driven\
-    \ Service Delivery\n\nCIVORA now supports fully configurable workflow definitions:\
-    \ create\ncustom states and transitions, activate a definition, bind a case to\
-    \ it\nvia `workflow_id`, and drive the case through the workflow lifecycle.\n\
-    Any state can be marked terminal; terminal states block further\ntransitions and\
-    \ set the case `closed_at` timestamp.\n\nFull end-to-end workflow for public service\
-    \ delivery:\nRequest \xE2\u2020\u2019 Person registered \xE2\u2020\u2019 Case\
-    \ created (initial state) \xE2\u2020\u2019\nEligibility assessed \xE2\u2020\u2019\
-    \ Evidence collected \xE2\u2020\u2019 Decision made \xE2\u2020\u2019\nAssistance\
-    \ provided \xE2\u2020\u2019 Terminal state reached\n\nState machine is defined\
-    \ by the workflow definition, not hardcoded.\n"
+  description: >-
+      CIVORA API - open-source infrastructure for configurable, auditable
+      public-service workflows, case management, forms, rules, and human
+      decisions. Version 0.5.0.
+      Configurable workflow-driven service delivery: create custom states and
+      transitions, activate a definition, bind a case to it via workflow_id, and
+      drive the case through the workflow lifecycle. Any state can be marked
+      terminal; terminal states block further transitions and set the case
+      closed_at timestamp. Full end-to-end workflow for public service delivery:
+      Request, Person registered, Case created, Eligibility assessed, Evidence
+      collected, Decision made, Assistance provided, Terminal state reached.
+      State machine is defined by the workflow definition, not hardcoded.
+      API-first: all functionality is exposed through versioned HTTP REST
+      endpoints with JSON request/response bodies. Authentication uses bearer
+      tokens. OpenAPI 3.0 specification. Multi-tenant: all data is scoped by
+      organization; cross-tenant access is prevented at the data-access layer.
+      Deterministic rules engine: rule sets are configured as JSON via the API,
+      evaluated against case facts, and produce full trace trees with
+      human-readable explanations. Human-in-the-loop: rules are advisory; final
+      decisions are made by humans and recorded with rationale, actor, and
+      timestamp. AI assistance is planned for a future milestone. Audit trail:
+      every state transition, form submission, rule evaluation, evidence
+      addition, and human decision is recorded in a tamper-evident, hash-chained
+      audit log isolated in a dedicated PostgreSQL schema.
   version: 0.5.0
   contact:
     name: CIVORA
