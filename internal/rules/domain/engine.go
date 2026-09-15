@@ -332,6 +332,8 @@ func compareTyped(op Operator, actual, expected interface{}) (conditionResult, s
 		return compareBoolean(op, actual, expected)
 	case stringOperators[op] || op == OpMatches:
 		return compareString(op, actual, expected)
+	case temporalOperators[op]:
+		return compareTemporal(op, actual, expected)
 	default:
 		return compareEquality(op, actual, expected)
 	}
@@ -540,6 +542,47 @@ func compareString(op Operator, actual, expected interface{}) (conditionResult, 
 		return resultFalse, "regex did not match"
 	}
 	return resultError, "unhandled string operator"
+}
+
+// compareTemporal evaluates the date/datetime operators. Both operands must
+// be RFC3339 date or date-time strings; comparisons are normalised to UTC so
+// the result is deterministic regardless of the caller's local timezone.
+// Malformed values fail safely with resultError.
+func compareTemporal(op Operator, actual, expected interface{}) (conditionResult, string) {
+	as, aok := actual.(string)
+	es, ok := expected.(string)
+	if !aok || !ok {
+		return resultError, "temporal operator requires string values"
+	}
+	at, aok := parseTemporal(as)
+	et, eok := parseTemporal(es)
+	if !aok || !eok {
+		return resultError, "invalid RFC3339 date or date-time value"
+	}
+	cmp := at.Compare(et)
+	switch op {
+	case OpBefore:
+		if cmp < 0 {
+			return resultTrue, "actual before expected"
+		}
+		return resultFalse, "actual not before expected"
+	case OpAfter:
+		if cmp > 0 {
+			return resultTrue, "actual after expected"
+		}
+		return resultFalse, "actual not after expected"
+	case OpOnOrBefore:
+		if cmp <= 0 {
+			return resultTrue, "actual on or before expected"
+		}
+		return resultFalse, "actual after expected"
+	case OpOnOrAfter:
+		if cmp >= 0 {
+			return resultTrue, "actual on or after expected"
+		}
+		return resultFalse, "actual before expected"
+	}
+	return resultError, "unhandled temporal operator"
 }
 
 func isStringType(v interface{}) bool {

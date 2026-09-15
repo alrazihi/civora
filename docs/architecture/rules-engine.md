@@ -257,12 +257,18 @@ conditions combine via `and`/`or` with explicit operator whitelist.
 ### Operators (whitelist)
 `eq` · `neq` · `gt` · `gte` · `lt` · `lte` · `in` · `not_in` · `is`
 (boolean) · `is_not` · `exists` · `not_exists` · `contains` (substring/array)
-· `matches` (regex, anchored).
+· `matches` (regex, anchored) · `before` · `after` · `on_or_before` ·
+`on_or_after` (RFC3339 date/date-time, UTC-normalised).
 
 > Operators are **typed**: the engine validates that a numeric operator is only
 > applied to numbers, `in`/`not_in` accept arrays, `matches` requires a string
-> fact, etc. Mismatches yield `EvaluationStatus.ERROR` with a trace entry — never
+> fact, and temporal operators require RFC3339 date/date-time strings on both
+> operands. Mismatches yield `EvaluationStatus.ERROR` with a trace entry — never
 > silent truthy/falsey coercion.
+
+> Temporal semantics: both operands are parsed as RFC3339. A bare date
+> (`YYYY-MM-DD`) is normalised to midnight UTC. Comparisons are performed in
+> UTC so results are deterministic regardless of the caller's timezone.
 
 ### Fact paths
 Dot-separated paths into the facts document. Supported prefixes:

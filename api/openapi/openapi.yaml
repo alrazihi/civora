@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: CIVORA API
   description: "CIVORA API - open digital infrastructure for public-interest service\
-    \ delivery.\n\nVersion: 0.3.0-workflow-engine\n\n## Configurable Workflow-Driven\
+    \ delivery.\n\nVersion: 0.5.0\n\n## Configurable Workflow-Driven\
     \ Service Delivery\n\nCIVORA now supports fully configurable workflow definitions:\
     \ create\ncustom states and transitions, activate a definition, bind a case to\
     \ it\nvia `workflow_id`, and drive the case through the workflow lifecycle.\n\
@@ -13,7 +13,7 @@ info:
     \ Evidence collected \xE2\u2020\u2019 Decision made \xE2\u2020\u2019\nAssistance\
     \ provided \xE2\u2020\u2019 Terminal state reached\n\nState machine is defined\
     \ by the workflow definition, not hardcoded.\n"
-  version: 0.3.0
+  version: 0.5.0
   contact:
     name: CIVORA
     url: https://github.com/alrazihi/civora
@@ -1762,8 +1762,8 @@ components:
           description: The fact path being compared (e.g. "form.income_verification.amount").
         operator:
           type: string
-          enum: [eq, neq, gt, gte, lt, lte, in, not_in, is, is_not, exists, not_exists, contains, matches]
-          description: The comparison operator.
+          enum: [eq, neq, gt, gte, lt, lte, in, not_in, is, is_not, exists, not_exists, contains, matches, before, after, on_or_before, on_or_after]
+          description: The comparison operator. Temporal operators compare RFC3339 date or date-time values in UTC.
         value:
           description: The expected value. Type depends on operator.
         all:

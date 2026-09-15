@@ -432,3 +432,100 @@ func TestToRat_NonNumeric(t *testing.T) {
 }
 
 var _ = strings.TrimSpace
+
+func TestEvaluate_TemporalOperators(t *testing.T) {
+	tests := []struct {
+		name   string
+		op     Operator
+		value  string
+		fact   string
+		expect EvaluationStatus
+	}{
+		{"before-true", OpBefore, "2025-06-16", "2025-06-15", StatusEligible},
+		{"before-equal-date-false", OpBefore, "2025-06-15", "2025-06-15", StatusIneligible},
+		{"after-true", OpAfter, "2025-06-14", "2025-06-15", StatusEligible},
+		{"on-or-before-true-equal", OpOnOrBefore, "2025-06-15", "2025-06-15", StatusEligible},
+		{"on-or-before-true-less", OpOnOrBefore, "2025-06-16", "2025-06-15", StatusEligible},
+		{"on-or-before-false", OpOnOrBefore, "2025-06-14", "2025-06-15", StatusIneligible},
+		{"on-or-after-true-equal", OpOnOrAfter, "2025-06-15", "2025-06-15", StatusEligible},
+		{"on-or-after-true-greater", OpOnOrAfter, "2025-06-14", "2025-06-15", StatusEligible},
+		{"on-or-after-false", OpOnOrAfter, "2025-06-16", "2025-06-15", StatusIneligible},
+		{"datetime-before", OpBefore, "2025-06-15T12:00:00Z", "2025-06-15T10:00:00Z", StatusEligible},
+		{"datetime-after", OpAfter, "2025-06-15T10:00:00Z", "2025-06-15T12:00:00Z", StatusEligible},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			facts := factsFrom(t, `{"d":"`+tt.fact+`"}`)
+			cond := Condition{Field: "d", Operator: tt.op, Value: tt.value}
+			rs := &RuleSet{ID: uuid.New(), OrganizationID: uuid.New(), Key: "t", Version: 1, Status: StatusPublished, DefaultOutcome: OutcomeIneligible, Rules: []Rule{{ID: uuid.New(), Priority: 0, Outcome: OutcomeEligible, Conditions: cond}}}
+			ev := Evaluate(rs, facts, time.Now().UTC(), nil, TriggerManual)
+			assert.Equal(t, tt.expect, ev.Status, "op=%s fact=%s value=%s", tt.op, tt.fact, tt.value)
+		})
+	}
+}
+
+func TestEvaluate_TemporalMalformedFailsSafely(t *testing.T) {
+	facts := factsFrom(t, `{"d":"2025-06-15"}`)
+	for _, op := range []Operator{OpBefore, OpAfter, OpOnOrBefore, OpOnOrAfter} {
+		cond := Condition{Field: "d", Operator: op, Value: "not-a-date"}
+		rs := &RuleSet{ID: uuid.New(), OrganizationID: uuid.New(), Key: "t", Version: 1, Status: StatusPublished, DefaultOutcome: OutcomeIneligible, Rules: []Rule{{ID: uuid.New(), Priority: 0, Outcome: OutcomeEligible, Conditions: cond}}}
+		ev := Evaluate(rs, facts, time.Now().UTC(), nil, TriggerManual)
+		assert.Equal(t, StatusError, ev.Status, "op=%s", op)
+		assert.Equal(t, OutcomeError, ev.Outcome, "op=%s", op)
+	}
+}
+
+func TestEvaluate_TemporalTypeMismatch(t *testing.T) {
+	facts := factsFrom(t, `{"d":500}`)
+	cond := Condition{Field: "d", Operator: OpBefore, Value: "2025-06-16"}
+	rs := &RuleSet{ID: uuid.New(), OrganizationID: uuid.New(), Key: "t", Version: 1, Status: StatusPublished, DefaultOutcome: OutcomeIneligible, Rules: []Rule{{ID: uuid.New(), Priority: 0, Outcome: OutcomeEligible, Conditions: cond}}}
+	ev := Evaluate(rs, facts, time.Now().UTC(), nil, TriggerManual)
+	assert.Equal(t, StatusError, ev.Status)
+	assert.Equal(t, OutcomeError, ev.Outcome)
+}
+
+func TestEvaluate_TemporalTimezoneDeterministic(t *testing.T) {
+	// 2025-06-15T10:00:00-05:00 == 2025-06-15T15:00:00Z; both must compare
+	// identically against a UTC anchor.
+	facts := factsFrom(t, `{"d":"2025-06-15T10:00:00-05:00"}`)
+	cond := Condition{Field: "d", Operator: OpBefore, Value: "2025-06-15T16:00:00Z"}
+	rs := &RuleSet{ID: uuid.New(), OrganizationID: uuid.New(), Key: "t", Version: 1, Status: StatusPublished, DefaultOutcome: OutcomeIneligible, Rules: []Rule{{ID: uuid.New(), Priority: 0, Outcome: OutcomeEligible, Conditions: cond}}}
+	ev := Evaluate(rs, facts, time.Now().UTC(), nil, TriggerManual)
+	assert.Equal(t, StatusEligible, ev.Status)
+}
+
+func TestValidateCondition_TemporalValue(t *testing.T) {
+	require.NoError(t, ValidateCondition(&Condition{Field: "d", Operator: OpBefore, Value: "2025-06-16"}, 0))
+	require.NoError(t, ValidateCondition(&Condition{Field: "d", Operator: OpAfter, Value: "2025-06-16T10:00:00Z"}, 0))
+	require.Error(t, ValidateCondition(&Condition{Field: "d", Operator: OpBefore, Value: "not-a-date"}, 0))
+	require.Error(t, ValidateCondition(&Condition{Field: "d", Operator: OpBefore, Value: 500}, 0))
+}
+
+func TestValueTypeString_Temporal(t *testing.T) {
+	assert.Equal(t, "date", valueTypeString("2025-06-15"))
+	assert.Equal(t, "datetime", valueTypeString("2025-06-15T10:00:00Z"))
+	assert.Equal(t, "string", valueTypeString("hello"))
+}
+
+func TestParseTemporal(t *testing.T) {
+	t1, ok := parseTemporal("2025-06-15")
+	assert.True(t, ok)
+	assert.Equal(t, 0, t1.Hour())
+	assert.Equal(t, time.UTC, t1.Location())
+
+	t2, ok := parseTemporal("2025-06-15T10:00:00Z")
+	assert.True(t, ok)
+	assert.Equal(t, 10, t2.Hour())
+	assert.Equal(t, time.UTC, t2.Location())
+
+	t3, ok := parseTemporal("2025-06-15T10:00:00-05:00")
+	assert.True(t, ok)
+	assert.Equal(t, 15, t3.Hour())
+	assert.Equal(t, time.UTC, t3.Location())
+
+	_, ok = parseTemporal("not-a-date")
+	assert.False(t, ok)
+
+	_, ok = parseTemporal("2025-13-45")
+	assert.False(t, ok)
+}

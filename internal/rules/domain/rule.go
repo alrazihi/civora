@@ -251,6 +251,15 @@ func validateValueForOperator(op Operator, val interface{}) error {
 			return fmt.Errorf("%w: operator %s requires a string value", ErrTypeMismatch, op)
 		}
 		return nil
+	case temporalOperators[op]:
+		s, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("%w: operator %s requires a string value", ErrTypeMismatch, op)
+		}
+		if _, ok := parseTemporal(s); !ok {
+			return fmt.Errorf("%w: operator %s requires a valid RFC3339 date or date-time value", ErrInvalidOperator, op)
+		}
+		return nil
 	case op == OpMatches:
 		pattern, ok := val.(string)
 		if !ok {

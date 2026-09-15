@@ -89,10 +89,15 @@ func (e *caseRuleEnv) seedCaseWithWorkflow(t *testing.T) (uuid.UUID, uuid.UUID) 
 	`, stateID, workflowDefID, e.orgID)
 	require.NoError(t, err, "insert workflow_state")
 
+	// Match production insertion order: the case is created first with
+	// workflow_instance_id = NULL, the workflow instance is created next, and
+	// the case is then linked back. This avoids the circular FK between
+	// cases.workflow_instance_id -> workflow_instances.id and
+	// workflow_instances.case_id -> cases.id.
 	_, err = e.db.ExecContext(ctx, `
 		INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, person_id, created_by, assigned_to, created_at, updated_at, closed_at, version, workflow_instance_id, workflow_state, workflow_key, workflow_id)
-		VALUES ($1, $2, 'CASE-001', 'Test Case', '', 'OPEN', 'GENERAL', 'NORMAL', NULL, $3, NULL, NOW(), NOW(), NULL, 1, $4, 'OPEN', 'test-workflow', $5)
-	`, caseID, e.orgID, e.actorID, instanceID, workflowDefID)
+		VALUES ($1, $2, 'CASE-001', 'Test Case', '', 'OPEN', 'GENERAL', 'NORMAL', NULL, $3, NULL, NOW(), NOW(), NULL, 1, NULL, NULL, 'test-workflow', $4)
+	`, caseID, e.orgID, e.actorID, workflowDefID)
 	require.NoError(t, err, "insert case")
 
 	_, err = e.db.ExecContext(ctx, `
@@ -100,6 +105,11 @@ func (e *caseRuleEnv) seedCaseWithWorkflow(t *testing.T) (uuid.UUID, uuid.UUID) 
 		VALUES ($1, $2, $3, 1, $4, 'OPEN', NOW(), NULL, '{}', 1)
 	`, instanceID, e.orgID, workflowDefID, caseID)
 	require.NoError(t, err, "insert workflow_instance")
+
+	_, err = e.db.ExecContext(ctx, `
+		UPDATE cases SET workflow_instance_id = $1, workflow_state = 'OPEN', updated_at = NOW() WHERE id = $2
+	`, instanceID, caseID)
+	require.NoError(t, err, "link case to workflow instance")
 
 	return caseID, workflowDefID
 }
@@ -126,7 +136,7 @@ func (e *caseRuleEnv) seedFormAndSubmission(t *testing.T, caseID uuid.UUID) {
 	})
 	_, err = e.db.ExecContext(ctx, `
 		INSERT INTO form_submissions (id, tenant_id, case_id, form_id, form_version_id, submitted_by, status, data, submitted_at, updated_at)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'SUBMITTED', $6, NOW(), NOW())
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'submitted', $6, NOW(), NOW())
 	`, e.orgID, caseID, formID, formVersionID, e.actorID, string(submissionData))
 	require.NoError(t, err, "insert form_submission")
 }

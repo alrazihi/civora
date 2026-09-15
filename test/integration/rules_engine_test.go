@@ -252,3 +252,65 @@ func TestConcurrentRuleSetCreation(t *testing.T) {
 	assert.Equal(t, 1, success, "exactly one concurrent create should succeed")
 	assert.GreaterOrEqual(t, dupes, 1, "remaining concurrent creates must report duplicate key")
 }
+
+func TestRuleSetTemporalOperators(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	svc, orgID, actorID := setupRulesServices(t)
+	ctx := context.Background()
+
+	rs, err := svc.CreateRuleSet(ctx, rulesapp.CreateRuleSetParams{
+		OrganizationID: orgID,
+		Key:            "temporal-eligibility",
+		Name:           "Temporal Eligibility",
+		Description:    "Test",
+		DefaultOutcome: rulesdomain.OutcomeIneligible,
+		Rules: []rulesdomain.Rule{
+			{
+				Priority:   0,
+				Outcome:    rulesdomain.OutcomeEligible,
+				Conditions: rulesdomain.Condition{Field: "form.due_date", Operator: rulesdomain.OpBefore, Value: "2025-12-31"},
+			},
+		},
+		Triggers: []string{"form_submitted"},
+		ActorID:  actorID,
+	})
+	require.NoError(t, err)
+
+	published, err := svc.PublishRuleSet(ctx, orgID, rs.ID, actorID)
+	require.NoError(t, err)
+
+	// Malformed temporal value must be rejected at validation time, not stored.
+	_, err = svc.CreateRuleSet(ctx, rulesapp.CreateRuleSetParams{
+		OrganizationID: orgID,
+		Key:            "temporal-bad",
+		Name:           "Temporal Bad",
+		Description:    "Test",
+		DefaultOutcome: rulesdomain.OutcomeIneligible,
+		Rules: []rulesdomain.Rule{
+			{
+				Priority:   0,
+				Outcome:    rulesdomain.OutcomeEligible,
+				Conditions: rulesdomain.Condition{Field: "form.due_date", Operator: rulesdomain.OpBefore, Value: "not-a-date"},
+			},
+		},
+		ActorID: actorID,
+	})
+	require.Error(t, err, "malformed temporal value must be rejected at creation")
+
+	// Evaluate with a matching fact.
+	ev, err := svc.EvaluateRuleSet(ctx, rulesapp.EvaluateRuleSetParams{
+		OrganizationID: orgID,
+		ID:             published.ID,
+		Facts: map[string]interface{}{
+			"form": map[string]interface{}{
+				"due_date": "2025-06-15",
+			},
+		},
+		Trigger: rulesdomain.TriggerManual,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, rulesdomain.StatusEligible, ev.Status)
+	assert.Equal(t, rulesdomain.OutcomeEligible, ev.Outcome)
+}

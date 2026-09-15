@@ -58,6 +58,10 @@ const (
 	OpNotExists        Operator = "not_exists"
 	OpContains         Operator = "contains"
 	OpMatches          Operator = "matches"
+	OpBefore           Operator = "before"
+	OpAfter            Operator = "after"
+	OpOnOrBefore       Operator = "on_or_before"
+	OpOnOrAfter        Operator = "on_or_after"
 )
 
 // validOperators is the authoritative whitelist. Any operator not present here
@@ -77,6 +81,10 @@ var validOperators = map[Operator]bool{
 	OpNotExists:        true,
 	OpContains:         true,
 	OpMatches:          true,
+	OpBefore:           true,
+	OpAfter:            true,
+	OpOnOrBefore:       true,
+	OpOnOrAfter:        true,
 }
 
 // IsValidOperator reports whether op is a recognised operator.
@@ -116,6 +124,16 @@ var stringOperators = map[Operator]bool{
 	OpMatches:  true,
 }
 
+// temporalOperators compare date/datetime values. Both operands must be
+// RFC3339 strings; comparisons are performed in UTC to remain deterministic
+// regardless of the caller's local timezone.
+var temporalOperators = map[Operator]bool{
+	OpBefore:     true,
+	OpAfter:      true,
+	OpOnOrBefore: true,
+	OpOnOrAfter:  true,
+}
+
 // OperatorCategory classifies an operator for value-type validation.
 func OperatorCategory(op Operator) string {
 	switch {
@@ -129,6 +147,8 @@ func OperatorCategory(op Operator) string {
 		return "existence"
 	case stringOperators[op]:
 		return "string"
+	case temporalOperators[op]:
+		return "temporal"
 	case op == OpEqual || op == OpNotEqual:
 		return "equality"
 	default:

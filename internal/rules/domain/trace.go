@@ -56,9 +56,17 @@ func marshalValue(v interface{}) json.RawMessage {
 
 // valueTypeString returns a human-readable type label for a fact value, for
 // trace/explanation output. It does NOT participate in comparison logic.
+// RFC3339 date (YYYY-MM-DD) and date-time (RFC3339) strings are labelled as
+// "date" and "datetime" respectively so the trace matches the ValueType enum.
 func valueTypeString(v interface{}) string {
-	switch v.(type) {
+	switch x := v.(type) {
 	case string:
+		if isRFC3339Date(x) {
+			return "date"
+		}
+		if isRFC3339DateTime(x) {
+			return "datetime"
+		}
 		return "string"
 	case json.Number:
 		return "number"
@@ -73,4 +81,41 @@ func valueTypeString(v interface{}) string {
 	default:
 		return "unknown"
 	}
+}
+
+// isRFC3339Date reports whether s is a valid ISO 8601 calendar date
+// (YYYY-MM-DD). It does not accept full RFC3339 date-times.
+func isRFC3339Date(s string) bool {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return false
+	}
+	return t.Format("2006-01-02") == s
+}
+
+// isRFC3339DateTime reports whether s is a valid RFC3339 date-time. The
+// trailing 'Z' or explicit numeric offset forms are both accepted.
+func isRFC3339DateTime(s string) bool {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return false
+	}
+	return t.Format(time.RFC3339) == s
+}
+
+// parseTemporal parses an RFC3339 date or date-time string into a time.Time
+// in UTC. It returns ok=false when the value is not a recognised temporal
+// string. A bare date (YYYY-MM-DD) is normalised to midnight UTC.
+func parseTemporal(s string) (time.Time, bool) {
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		if t.Format("2006-01-02") == s {
+			return t.UTC(), true
+		}
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		if t.Format(time.RFC3339) == s {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
