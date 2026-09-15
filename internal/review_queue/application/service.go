@@ -332,9 +332,22 @@ func (s *ReviewQueueService) EscalateReview(ctx context.Context, params Escalate
 		return nil, err
 	}
 
+	workflowState := entry.WorkflowState
+	if s.workflowSvc != nil {
+		if inst, wfErr := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, entry.CaseID); wfErr == nil && inst != nil {
+			workflowState = inst.CurrentState
+		}
+	}
+
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusEscalated, entry.AssignedToID); err != nil {
 			return fmt.Errorf("failed to update review status: %w", err)
+		}
+
+		if s.decisionSvc != nil {
+			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeEscalate, params.Reason, workflowState, entry.RuleEvaluationIDs, nil, nil); err != nil {
+				return fmt.Errorf("failed to create decision: %w", err)
+			}
 		}
 
 		if s.auditor != nil {
@@ -390,9 +403,22 @@ func (s *ReviewQueueService) RequestInformation(ctx context.Context, params Requ
 	}
 	entry.MissingInformation = params.MissingFields
 
+	workflowState := entry.WorkflowState
+	if s.workflowSvc != nil {
+		if inst, wfErr := s.workflowSvc.GetInstanceByCaseID(ctx, params.OrganizationID, entry.CaseID); wfErr == nil && inst != nil {
+			workflowState = inst.CurrentState
+		}
+	}
+
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
 		if err := s.repo.UpdateStatusTx(ctx, tx, params.OrganizationID, entry.ID, reviewdomain.ReviewStatusWaitingInfo, entry.AssignedToID); err != nil {
 			return fmt.Errorf("failed to update review status: %w", err)
+		}
+
+		if s.decisionSvc != nil {
+			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeNeedsMoreInformation, params.Reason, workflowState, entry.RuleEvaluationIDs, nil, nil); err != nil {
+				return fmt.Errorf("failed to create decision: %w", err)
+			}
 		}
 
 		if s.auditor != nil {
