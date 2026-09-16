@@ -24,6 +24,7 @@ import (
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/database"
+	"github.com/alrazihi/civora/internal/identity"
 	decisionsapi "github.com/alrazihi/civora/internal/decisions/api"
 	decisionsapp "github.com/alrazihi/civora/internal/decisions/application"
 	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
@@ -69,6 +70,8 @@ import (
 )
 
 func main() {
+	identity.MustVerifyIntegrity()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
