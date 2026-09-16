@@ -680,11 +680,70 @@ async function requestReviewInformation(reviewId, missingFields, reason) {
   return res.data || null;
 }
 
+// ── AI Observations API ───────────────────────────────────────────────────
+
+/**
+ * Generate AI observations for an evidence item.
+ * @param {string} evidenceId
+ * @param {string[]} [types] - Observation types to request (SUMMARY, ENTITY_EXTRACTION, CLASSIFICATION, INCONSISTENCY)
+ * @param {number} [maxTokens] - Max tokens for the response
+ * @returns {Promise<object>} Generated observations result
+ */
+async function generateAIObservations(evidenceId, types, maxTokens) {
+  const body = {};
+  if (types && types.length) body.types = types;
+  if (maxTokens) body.max_tokens = maxTokens;
+  const res = await api('POST', `/organizations/${orgId}/evidence/${evidenceId}/ai/observations/generate`, body);
+  return res.data || null;
+}
+
+/**
+ * List AI observations for an evidence item.
+ * @param {string} evidenceId
+ * @param {object} [opts] - Pagination options.
+ * @param {number} [opts.page] - Page number (1-based).
+ * @param {number} [opts.per_page] - Results per page.
+ * @returns {Promise<{data: object[], meta: object}>}
+ */
+async function listAIObservations(evidenceId, opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.perPage) params.set('per_page', String(opts.perPage));
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/evidence/${evidenceId}/ai/observations${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+/**
+ * Accept an AI observation (human verification).
+ * @param {string} evidenceId
+ * @param {string} observationId
+ * @param {string} [notes] - Optional reviewer notes
+ * @returns {Promise<object>} The updated observation
+ */
+async function acceptAIObservation(evidenceId, observationId, notes) {
+  const res = await api('POST', `/organizations/${orgId}/evidence/${evidenceId}/ai/observations/${observationId}/accept`, { notes });
+  return res.data || null;
+}
+
+/**
+ * Reject an AI observation (human verification).
+ * @param {string} evidenceId
+ * @param {string} observationId
+ * @param {string} [notes] - Optional reviewer notes
+ * @returns {Promise<object>} The updated observation
+ */
+async function rejectAIObservation(evidenceId, observationId, notes) {
+  const res = await api('POST', `/organizations/${orgId}/evidence/${evidenceId}/ai/observations/${observationId}/reject`, { notes });
+  return res.data || null;
+}
+
 // Exported so app.js can call these helpers.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment, listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields, listReviewQueue, getReviewQueueEntry, claimReview, startReview, completeReview, escalateReview, requestReviewInformation };
+  module.exports = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment, listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields, listReviewQueue, getReviewQueueEntry, claimReview, startReview, completeReview, escalateReview, requestReviewInformation, generateAIObservations, listAIObservations, acceptAIObservation, rejectAIObservation };
 } else {
   window.FormAPI = { getRequiredForm, getFormSubmission, submitForm, listForms, getForm, createForm, updateForm, deleteForm, getActiveFormVersion, getFormSubmissions, getCaseFormSubmissions, getCaseFormSubmission, assignFormToWorkflowState, getFormAssignments, getFormAssignmentsByForm, removeFormAssignment };
   window.RulesAPI = { listRuleSets, getRuleSet, getRuleSetByKey, createRuleSet, updateRuleSet, createRuleSetVersion, publishRuleSet, archiveRuleSet, deleteRuleSet, listRuleSetVersions, evaluateRuleSet, listEvaluationsByRuleSet, getEvaluation, listEvaluationsByCase, listDiscoverableFields };
   window.ReviewQueueAPI = { listReviewQueue, getReviewQueueEntry, claimReview, startReview, completeReview, escalateReview, requestReviewInformation };
+  window.AIObservationsAPI = { generateAIObservations, listAIObservations, acceptAIObservation, rejectAIObservation };
 }

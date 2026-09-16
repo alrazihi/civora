@@ -16,6 +16,7 @@ type Config struct {
 	Auth     AuthConfig
 	Audit    AuditConfig
 	Storage  StorageConfig
+	AI       AIConfig
 }
 
 type ServerConfig struct {
@@ -57,6 +58,18 @@ type StorageConfig struct {
 	MaxFileSize int64
 }
 
+type AIConfig struct {
+	Enabled       bool
+	Provider      string
+	MaxTokens     int
+	LocalEnabled  bool
+	LocalBaseURL  string
+	LocalModel    string
+	OpenAIAPIKey  string
+	OpenAIModel   string
+	OpenAIBaseURL string
+}
+
 func Load() (*Config, error) {
 	if os.Getenv("CIVORA_ENV") != "production" {
 		_ = godotenv.Load(".env")
@@ -96,6 +109,17 @@ func Load() (*Config, error) {
 			Provider:    getEnv("CIVORA_STORAGE_PROVIDER", "local"),
 			LocalPath:   getEnv("CIVORA_STORAGE_LOCAL_PATH", "./storage"),
 			MaxFileSize: getEnvInt64("CIVORA_STORAGE_MAX_FILE_SIZE", 10<<20), // 10 MB
+		},
+		AI: AIConfig{
+			Enabled:       getEnvBool("CIVORA_AI_ENABLED", false),
+			Provider:      getEnv("CIVORA_AI_PROVIDER", "noop"),
+			MaxTokens:     getEnvInt("CIVORA_AI_MAX_TOKENS", 4096),
+			LocalEnabled:  getEnvBool("CIVORA_AI_LOCAL_ENABLED", false),
+			LocalBaseURL:  getEnv("CIVORA_AI_LOCAL_BASE_URL", "http://localhost:11434/v1"),
+			LocalModel:    getEnv("CIVORA_AI_LOCAL_MODEL", "llama3"),
+			OpenAIAPIKey:  getEnv("CIVORA_AI_OPENAI_API_KEY", ""),
+			OpenAIModel:   getEnv("CIVORA_AI_OPENAI_MODEL", "gpt-4o-mini"),
+			OpenAIBaseURL: getEnv("CIVORA_AI_OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		},
 	}
 

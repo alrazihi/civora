@@ -1623,6 +1623,131 @@ code {
   color: var(--primary);
 }
 
+/* AI Observations */
+
+.btn.ai {
+  background: var(--info-soft);
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.btn.ai:hover {
+  background: var(--info);
+  color: var(--surface);
+}
+
+.ai-observations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-observation-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.ai-observation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-observation-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.ai-type-badge {
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ai-observation-body {
+  margin-bottom: 8px;
+}
+
+.ai-content-text {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.ai-content-pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px;
+  font-size: var(--font-xs);
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-entity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-entity-list li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.ai-entity-type {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--info);
+  background: var(--info-soft);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+}
+
+.ai-observation-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ai-observation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  align-items: flex-start;
+}
+
+.ai-meta-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ai-review-notes {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+
 @media (max-width: 768px) {
   .form-field-card {
     padding: var(--space-3);

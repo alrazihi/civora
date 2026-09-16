@@ -80,6 +80,10 @@ function icon(name) {
     search: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
     link: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
     lock: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+    ai: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>`,
+    check: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    x: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    loading: `<svg ${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><path d="M18.36 5.64L5.64 18.36"/></svg>`,
   };
   return icons[name] || '';
 }
@@ -107,6 +111,13 @@ styleEl.textContent = '';
 document.head.appendChild(styleEl);
 
 const FALLBACK_TERMINAL_STATES = ['CLOSED', 'REJECTED'];
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
 
 function computeTerminalStateSet(defs) {
   const set = new Set(FALLBACK_TERMINAL_STATES);
@@ -1592,16 +1603,21 @@ async loadSection(name, path) {
 
   renderEvidenceActions(e) {
     const status = (e.verification_status || '').toLowerCase();
-    if (status === 'verified' || status === 'rejected') {
-      return `<span class="empty">Action taken</span>`;
-    }
-    const canVerify = ['verified', 'rejected'].includes(status) ? false : true;
+    const canVerify = !['verified', 'rejected'].includes(status);
     let html = '';
     if (canVerify) {
       html += `<button class="btn tiny" onclick="app.verifyEvidence('${e.id}', 'verified', event)">${icon('check')} Verify</button>`;
       html += `<button class="btn tiny btn-danger" onclick="app.verifyEvidence('${e.id}', 'rejected', event)">${icon('x')} Reject</button>`;
     }
-    return html || '<span class="empty">No actions</span>';
+    if (status === 'verified') {
+      html += `<button class="btn tiny ai" onclick="app.showAIObservations('${e.id}', event)">${icon('ai')} AI</button>`;
+    }
+    return html || '<span class="empty">Action taken</span>';
+  },
+
+  showAIObservations(evidenceId, ev) {
+    if (ev) ev.preventDefault();
+    AIObservations.open(evidenceId);
   },
 
   async verifyEvidence(evidenceId, status, ev) {

@@ -9,6 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	aiapi "github.com/alrazihi/civora/internal/ai/api"
+	aiapplication "github.com/alrazihi/civora/internal/ai/application"
+	aiinfrapostgres "github.com/alrazihi/civora/internal/ai/infrastructure/postgres"
+	aiprovider "github.com/alrazihi/civora/internal/ai/infrastructure/provider"
 	assessmentapi "github.com/alrazihi/civora/internal/assessment/api"
 	assessmentapp "github.com/alrazihi/civora/internal/assessment/application"
 	assessmentpostgres "github.com/alrazihi/civora/internal/assessment/infrastructure/postgres"
@@ -244,6 +248,23 @@ func main() {
 
 	auditHandler := auditapi.NewHandler(auditService)
 
+	aiObsRepo := aiinfrapostgres.NewPostgresObservationRepository(db.DB)
+	var aiProvider aiapplication.AIProvider
+	switch {
+	case cfg.AI.Enabled && cfg.AI.Provider == "openai" && cfg.AI.OpenAIAPIKey != "":
+		aiProvider = aiprovider.NewOpenAIProvider(aiprovider.OpenAIProviderConfig{
+			APIKey:  cfg.AI.OpenAIAPIKey,
+			BaseURL: cfg.AI.OpenAIBaseURL,
+			Model:   cfg.AI.OpenAIModel,
+		})
+	case cfg.AI.Enabled && cfg.AI.Provider == "local" && cfg.AI.LocalEnabled:
+		aiProvider = aiprovider.NewLocalProvider(cfg.AI.LocalBaseURL, cfg.AI.LocalModel)
+	default:
+		aiProvider = aiprovider.NewNoopProvider()
+	}
+	aiService := aiapplication.NewAIService(aiObsRepo, evidenceRepo, domain.NewOrganizationUserChecker(userRepo), auditService, aiProvider)
+	aiHandler := aiapi.NewHandler(aiService)
+
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
 
@@ -274,6 +295,7 @@ func main() {
 	workflowHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	reviewQueueHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	aiHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -1183,10 +1183,26 @@
       </div>
     </div>
 
-    <script src="/js/api.js"></script>
-    <script src="/js/form-renderer.js"></script>
-    <script src="/js/app.js"></script>
-    <script src="/js/tests.js"></script>
-    <script>app.init();</script>
+   <div id="ai-observations-modal" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
+     <div class="card" style="max-width:700px;width:100%;max-height:80vh;display:flex;flex-direction:column">
+       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+         <h2 id="ai-modal-title">AI Observations</h2>
+         <button class="btn tiny" onclick="AIObservations.close()" aria-label="Close"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span></button>
+       </div>
+       <div style="margin-bottom:12px">
+         <button class="btn btn-success sm" id="ai-generate-btn" onclick="AIObservations.generateObservations()"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg></span> Generate AI Observations</button>
+       </div>
+       <div id="ai-observations-body" style="flex:1;overflow-y:auto">
+         <div class="loading" style="padding:40px;text-align:center"><div class="loading-spinner" style="margin:0 auto 12px" aria-hidden="true"></div> Loading…</div>
+       </div>
+     </div>
+   </div>
+
+   <script src="/js/api.js"></script>
+   <script src="/js/form-renderer.js"></script>
+   <script src="/js/ai-observations.js"></script>
+   <script src="/js/app.js"></script>
+   <script src="/js/tests.js"></script>
+   <script>app.init();</script>
   </body>
   </html>
