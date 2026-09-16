@@ -1199,11 +1199,22 @@ async loadSection(name, path) {
       } else if (name === 'evidence') {
         if (Array.isArray(data)) {
           if (!data.length) { el.innerHTML = hintHTML + '<p class="empty not-recorded">No evidence recorded yet</p>'; return; }
-          el.innerHTML = hintHTML + '<table><thead><tr><th>Type</th><th>Description</th></tr></thead><tbody>' +
-            data.map(e => `<tr><td>${escapeHTML(e.type)}</td><td>${escapeHTML(e.description)}</td></tr>`).join('') +
+          el.innerHTML = hintHTML + '<table><thead><tr><th>Type</th><th>Description</th><th>Status</th><th>Documents</th><th>Actions</th></tr></thead><tbody>' +
+            data.map(e => {
+              const statusClass = e.verification_status ? cssStateClass(e.verification_status) : 'pending';
+              const statusLabel = e.verification_status || 'PENDING';
+              const actionsHtml = this.renderEvidenceActions(e);
+              return `<tr data-evidence-id="${e.id}"><td>${escapeHTML(e.type)}</td><td>${escapeHTML(e.description)}</td><td><span class="badge ${statusClass}-badge">${escapeHTML(statusLabel)}</span></td><td class="evidence-docs-cell"><div class="loading-spinner small"></div></td><td>${actionsHtml}</td></tr>`;
+            }).join('') +
             '</tbody></table>';
+          data.forEach((e, idx) => {
+            this.renderEvidenceDocuments(e.id, idx);
+          });
         } else {
-          el.innerHTML = `${hintHTML}<strong>Type:</strong> ${escapeHTML(data.type)}<br><strong>Description:</strong> ${escapeHTML(data.description)}`;
+          const statusClass = data.verification_status ? cssStateClass(data.verification_status) : 'pending';
+          const statusLabel = data.verification_status || 'PENDING';
+          const actionsHtml = this.renderEvidenceActions(data);
+          el.innerHTML = `${hintHTML}<p><strong>Type:</strong> ${escapeHTML(data.type)}</p><p><strong>Description:</strong> ${escapeHTML(data.description)}</p><p><strong>Status:</strong> <span class="badge ${statusClass}-badge">${escapeHTML(statusLabel)}</span></p><p>${actionsHtml}</p>`;
         }
       } else if (name === 'assessment') {
         if (Array.isArray(data)) {
@@ -1252,6 +1263,52 @@ async loadSection(name, path) {
         el.innerHTML = `<p style="color:var(--danger)">Error loading: ${escapeHTML(err.message)}</p>`;
       }
     }
+  },
+
+  handleDragOver(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const dropArea = document.getElementById('ev-drop-area');
+    if (dropArea) dropArea.classList.add('drop-area-hover');
+  },
+
+  handleDragLeave(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const dropArea = document.getElementById('ev-drop-area');
+    if (dropArea) dropArea.classList.remove('drop-area-hover');
+  },
+
+  handleDrop(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const dropArea = document.getElementById('ev-drop-area');
+    if (dropArea) dropArea.classList.remove('drop-area-hover');
+    const fileInput = document.getElementById('ev-file');
+    if (fileInput && ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]) {
+      fileInput.files = ev.dataTransfer.files;
+    }
+  },
+
+  formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  },
+
+  getFileIcon(contentType) {
+    if (contentType && contentType.startsWith('image/')) return icon('image');
+    if (contentType === 'application/pdf') return icon('file-text');
+    if (contentType && contentType.includes('spreadsheet')) return icon('file-text');
+    return icon('file');
+  },
+
+  getDocumentPreview(d) {
+    const type = d.content_type;
+    if (type && type.startsWith('image/')) {
+      return `<img src="${this.orgPath(`/evidence/${d.evidence_id}/document`)}" alt="${escapeHTML(d.file_name)}" class="doc-thumbnail" loading="lazy">`;
+    }
+    return this.getFileIcon(type);
   },
 
   btn(label, onclick) {
@@ -1432,17 +1489,135 @@ async loadSection(name, path) {
   async submitEvidence(e) {
     e.preventDefault();
     try {
-      await api('POST', this.orgPath('/evidence'), {
+      const res = await api('POST', this.orgPath('/evidence'), {
         service_request_id: this.currentCase.id,
         type: document.getElementById('ev-type').value,
         description: document.getElementById('ev-desc').value,
         storage_reference: document.getElementById('ev-ref').value,
       });
+      const evidenceId = res.data?.id;
+      const fileInput = document.getElementById('ev-file');
+      if (evidenceId && fileInput && fileInput.files && fileInput.files[0]) {
+        const progressBar = document.getElementById('ev-upload-progress');
+        const progressFill = progressBar.querySelector('.progress-fill');
+        progressBar.style.display = 'block';
+        progressFill.style.width = '0%';
+        try {
+          await apiUploadWithProgress(
+            this.orgPath(`/evidence/${evidenceId}/upload`),
+            fileInput.files[0],
+            null,
+            (percent) => {
+              progressFill.style.width = Math.round(percent) + '%';
+            }
+          );
+        } finally {
+          progressBar.style.display = 'none';
+        }
+      }
+      fileInput.value = '';
       this.hideModal('evidence-modal');
       await this.loadCaseSections(this.currentCase.id);
       this.renderSectionActions();
       this.renderActions();
     } catch (err) { showToast(err.message, 'error'); }
+  },
+
+  async renderEvidenceDocuments(evidenceId, rowIdx) {
+    const table = document.querySelector('#sec-evidence table tbody');
+    if (!table || !table.rows[rowIdx]) return;
+    const cell = table.rows[rowIdx].cells[3];
+    if (!cell) return;
+    let docs = [];
+    let total = 0;
+    try {
+      const res = await api('GET', this.orgPath(`/evidence/${evidenceId}/documents`));
+      docs = res.data || [];
+      total = res.total || docs.length;
+    } catch (err) {
+      if (err.status !== 404) cell.innerHTML = `<span class="error-text">Error loading</span>`;
+      return;
+    }
+    if (!docs.length) {
+      cell.innerHTML = '<span class="empty">No documents</span>';
+      return;
+    }
+    cell.innerHTML = docs.map(d => `
+      <div class="doc-item" style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span class="doc-preview">${this.getDocumentPreview(d)}</span>
+        <a href="${this.orgPath(`/evidence/${evidenceId}/document`)}" onclick="app.downloadDocument('${evidenceId}', event);return false" style="text-decoration:none">${escapeHTML(d.file_name)}</a>
+        <span class="badge">${this.formatFileSize(d.size_bytes || 0)}</span>
+        <button class="btn tiny btn-danger" onclick="app.deleteDocument('${evidenceId}', '${d.id}', event)" title="Delete document">${icon('trash')}</button>
+      </div>
+    `).join('');
+  },
+
+  async downloadDocument(evidenceId, ev) {
+    ev.preventDefault();
+    try {
+      const res = await apiDownload(this.orgPath(`/evidence/${evidenceId}/document`));
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition');
+      let filename = 'download';
+      if (disposition && disposition.includes('filename=')) {
+        filename = disposition.split('filename=')[1].trim().replace(/['"]/g, '');
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  async deleteDocument(evidenceId, docId, ev) {
+    ev.preventDefault();
+    if (!confirm('Are you sure you want to delete this document?')) return;
+    try {
+      await fetch(`${API_BASE}${this.orgPath(`/evidence/${evidenceId}/documents/${docId}`)}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      showToast('Document deleted', 'success');
+      await this.loadCaseSections(this.currentCase.id);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  },
+
+  renderEvidenceActions(e) {
+    const status = (e.verification_status || '').toLowerCase();
+    if (status === 'verified' || status === 'rejected') {
+      return `<span class="empty">Action taken</span>`;
+    }
+    const canVerify = ['verified', 'rejected'].includes(status) ? false : true;
+    let html = '';
+    if (canVerify) {
+      html += `<button class="btn tiny" onclick="app.verifyEvidence('${e.id}', 'verified', event)">${icon('check')} Verify</button>`;
+      html += `<button class="btn tiny btn-danger" onclick="app.verifyEvidence('${e.id}', 'rejected', event)">${icon('x')} Reject</button>`;
+    }
+    return html || '<span class="empty">No actions</span>';
+  },
+
+  async verifyEvidence(evidenceId, status, ev) {
+    ev.preventDefault();
+    const reason = prompt(`Enter reason for ${status} (optional):`, '');
+    if (reason === null) return;
+    try {
+      await api('POST', this.orgPath(`/evidence/${evidenceId}/${status === 'verified' ? 'verify' : 'reject'}`), {
+        reason: reason.trim(),
+        method: 'manual',
+      });
+      await this.loadCaseSections(this.currentCase.id);
+      this.renderActions();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   },
 
   async submitAssessment(e) {

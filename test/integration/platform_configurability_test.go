@@ -16,6 +16,7 @@ import (
 	decpostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
 	evidenceapp "github.com/alrazihi/civora/internal/evidence/application"
 	evidencepostgres "github.com/alrazihi/civora/internal/evidence/infrastructure/postgres"
+	evidencestorage "github.com/alrazihi/civora/internal/evidence/infrastructure/storage"
 	submissioninfra "github.com/alrazihi/civora/internal/form_submission/infrastructure/postgres"
 	formapp "github.com/alrazihi/civora/internal/forms/application"
 	formdomain "github.com/alrazihi/civora/internal/forms/domain"
@@ -78,6 +79,8 @@ func TestPlatformConfigurability_TwoDistinctProcesses(t *testing.T) {
 	ruleSetRepo := rulespostgres.NewPostgresRuleSetRepository(db)
 	evalRepo := rulespostgres.NewPostgresEvaluationRepository(db)
 	evidenceRepo := evidencepostgres.NewPostgresEvidenceRepository(db)
+	evidenceStorage, err := evidencestorage.NewLocalStorageProvider(t.TempDir())
+	require.NoError(t, err)
 	reviewRepo := revpostgres.NewPostgresReviewQueueRepository(db)
 	decisionRepo := decpostgres.NewPostgresDecisionRepository(db)
 	auditRepo := auditpostgres.NewPostgresAuditRepository(db)
@@ -95,7 +98,7 @@ func TestPlatformConfigurability_TwoDistinctProcesses(t *testing.T) {
 	caseFinder := &simpleCaseFinder{caseRepo: caseRepo}
 
 	ruleSvc := rulesapp.NewRuleSetService(ruleSetRepo, evalRepo, nil, nil, auditService)
-	evidenceSvc := evidenceapp.NewEvidenceService(evidenceRepo, caseFinder, nil, auditService)
+	evidenceSvc := evidenceapp.NewEvidenceService(evidenceRepo, caseFinder, nil, auditService, evidenceStorage)
 	decisionSvc := decapp.NewDecisionService(decisionRepo, caseFinder, nil, auditService, workflowSvc)
 	reviewSvc := revapp.NewReviewQueueService(reviewRepo, caseFinder, &simpleUserChecker{}, auditService, workflowSvc, decisionSvc)
 
