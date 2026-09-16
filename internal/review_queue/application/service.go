@@ -44,7 +44,7 @@ type WorkflowExecutor interface {
 }
 
 type DecisionCreator interface {
-	CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgID, serviceRequestID, decisionMaker uuid.UUID, decision decisionsdomain.DecisionType, reason, workflowState string, ruleEvalIDs, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) (*decisionsdomain.Decision, error)
+	CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgID, serviceRequestID, decisionMaker uuid.UUID, decision decisionsdomain.DecisionType, reason, workflowState string, ruleEvalIDs, evidenceIDs []uuid.UUID, formSubmissionID, reviewQueueEntryID *uuid.UUID) (*decisionsdomain.Decision, error)
 }
 
 type ReviewQueueService struct {
@@ -270,9 +270,14 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 			return ErrReviewInvalidInput
 		}
 
+		var decisionID *uuid.UUID
 		if s.decisionSvc != nil {
-			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionType, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
+			decision, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionType, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID, &entry.ID)
+			if err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
+			}
+			if decision != nil {
+				decisionID = &decision.ID
 			}
 		}
 
@@ -288,6 +293,7 @@ func (s *ReviewQueueService) CompleteReview(ctx context.Context, params Complete
 						ActorID:       params.ReviewerID,
 						ActorRole:     "",
 						Reason:        params.Reason,
+						DecisionID:    decisionID,
 					}); execErr != nil {
 						return fmt.Errorf("failed to execute workflow transition: %w", execErr)
 					}
@@ -368,12 +374,17 @@ func (s *ReviewQueueService) EscalateReview(ctx context.Context, params Escalate
 			return fmt.Errorf("failed to update review status: %w", err)
 		}
 
+		var decisionID *uuid.UUID
 		if s.decisionSvc != nil {
 			if decisionsdomain.ReasonRequired(decisionsdomain.DecisionTypeEscalate) && params.Reason == "" {
 				return ErrReviewInvalidInput
 			}
-			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeEscalate, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
+			decision, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeEscalate, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID, &entry.ID)
+			if err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
+			}
+			if decision != nil {
+				decisionID = &decision.ID
 			}
 		}
 
@@ -389,6 +400,7 @@ func (s *ReviewQueueService) EscalateReview(ctx context.Context, params Escalate
 						ActorID:       params.ReviewerID,
 						ActorRole:     "",
 						Reason:        params.Reason,
+						DecisionID:    decisionID,
 					}); execErr != nil {
 						return fmt.Errorf("failed to execute workflow transition: %w", execErr)
 					}
@@ -461,9 +473,14 @@ func (s *ReviewQueueService) RequestInformation(ctx context.Context, params Requ
 			return fmt.Errorf("failed to update review status: %w", err)
 		}
 
+		var decisionID *uuid.UUID
 		if s.decisionSvc != nil {
-			if _, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeNeedsMoreInformation, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID); err != nil {
+			decision, err := s.decisionSvc.CreateDecisionTx(ctx, tx, params.OrganizationID, entry.CaseID, params.ReviewerID, decisionsdomain.DecisionTypeNeedsMoreInformation, params.Reason, workflowState, entry.RuleEvaluationIDs, entry.EvidenceIDs, entry.FormSubmissionID, &entry.ID)
+			if err != nil {
 				return fmt.Errorf("failed to create decision: %w", err)
+			}
+			if decision != nil {
+				decisionID = &decision.ID
 			}
 		}
 
@@ -479,6 +496,7 @@ func (s *ReviewQueueService) RequestInformation(ctx context.Context, params Requ
 						ActorID:       params.ReviewerID,
 						ActorRole:     "",
 						Reason:        params.Reason,
+						DecisionID:    decisionID,
 					}); execErr != nil {
 						return fmt.Errorf("failed to execute workflow transition: %w", execErr)
 					}

@@ -59,15 +59,19 @@ func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExe
 		INSERT INTO decisions (
 			id, organization_id, service_request_id, decision, reason,
 			decision_maker, decided_at, created_at, workflow_state,
-			rule_evaluation_ids, evidence_ids, form_submission_id, version,
-			superseded_by_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			rule_evaluation_ids, evidence_ids, form_submission_id, review_queue_entry_id,
+			version, superseded_by_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
+	var reviewQueueEntryIDArg interface{}
+	if d.ReviewQueueEntryID != nil && *d.ReviewQueueEntryID != uuid.Nil {
+		reviewQueueEntryIDArg = *d.ReviewQueueEntryID
+	}
 	_, err = ex.ExecContext(ctx, query,
 		d.ID, d.OrganizationID, d.ServiceRequestID, d.Decision, d.Reason,
 		d.DecisionMaker, d.DecidedAt, d.CreatedAt, d.WorkflowState,
-		ruleEvalIDsJSON, evidenceIDsJSON, d.FormSubmissionID, d.Version,
-		d.SupersededByID,
+		ruleEvalIDsJSON, evidenceIDsJSON, d.FormSubmissionID, reviewQueueEntryIDArg,
+		d.Version, d.SupersededByID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert decision: %w", err)
@@ -79,8 +83,8 @@ func (r *PostgresDecisionRepository) FindByID(ctx context.Context, orgID, id uui
 	query := `
 		SELECT id, organization_id, service_request_id, decision, reason,
 			   decision_maker, decided_at, created_at, workflow_state,
-			   rule_evaluation_ids, evidence_ids, form_submission_id, version,
-			   superseded_by_id
+			   rule_evaluation_ids, evidence_ids, form_submission_id, review_queue_entry_id,
+			   version, superseded_by_id
 		FROM decisions
 		WHERE organization_id = $1 AND id = $2
 	`
@@ -91,8 +95,8 @@ func (r *PostgresDecisionRepository) FindByServiceRequest(ctx context.Context, o
 	query := `
 		SELECT id, organization_id, service_request_id, decision, reason,
 			   decision_maker, decided_at, created_at, workflow_state,
-			   rule_evaluation_ids, evidence_ids, form_submission_id, version,
-			   superseded_by_id
+			   rule_evaluation_ids, evidence_ids, form_submission_id, review_queue_entry_id,
+			   version, superseded_by_id
 		FROM decisions
 		WHERE organization_id = $1 AND service_request_id = $2
 		ORDER BY version DESC
@@ -105,8 +109,8 @@ func (r *PostgresDecisionRepository) FindByOrganization(ctx context.Context, org
 	query := `
 		SELECT id, organization_id, service_request_id, decision, reason,
 			   decision_maker, decided_at, created_at, workflow_state,
-			   rule_evaluation_ids, evidence_ids, form_submission_id, version,
-			   superseded_by_id
+			   rule_evaluation_ids, evidence_ids, form_submission_id, review_queue_entry_id,
+			   version, superseded_by_id
 		FROM decisions
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
@@ -146,8 +150,8 @@ func (r *PostgresDecisionRepository) ListByServiceRequest(ctx context.Context, o
 	query := `
 		SELECT id, organization_id, service_request_id, decision, reason,
 			   decision_maker, decided_at, created_at, workflow_state,
-			   rule_evaluation_ids, evidence_ids, form_submission_id, version,
-			   superseded_by_id
+			   rule_evaluation_ids, evidence_ids, form_submission_id, review_queue_entry_id,
+			   version, superseded_by_id
 		FROM decisions
 		WHERE organization_id = $1 AND service_request_id = $2
 		ORDER BY version ASC
@@ -178,12 +182,13 @@ func (r *PostgresDecisionRepository) scanDecision(row interface {
 	var d domain.Decision
 	var supersededByID sql.NullString
 	var formSubmissionID sql.NullString
+	var reviewQueueEntryID sql.NullString
 	var ruleEvalIDsJSON []byte
 	var evidenceIDsJSON []byte
 	if err := row.Scan(
 		&d.ID, &d.OrganizationID, &d.ServiceRequestID, &d.Decision, &d.Reason,
 		&d.DecisionMaker, &d.DecidedAt, &d.CreatedAt, &d.WorkflowState,
-		&ruleEvalIDsJSON, &evidenceIDsJSON, &formSubmissionID, &d.Version,
+		&ruleEvalIDsJSON, &evidenceIDsJSON, &formSubmissionID, &reviewQueueEntryID, &d.Version,
 		&supersededByID,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -205,6 +210,12 @@ func (r *PostgresDecisionRepository) scanDecision(row interface {
 			d.FormSubmissionID = &id
 		}
 	}
+	if reviewQueueEntryID.Valid {
+		id, err := uuid.Parse(reviewQueueEntryID.String)
+		if err == nil {
+			d.ReviewQueueEntryID = &id
+		}
+	}
 	return &d, nil
 }
 
@@ -212,12 +223,13 @@ func (r *PostgresDecisionRepository) scanDecisionFromRows(rows *sql.Rows) (*doma
 	var d domain.Decision
 	var supersededByID sql.NullString
 	var formSubmissionID sql.NullString
+	var reviewQueueEntryID sql.NullString
 	var ruleEvalIDsJSON []byte
 	var evidenceIDsJSON []byte
 	if err := rows.Scan(
 		&d.ID, &d.OrganizationID, &d.ServiceRequestID, &d.Decision, &d.Reason,
 		&d.DecisionMaker, &d.DecidedAt, &d.CreatedAt, &d.WorkflowState,
-		&ruleEvalIDsJSON, &evidenceIDsJSON, &formSubmissionID, &d.Version,
+		&ruleEvalIDsJSON, &evidenceIDsJSON, &formSubmissionID, &reviewQueueEntryID, &d.Version,
 		&supersededByID,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan decision: %w", err)
@@ -234,6 +246,12 @@ func (r *PostgresDecisionRepository) scanDecisionFromRows(rows *sql.Rows) (*doma
 		id, err := uuid.Parse(formSubmissionID.String)
 		if err == nil {
 			d.FormSubmissionID = &id
+		}
+	}
+	if reviewQueueEntryID.Valid {
+		id, err := uuid.Parse(reviewQueueEntryID.String)
+		if err == nil {
+			d.ReviewQueueEntryID = &id
 		}
 	}
 	return &d, nil

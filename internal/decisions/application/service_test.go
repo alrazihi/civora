@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 	"testing"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
@@ -63,6 +64,9 @@ func (m *mockDecisionRepo) ListByServiceRequest(ctx context.Context, orgID, serv
 	if len(result) == 0 {
 		return nil, errors.New("not found")
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Version < result[j].Version
+	})
 	return result, nil
 }
 

@@ -816,6 +816,7 @@ components:
           - APPROVED
           - REJECTED
           - NEEDS_MORE_INFORMATION
+          - ESCALATE
         reason:
           type: string
         decision_maker:
@@ -828,6 +829,34 @@ components:
         created_at:
           type: string
           format: date-time
+        workflow_state:
+          type: string
+        rule_evaluation_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+        evidence_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+        form_submission_id:
+          type: string
+          format: uuid
+          nullable: true
+        review_queue_entry_id:
+          type: string
+          format: uuid
+          nullable: true
+        superseded_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          type: integer
     CreateDecisionRequest:
       type: object
       required:
@@ -845,6 +874,7 @@ components:
           - APPROVED
           - REJECTED
           - NEEDS_MORE_INFORMATION
+          - ESCALATE
         reason:
           type: string
     Assistance:
@@ -2201,6 +2231,15 @@ components:
           items:
             type: string
             format: uuid
+        evidence_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        form_submission_id:
+          type: string
+          format: uuid
+          nullable: true
         missing_information:
           type: array
           items:
@@ -2225,9 +2264,9 @@ components:
     CreateReviewQueueEntryRequest:
       type: object
       required:
-        - case_id
-        - workflow_instance_id
-        - workflow_state
+      - case_id
+      - workflow_instance_id
+      - workflow_state
       properties:
         case_id:
           type: string
@@ -2246,6 +2285,15 @@ components:
           items:
             type: string
             format: uuid
+        evidence_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        form_submission_id:
+          type: string
+          format: uuid
+          nullable: true
         missing_information:
           type: array
           items:

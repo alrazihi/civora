@@ -374,6 +374,9 @@ func serializeDecision(d *domain.Decision) map[string]interface{} {
 	if d.FormSubmissionID != nil {
 		result["form_submission_id"] = d.FormSubmissionID
 	}
+	if d.ReviewQueueEntryID != nil {
+		result["review_queue_entry_id"] = d.ReviewQueueEntryID
+	}
 	return result
 }
 

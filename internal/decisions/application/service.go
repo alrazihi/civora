@@ -141,6 +141,7 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 		params.RuleEvaluationIDs,
 		params.EvidenceIDs,
 		params.FormSubmissionID,
+		nil,
 		1,
 	)
 	if err != nil {
@@ -153,6 +154,7 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 			return fmt.Errorf("failed to save decision: %w", err)
 		}
 
+		decisionID := &d.ID
 		_, err = s.workflowSvc.ExecuteTransitionInTx(ctx, tx, workflowapp.ExecuteTransitionParams{
 			TenantID:      params.OrganizationID,
 			InstanceID:    instance.ID,
@@ -160,6 +162,7 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 			ActorID:       params.ActorID,
 			ActorRole:     params.ActorRole,
 			Reason:        params.Reason,
+			DecisionID:    decisionID,
 		})
 		if err != nil {
 			return fmt.Errorf("workflow transition failed: %w", err)
@@ -195,7 +198,7 @@ func (s *DecisionService) MakeDecision(ctx context.Context, params MakeDecisionP
 	return result, nil
 }
 
-func (s *DecisionService) CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgID, serviceRequestID, decisionMaker uuid.UUID, decision decisionsdomain.DecisionType, reason, workflowState string, ruleEvalIDs, evidenceIDs []uuid.UUID, formSubmissionID *uuid.UUID) (*decisionsdomain.Decision, error) {
+func (s *DecisionService) CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgID, serviceRequestID, decisionMaker uuid.UUID, decision decisionsdomain.DecisionType, reason, workflowState string, ruleEvalIDs, evidenceIDs []uuid.UUID, formSubmissionID, reviewQueueEntryID *uuid.UUID) (*decisionsdomain.Decision, error) {
 	d, err := decisionsdomain.NewDecisionWithContext(
 		orgID,
 		serviceRequestID,
@@ -206,6 +209,7 @@ func (s *DecisionService) CreateDecisionTx(ctx context.Context, tx *sql.Tx, orgI
 		ruleEvalIDs,
 		evidenceIDs,
 		formSubmissionID,
+		reviewQueueEntryID,
 		1,
 	)
 	if err != nil {
@@ -272,6 +276,7 @@ func (s *DecisionService) SupersedeDecision(ctx context.Context, params Supersed
 		params.RuleEvaluationIDs,
 		params.EvidenceIDs,
 		params.FormSubmissionID,
+		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrDecisionInput, err)

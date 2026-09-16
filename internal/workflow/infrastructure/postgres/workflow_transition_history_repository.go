@@ -36,18 +36,23 @@ func (r *PostgresWorkflowTransitionHistoryRepository) saveHistory(ctx context.Co
 	query := `
 		INSERT INTO workflow_transition_history (
 			id, organization_id, workflow_instance_id, case_id, from_state, to_state,
-			transition_key, actor_id, occurred_at, reason, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			transition_key, actor_id, occurred_at, reason, metadata, decision_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	metadataJSON, err := json.Marshal(history.Metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal workflow transition history metadata: %w", err)
 	}
 
+	var decisionIDArg interface{}
+	if history.DecisionID != nil && *history.DecisionID != uuid.Nil {
+		decisionIDArg = *history.DecisionID
+	}
+
 	_, err = e.ExecContext(ctx, query,
 		history.ID, history.TenantID, history.WorkflowInstanceID, history.CaseID,
 		history.FromState, history.ToState, history.TransitionKey, history.ActorID,
-		history.OccurredAt, history.Reason, metadataJSON,
+		history.OccurredAt, history.Reason, metadataJSON, decisionIDArg,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert workflow transition history: %w", err)
@@ -58,7 +63,7 @@ func (r *PostgresWorkflowTransitionHistoryRepository) saveHistory(ctx context.Co
 func (r *PostgresWorkflowTransitionHistoryRepository) FindByInstanceID(ctx context.Context, tenantID, instanceID uuid.UUID, limit, offset int) ([]domain.WorkflowTransitionHistory, error) {
 	query := `
 		SELECT id, organization_id, workflow_instance_id, case_id, from_state, to_state,
-			   transition_key, actor_id, occurred_at, reason, metadata
+			   transition_key, actor_id, occurred_at, reason, metadata, decision_id
 		FROM workflow_transition_history
 		WHERE workflow_instance_id = $1 AND organization_id = $2
 		ORDER BY occurred_at ASC, id ASC
@@ -87,7 +92,7 @@ func (r *PostgresWorkflowTransitionHistoryRepository) FindByInstanceID(ctx conte
 func (r *PostgresWorkflowTransitionHistoryRepository) FindByCaseID(ctx context.Context, tenantID, caseID uuid.UUID, limit, offset int) ([]domain.WorkflowTransitionHistory, error) {
 	query := `
 		SELECT id, organization_id, workflow_instance_id, case_id, from_state, to_state,
-			   transition_key, actor_id, occurred_at, reason, metadata
+			   transition_key, actor_id, occurred_at, reason, metadata, decision_id
 		FROM workflow_transition_history
 		WHERE case_id = $1 AND organization_id = $2
 		ORDER BY occurred_at ASC, id ASC
@@ -116,13 +121,21 @@ func (r *PostgresWorkflowTransitionHistoryRepository) FindByCaseID(ctx context.C
 func (r *PostgresWorkflowTransitionHistoryRepository) scanHistoryFromRows(rows *sql.Rows) (domain.WorkflowTransitionHistory, error) {
 	var history domain.WorkflowTransitionHistory
 	var metadataJSON []byte
+	var decisionID sql.NullString
 
 	if err := rows.Scan(
 		&history.ID, &history.TenantID, &history.WorkflowInstanceID, &history.CaseID,
 		&history.FromState, &history.ToState, &history.TransitionKey, &history.ActorID,
-		&history.OccurredAt, &history.Reason, &metadataJSON,
+		&history.OccurredAt, &history.Reason, &metadataJSON, &decisionID,
 	); err != nil {
 		return domain.WorkflowTransitionHistory{}, fmt.Errorf("failed to scan workflow transition history: %w", err)
+	}
+
+	if decisionID.Valid {
+		id, err := uuid.Parse(decisionID.String)
+		if err == nil {
+			history.DecisionID = &id
+		}
 	}
 
 	if len(metadataJSON) > 0 {

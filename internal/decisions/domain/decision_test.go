@@ -70,7 +70,7 @@ func TestNewDecisionWithContext(t *testing.T) {
 		d, err := NewDecisionWithContext(
 			orgID, srID, actorID, DecisionTypeApproved, "Approved",
 			"DECISION_PENDING", []uuid.UUID{evalID}, []uuid.UUID{evidenceID},
-			&submissionID, 1,
+			&submissionID, nil, 1,
 		)
 		require.NoError(t, err)
 		assert.Equal(t, "DECISION_PENDING", d.WorkflowState)
@@ -81,11 +81,12 @@ func TestNewDecisionWithContext(t *testing.T) {
 	})
 
 	t.Run("defaults empty slices", func(t *testing.T) {
-		d, err := NewDecisionWithContext(uuid.New(), uuid.New(), uuid.New(), DecisionTypeApproved, "ok", "", nil, nil, nil, 1)
+		d, err := NewDecisionWithContext(uuid.New(), uuid.New(), uuid.New(), DecisionTypeApproved, "ok", "", nil, nil, nil, nil, 1)
 		require.NoError(t, err)
 		assert.Empty(t, d.RuleEvaluationIDs)
 		assert.Empty(t, d.EvidenceIDs)
 		assert.Nil(t, d.FormSubmissionID)
+		assert.Nil(t, d.ReviewQueueEntryID)
 	})
 }
 
@@ -104,7 +105,7 @@ func TestNewSupersedingDecision(t *testing.T) {
 
 		d, err := NewSupersedingDecision(
 			orgID, srID, actorID, DecisionTypeRejected, "Reversed",
-			prev, "DECISION_PENDING", nil, nil, nil,
+			prev, "DECISION_PENDING", nil, nil, nil, nil,
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 2, d.Version)
@@ -115,7 +116,7 @@ func TestNewSupersedingDecision(t *testing.T) {
 	t.Run("no previous decision defaults version to 1", func(t *testing.T) {
 		d, err := NewSupersedingDecision(
 			uuid.New(), uuid.New(), uuid.New(), DecisionTypeApproved, "ok",
-			nil, "", nil, nil, nil,
+			nil, "", nil, nil, nil, nil,
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 1, d.Version)

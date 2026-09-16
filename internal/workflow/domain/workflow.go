@@ -103,6 +103,7 @@ type WorkflowTransitionHistory struct {
 	OccurredAt         time.Time
 	Reason             string
 	Metadata           map[string]interface{}
+	DecisionID         *uuid.UUID
 }
 
 // ValidationResult holds validation errors for a workflow definition.

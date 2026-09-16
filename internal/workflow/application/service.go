@@ -97,6 +97,7 @@ type ExecuteTransitionParams struct {
 	ActorID       uuid.UUID
 	ActorRole     string
 	Reason        string
+	DecisionID    *uuid.UUID
 }
 
 // CreateWorkflowDefinition creates a new draft workflow definition with states and transitions.
@@ -717,6 +718,7 @@ func (s *WorkflowService) executeTransition(ctx context.Context, tx *sql.Tx, par
 		OccurredAt:         now,
 		Reason:             params.Reason,
 		Metadata:           map[string]interface{}{},
+		DecisionID:         params.DecisionID,
 	}
 
 	auditParams := auditdomain.RecordEventParams{

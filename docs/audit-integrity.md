@@ -164,3 +164,68 @@ It is **not** called automatically on every read path outside the audit API.
 5. **Metadata is unstructured**: audit metadata is stored as JSONB. There is
    no schema enforcement on its contents, so an application bug can write
    sensitive data into audit metadata.
+
+## 9. Decision Provenance Model
+
+Human decisions are immutable append-only records. Each decision preserves
+stable references to the exact inputs that produced it, without duplicating
+sensitive data.
+
+A decision records:
+
+- **service_request_id** — the exact case
+- **form_submission_id** — the exact submitted form version (stable UUID)
+- **rule_evaluation_ids** — the exact rule evaluation(s) performed
+- **evidence_ids** — the exact evidence items considered
+- **review_queue_entry_id** — the exact review queue entry that triggered
+  the decision
+- **workflow_state** — the workflow state at the moment of decision
+- **decision_maker** — the reviewer who made the decision
+- **decided_at** — decision timestamp
+- **version** — incremented on supersession; old decisions are never
+  overwritten
+
+### Traceability Chain
+
+Given a decision ID, the system can reconstruct:
+
+1. Case details via `service_request_id`
+2. Exact form version via `form_submission_id` → `form_versions`
+3. Exact rule versions via `rule_evaluation_ids` → `rules.evaluations` →
+   `rules.rule_sets`
+4. Rule evaluation trace/explanation via `rules.evaluations.trace`
+5. Relevant evidence via `evidence_ids` → `evidence`
+6. Reviewer context via `review_queue_entry_id` → `review_queue`
+7. Workflow transition via `workflow_state` + audit chain
+
+### Workflow Transition Provenance
+
+Each `workflow_transition_history` row optionally records the `decision_id`
+that caused the transition. This links workflow state changes back to the
+authoritative human decision.
+
+### Historical Reproducibility
+
+Publishing a new form version (v2) or new rule version (v2) does not affect
+historical decisions:
+
+- Decisions store `form_submission_id`, which pins the submission to the
+  exact form version that was current at submission time.
+- Decisions store `rule_evaluation_ids`, which pin the evaluation to the
+  exact rule set version that was evaluated.
+- The `Evaluation` record stores `rule_set_version` and `facts_snapshot`,
+  preserving the exact inputs and rules used.
+
+Re-opening a historical decision context loads the same immutable
+references; it does not depend on today's current form or rule versions.
+
+### Supersession
+
+Decisions support explicit supersession via `SupersedeDecision`. The new
+decision:
+
+- Receives `version = previous.Version + 1`
+- Records `superseded_by_id` on the previous decision
+- Is never a mutation of the old record
+
+This ensures the full decision history is preserved and auditable.
