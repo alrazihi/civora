@@ -15,6 +15,7 @@ type Config struct {
 	Database DatabaseConfig
 	Auth     AuthConfig
 	Audit    AuditConfig
+	Storage  StorageConfig
 }
 
 type ServerConfig struct {
@@ -48,6 +49,12 @@ type AuditConfig struct {
 	Enabled          bool
 	HashChainEnabled bool
 	RetentionDays    int
+}
+
+type StorageConfig struct {
+	Provider    string
+	LocalPath   string
+	MaxFileSize int64
 }
 
 func Load() (*Config, error) {
@@ -85,6 +92,11 @@ func Load() (*Config, error) {
 			HashChainEnabled: getEnvBool("CIVORA_AUDIT_HASH_CHAIN", true),
 			RetentionDays:    getEnvInt("CIVORA_AUDIT_RETENTION_DAYS", 2555),
 		},
+		Storage: StorageConfig{
+			Provider:    getEnv("CIVORA_STORAGE_PROVIDER", "local"),
+			LocalPath:   getEnv("CIVORA_STORAGE_LOCAL_PATH", "./storage"),
+			MaxFileSize: getEnvInt64("CIVORA_STORAGE_MAX_FILE_SIZE", 10<<20), // 10 MB
+		},
 	}
 
 	if len(cfg.Auth.JWTSecret) < 32 {
@@ -108,6 +120,15 @@ func getEnv(key, fallback string) string {
 func getEnvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return fallback
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return i
 		}
 	}

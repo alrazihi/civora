@@ -730,6 +730,17 @@
         <input id="ev-desc" required>
         <label for="ev-ref">Storage Reference</label>
         <input id="ev-ref" required placeholder="s3://bucket/key">
+        <label for="ev-file">Document (optional)</label>
+        <div id="ev-drop-area" class="drop-area" ondrop="app.handleDrop(event)" ondragover="app.handleDragOver(event)" ondragleave="app.handleDragLeave(event)">
+          <input id="ev-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv,.html,.json,.zip,.xlsx" style="display:none">
+          <label for="ev-file" class="drop-area-label" style="cursor:pointer">
+            <span class="icon">${icon('upload')}</span>
+            <span>Drag & drop a file or click to browse</span>
+          </label>
+        </div>
+        <div id="ev-upload-progress" class="upload-progress-bar" style="display:none">
+          <div class="progress-fill" style="width:0%"></div>
+        </div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button type="button" class="btn secondary" onclick="app.hideModal('evidence-modal')"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span> Cancel</button>
           <button type="submit" class="btn"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span> Save</button>

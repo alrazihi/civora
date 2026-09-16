@@ -34,6 +34,7 @@ import (
 	evidenceapi "github.com/alrazihi/civora/internal/evidence/api"
 	evidenceapp "github.com/alrazihi/civora/internal/evidence/application"
 	evidencepostgres "github.com/alrazihi/civora/internal/evidence/infrastructure/postgres"
+	evidencestorage "github.com/alrazihi/civora/internal/evidence/infrastructure/storage"
 	followupapi "github.com/alrazihi/civora/internal/followup/api"
 	followupapp "github.com/alrazihi/civora/internal/followup/application"
 	followuppostgres "github.com/alrazihi/civora/internal/followup/infrastructure/postgres"
@@ -148,6 +149,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 	personRepo := peoplepostgres.NewPostgresPersonRepository(db.DB)
 	eligibilityRepo := eligibilitypostgres.NewPostgresEligibilityRepository(db.DB)
 	evidenceRepo := evidencepostgres.NewPostgresEvidenceRepository(db.DB)
+	evidenceStorage, err := evidencestorage.NewLocalStorageProvider(t.TempDir())
+	require.NoError(t, err)
 	assessmentRepo := assessmentpostgres.NewPostgresAssessmentRepository(db.DB)
 	decisionRepo := decisionspostgres.NewPostgresDecisionRepository(db.DB)
 	assistanceRepo := assistancepostgres.NewPostgresAssistanceRepository(db.DB)
@@ -185,7 +188,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	caseService.SetFormRepos(workflowDefRepo, workflowInstanceRepo, formRepo, versionRepo, fieldRepo, assignmentRepo, submissionRepo)
 	personService := peoplapp.NewPersonService(personRepo, auditService)
 	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
-	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, evidenceStorage)
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	decisionService := decisionsapp.NewDecisionService(decisionRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, workflowService)
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)

@@ -24,7 +24,6 @@ import (
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/database"
-	"github.com/alrazihi/civora/internal/identity"
 	decisionsapi "github.com/alrazihi/civora/internal/decisions/api"
 	decisionsapp "github.com/alrazihi/civora/internal/decisions/application"
 	decisionspostgres "github.com/alrazihi/civora/internal/decisions/infrastructure/postgres"
@@ -34,6 +33,7 @@ import (
 	evidenceapi "github.com/alrazihi/civora/internal/evidence/api"
 	evidenceapp "github.com/alrazihi/civora/internal/evidence/application"
 	evidencepostgres "github.com/alrazihi/civora/internal/evidence/infrastructure/postgres"
+	evidencestorage "github.com/alrazihi/civora/internal/evidence/infrastructure/storage"
 	followupapi "github.com/alrazihi/civora/internal/followup/api"
 	followupapp "github.com/alrazihi/civora/internal/followup/application"
 	followuppostgres "github.com/alrazihi/civora/internal/followup/infrastructure/postgres"
@@ -41,6 +41,7 @@ import (
 	formapi "github.com/alrazihi/civora/internal/forms/api"
 	formapp "github.com/alrazihi/civora/internal/forms/application"
 	formpostgres "github.com/alrazihi/civora/internal/forms/infrastructure/postgres"
+	"github.com/alrazihi/civora/internal/identity"
 	identityapi "github.com/alrazihi/civora/internal/identity/api"
 	identityapp "github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
@@ -98,6 +99,11 @@ func main() {
 	userRepo := identitypostgres.NewPostgresUserRepository(db.DB)
 	roleRepo := identitypostgres.NewPostgresRoleRepository(db.DB)
 	hasher := domain.NewBCryptHasher(cfg.Auth.BCryptCost)
+
+	storageProvider, err := evidencestorage.NewLocalStorageProvider(cfg.Storage.LocalPath)
+	if err != nil {
+		log.Fatalf("failed to initialize storage provider: %v", err)
+	}
 
 	orgRepo := orgpostgres.NewPostgresOrganizationRepository(db.DB)
 	caseRepo := casepostgres.NewPostgresCaseRepository(db.DB)
@@ -198,7 +204,7 @@ func main() {
 	eligibilityService := eligibilityapp.NewEligibilityService(eligibilityRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	eligibilityHandler := eligibilityapi.NewHandler(eligibilityService)
 
-	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
+	evidenceService := evidenceapp.NewEvidenceService(evidenceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService, storageProvider)
 	evidenceHandler := evidenceapi.NewHandler(evidenceService)
 
 	assessmentService := assessmentapp.NewAssessmentService(assessmentRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)

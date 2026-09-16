@@ -43,6 +43,97 @@ async function apiJSON(method, path, body) {
   return api(method, path, body);
 }
 
+async function apiUpload(path, file, extraFields, responseType = 'json') {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (extraFields) {
+    for (const [k, v] of Object.entries(extraFields)) {
+      formData.append(k, v);
+    }
+  }
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: headers,
+    body: formData,
+  });
+  if (res.status === 401) { clearAuth(); router.navigate('login'); }
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const msg = errData.error?.message || `HTTP ${res.status}`;
+    const err = new Error(`${res.status} ${msg}`);
+    err.status = res.status;
+    err.data = errData;
+    throw err;
+  }
+  if (responseType === 'blob') return res.blob();
+  return res.json().catch(() => ({}));
+}
+
+function apiUploadWithProgress(path, file, extraFields, onProgress) {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (extraFields) {
+      for (const [k, v] of Object.entries(extraFields)) {
+        formData.append(k, v);
+      }
+    }
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}${path}`);
+    for (const [k, v] of Object.entries(headers)) {
+      xhr.setRequestHeader(k, v);
+    }
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress((event.loaded / event.total) * 100);
+      }
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const json = JSON.parse(xhr.responseText || '{}');
+        resolve(json);
+      } else if (xhr.status === 401) {
+        clearAuth();
+        router.navigate('login');
+      } else {
+        let errData = {};
+        try { errData = JSON.parse(xhr.responseText); } catch (e) {}
+        const msg = errData.error?.message || `HTTP ${xhr.status}`;
+        const err = new Error(`${xhr.status} ${msg}`);
+        err.status = xhr.status;
+        err.data = errData;
+        reject(err);
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+    xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+    xhr.send(formData);
+  });
+}
+
+async function apiDownload(path) {
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: headers,
+  });
+  if (res.status === 401) { clearAuth(); router.navigate('login'); }
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const msg = errData.error?.message || `HTTP ${res.status}`;
+    const err = new Error(`${res.status} ${msg}`);
+    err.status = res.status;
+    err.data = errData;
+    throw err;
+  }
+  return res;
+}
+
 function decodeJWT(t) {
   try {
     const parts = t.split('.');

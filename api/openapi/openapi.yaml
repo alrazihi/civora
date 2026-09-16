@@ -691,15 +691,155 @@ components:
           - SUPPORTING_DOCUMENT
           - PHOTOGRAPH
           - STAFF_NOTE
+          - OTHER
+        custom_type:
+          type: string
+          description: Custom evidence type name, required when type is OTHER.
+          nullable: true
         description:
           type: string
         uploaded_by:
           type: string
           format: uuid
           pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        person_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+          description: Person associated with this evidence.
+        source:
+          type: string
+          enum:
+          - UPLOAD
+          - EXTERNAL_REFERENCE
+          - EXTERNAL_API
+          - MANUAL
+          description: How the evidence entered the system.
+        metadata:
+          type: object
+          description: Arbitrary structured metadata (file size, content type, checksum, etc.).
+          additionalProperties: true
+        verification_status:
+          type: string
+          enum:
+          - UNVERIFIED
+          - NEEDS_REVIEW
+          - VERIFIED
+          - REJECTED
+          description: Current verification status of the evidence.
+        verified_by:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+          description: User who last changed the verification status.
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last verification state change.
+        verification_reason:
+          type: string
+          nullable: true
+          description: Reason for the current verification status.
+        verification_method:
+          type: string
+          nullable: true
+          description: Method used for verification (e.g. manual, automated).
         created_at:
           type: string
           format: date-time
+    VerificationRecord:
+      type: object
+      required:
+      - id
+      - evidence_id
+      - status
+      - verified_at
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        evidence_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        status:
+          type: string
+          enum:
+          - UNVERIFIED
+          - NEEDS_REVIEW
+          - VERIFIED
+          - REJECTED
+        verifier_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          nullable: true
+        method:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    EvidenceDocument:
+      type: object
+      required:
+        - id
+        - evidence_id
+        - file_name
+        - content_type
+        - size_bytes
+        - checksum
+        - uploaded_by
+        - uploaded_at
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        evidence_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        file_name:
+          type: string
+          description: The sanitized filename of the uploaded document.
+        content_type:
+          type: string
+          description: The MIME type of the document (e.g., application/pdf, image/png).
+        size_bytes:
+          type: integer
+          format: int64
+          description: Size of the document in bytes.
+        checksum:
+          type: string
+          description: SHA-256 checksum of the document content for integrity verification.
+        uploaded_by:
+          type: string
+          format: uuid
+          description: User ID of the uploader.
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Timestamp when the document was uploaded.
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the document record was created.
     CreateEvidenceRequest:
       type: object
       required:
@@ -721,12 +861,46 @@ components:
           - SUPPORTING_DOCUMENT
           - PHOTOGRAPH
           - STAFF_NOTE
+          - OTHER
+        custom_type:
+          type: string
+          description: Custom evidence type name, required when type is OTHER.
+          nullable: true
         description:
           type: string
         storage_reference:
           type: string
           description: Validated object storage URI; accepted schemes are s3, gs,
             azureblob, and civora.
+        person_id:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+          nullable: true
+          description: Person associated with this evidence.
+        source:
+          type: string
+          enum:
+          - UPLOAD
+          - EXTERNAL_REFERENCE
+          - EXTERNAL_API
+          - MANUAL
+          description: How the evidence entered the system. Defaults to UPLOAD.
+        metadata:
+          type: object
+          description: Arbitrary structured metadata (file size, content type, checksum, etc.).
+          additionalProperties: true
+    EvidenceVerificationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          nullable: true
+          description: Reason for the verification status change.
+        method:
+          type: string
+          nullable: true
+          description: Method used for verification (e.g. manual, automated).
     Assessment:
       type: object
       required:
@@ -4951,6 +5125,55 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateEvidenceMetadata
+      tags:
+      - Evidence
+      summary: Update evidence metadata
+      description: Updates metadata on an existing evidence item. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - metadata
+              properties:
+                metadata:
+                  type: object
+                  description: Arbitrary structured metadata (file size, content type, checksum, etc.).
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Evidence metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/evidence/by-service-request/{serviceRequestId}:
     get:
       operationId: listEvidenceByServiceRequestId
@@ -4999,11 +5222,408 @@ paths:
                   $ref: '#/components/schemas/Evidence'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /organizations/{orgId}/evidence/{evidenceId}/verify:
+    post:
+      operationId: verifyEvidence
+      tags:
+      - Evidence
+      summary: Verify evidence
+      description: Marks evidence as verified, recording an immutable verification history entry.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceVerificationRequest'
+      responses:
+        '200':
+          description: Evidence verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/reject:
+    post:
+      operationId: rejectEvidence
+      tags:
+      - Evidence
+      summary: Reject evidence
+      description: Marks evidence as rejected, recording an immutable verification history entry.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceVerificationRequest'
+      responses:
+        '200':
+          description: Evidence rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/review:
+    post:
+      operationId: markEvidenceForReview
+      tags:
+      - Evidence
+      summary: Mark evidence for review
+      description: Marks evidence as needing review, recording an immutable verification history entry.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceVerificationRequest'
+      responses:
+        '200':
+          description: Evidence marked for review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/history:
+    get:
+      operationId: listVerificationHistory
+      tags:
+      - Evidence
+      summary: List verification history
+      description: Lists the immutable verification history records for an evidence item.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+      responses:
+        '200':
+          description: List of verification history records with pagination
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VerificationRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/upload:
+    post:
+      operationId: uploadEvidenceDocument
+      tags:
+        - Evidence
+      summary: Upload a document for evidence
+      description: Uploads a document file for an evidence item. The file is stored with server-generated keys. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 'The document file to upload. Allowed types: PDF, images, text/CSV, JSON, ZIP, XLSX.'
+                metadata:
+                  type: string
+                  description: Optional metadata JSON string.
+      responses:
+        '201':
+          description: Document uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   success:
+                     type: boolean
+                     example: true
+                   data:
+                     $ref: '#/components/schemas/EvidenceDocument'
+                   meta:
+                     type: object
+                     nullable: true
+                     description: Pagination metadata (null for single-resource responses).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/documents:
+    get:
+      operationId: listEvidenceDocuments
+      tags:
+        - Evidence
+      summary: List documents for evidence
+      description: Lists documents attached to an evidence item with pagination. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      responses:
+        '200':
+          description: List of documents with pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EvidenceDocument'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+                      total_pages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/document:
+    get:
+      operationId: downloadEvidenceDocument
+      tags:
+        - Evidence
+      summary: Download evidence document
+      description: Downloads the document file attached to an evidence item. The response includes Content-Disposition and Content-Type headers. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '200':
+          description: The document file binary content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="document.pdf"'
+            Content-Type:
+              schema:
+                type: string
+            Content-Length:
+              schema:
+                type: integer
+            X-Checksum-Sha256:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/documents/{documentId}:
+    delete:
+      operationId: deleteEvidenceDocument
+      tags:
+        - Evidence
+      summary: Delete evidence document
+      description: Deletes a document and its associated file from storage. Records an audit event. Requires authentication.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: evidenceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      - name: documentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        '204':
+          description: Document deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/assessments:
     post:
       operationId: createOrgassessments
       tags:
-      - Assessments
+        - Assessments
       summary: Create an assessment
       description: Creates a needs assessment for a service request. Requires authentication.
       security:
