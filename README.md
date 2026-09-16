@@ -25,8 +25,9 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.5** — Evidence & Documents
-  (document upload, evidence chains, audit integrity verification).
+Current focus: **Milestone 0.7** — Evidence & Documents
+(document upload, evidence chains, audit integrity verification, drag-and-drop
+upload UI, OpenAPI documentation).
 
 ## Quick Start
 

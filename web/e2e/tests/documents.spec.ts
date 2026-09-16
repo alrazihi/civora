@@ -210,7 +210,7 @@ test.describe('Evidence Document Management', () => {
     });
 
     // Mock document download endpoint
-    page.route(/.*\/organizations\/.*\/evidence\/.*\/document$/, async (route) => {
+    page.route(/.*\/organizations\/.*\/evidence\/.*\/documents\/.*\/download$/, async (route) => {
       await route.fulfill({
         body: 'fake pdf content for download test',
         headers: {

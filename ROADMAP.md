@@ -110,7 +110,30 @@ eligibility assessment, assistance provisioning, and follow-up management.
 
 **Dependencies**: 0.5
 
-### 0.7 AI Assistance
+### 0.7 Evidence & Documents
+
+**Goal**: Document and evidence management with audit chains.
+
+**Status**: Complete.
+
+**Implemented**:
+- Evidence domain: create, read, list by case, update metadata
+- Document storage: upload (multipart), download (streaming by document ID),
+  list, delete with server-generated storage keys
+- Verification state machine: UNVERIFIED → VERIFIED / REJECTED / NEEDS_REVIEW
+  with immutable append-only history
+- Local filesystem storage provider with server-generated keys, SHA-256
+  checksum, 10MB size limit, MIME allow-list, filename sanitization, and path
+  traversal prevention
+- Audit integration: hash-chained events for all evidence operations
+- Drag-and-drop upload UI in the evidence modal with preview thumbnails
+- OpenAPI documentation for all evidence and document endpoints
+- Security: tenant isolation, IDOR prevention, upload/download security,
+  path traversal prevention
+
+**Dependencies**: 0.6
+
+### 0.8 AI Assistance
 
 **Goal**: Introduce AI assistance with human-in-the-loop safeguards.
 
@@ -121,19 +144,6 @@ eligibility assessment, assistance provisioning, and follow-up management.
 - Human review gates for consequential decisions.
 - AI audit logging (provenance, model identification).
 - Opt-out / disable AI at org or system level.
-
-**Dependencies**: 0.6
-
-### 0.8 Interoperability
-
-**Goal**: Standards-based interoperability and integration.
-
-**Scope**:
-- Open standards for data exchange (JSON-LD, standard formats).
-- Integration adapter framework.
-- External system connectors (IdP, payment, document verification).
-- Import/export tooling for data portability.
-- API federation / cross-instance references.
 
 **Dependencies**: 0.7
 
@@ -178,4 +188,4 @@ production deployment by public-interest institutions.
 
 ---
 
-Last updated: 2026-09-06
+Last updated: 2026-09-16

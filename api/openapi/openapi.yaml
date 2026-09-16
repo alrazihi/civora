@@ -4,7 +4,7 @@ info:
   description: >-
       CIVORA API - open-source infrastructure for configurable, auditable
       public-service workflows, case management, forms, rules, and human
-      decisions. Version 0.5.0.
+      decisions. Version 0.7.0.
       Configurable workflow-driven service delivery: create custom states and
       transitions, activate a definition, bind a case to it via workflow_id, and
       drive the case through the workflow lifecycle. Any state can be marked
@@ -1935,7 +1935,6 @@ components:
       - case_id
       - current_state
       - required_forms
-      - required_evidence
       - required_assessments
       - required_decisions
       - required_assistance
@@ -1955,6 +1954,7 @@ components:
           type: array
           items:
             type: string
+          description: Reserved for future evidence requirements; currently always empty.
         required_assessments:
           type: array
           items:
@@ -5533,30 +5533,37 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-  /organizations/{orgId}/evidence/{evidenceId}/document:
+  /organizations/{orgId}/evidence/{evidenceId}/documents/{documentId}/download:
     get:
       operationId: downloadEvidenceDocument
       tags:
         - Evidence
       summary: Download evidence document
-      description: Downloads the document file attached to an evidence item. The response includes Content-Disposition and Content-Type headers. Requires authentication.
+      description: Downloads a specific document file attached to an evidence item. The response includes Content-Disposition and Content-Type headers. Requires authentication.
       security:
-      - BearerAuth: []
+        - BearerAuth: []
       parameters:
-      - name: orgId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-      - name: evidenceId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
       responses:
         '200':
           description: The document file binary content

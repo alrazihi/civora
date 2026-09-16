@@ -1306,7 +1306,7 @@ async loadSection(name, path) {
   getDocumentPreview(d) {
     const type = d.content_type;
     if (type && type.startsWith('image/')) {
-      return `<img src="${this.orgPath(`/evidence/${d.evidence_id}/document`)}" alt="${escapeHTML(d.file_name)}" class="doc-thumbnail" loading="lazy">`;
+      return `<img src="${this.orgPath(`/evidence/${d.evidence_id}/documents/${d.id}/download`)}" alt="${escapeHTML(d.file_name)}" class="doc-thumbnail" loading="lazy">`;
     }
     return this.getFileIcon(type);
   },
@@ -1545,17 +1545,17 @@ async loadSection(name, path) {
     cell.innerHTML = docs.map(d => `
       <div class="doc-item" style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span class="doc-preview">${this.getDocumentPreview(d)}</span>
-        <a href="${this.orgPath(`/evidence/${evidenceId}/document`)}" onclick="app.downloadDocument('${evidenceId}', event);return false" style="text-decoration:none">${escapeHTML(d.file_name)}</a>
+        <a href="${this.orgPath(`/evidence/${evidenceId}/documents/${d.id}/download`)}" onclick="app.downloadDocument('${evidenceId}', '${d.id}', event);return false" style="text-decoration:none">${escapeHTML(d.file_name)}</a>
         <span class="badge">${this.formatFileSize(d.size_bytes || 0)}</span>
         <button class="btn tiny btn-danger" onclick="app.deleteDocument('${evidenceId}', '${d.id}', event)" title="Delete document">${icon('trash')}</button>
       </div>
     `).join('');
   },
 
-  async downloadDocument(evidenceId, ev) {
+  async downloadDocument(evidenceId, docId, ev) {
     ev.preventDefault();
     try {
-      const res = await apiDownload(this.orgPath(`/evidence/${evidenceId}/document`));
+      const res = await apiDownload(this.orgPath(`/evidence/${evidenceId}/documents/${docId}/download`));
       const blob = await res.blob();
       const disposition = res.headers.get('content-disposition');
       let filename = 'download';

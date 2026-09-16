@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-16
+
+### Evidence Domain
+
+- `evidence` module: full evidence domain with document storage, verification
+  lifecycle, and audit integration
+- Evidence CRUD: create, read, list by case, update metadata
+- Document storage: upload (multipart), download (streaming by document ID),
+  list, delete with server-generated storage keys
+- Verification state machine: UNVERIFIED → VERIFIED / REJECTED / NEEDS_REVIEW
+  with immutable append-only history
+- Local filesystem storage provider with server-generated keys, SHA-256
+  checksum, 10MB size limit, MIME allow-list, filename sanitization, and path
+  traversal prevention
+- Audit integration: hash-chained events for all evidence operations
+- Drag-and-drop upload UI in the evidence modal with preview thumbnails
+- OpenAPI documentation for all evidence and document endpoints
+
+### Security
+
+- Tenant isolation enforced at repository, service, and API layers
+- IDOR prevention via organization-scoped queries
+- Upload security: filename sanitization, content-type validation, size limits,
+  checksum verification
+- Download security: storage keys never exposed in responses
+- Path traversal prevention in file retrieval and deletion
+
+### Documentation
+
+- 9 stage reports documenting the evidence domain implementation
+- Final release gate with architecture, security, and test verification
+- OpenAPI version bumped to 0.7.0
+
+### Changed
+
+- OpenAPI spec: added evidence and document endpoints; version bumped to 0.7.0
+- Download route: changed to per-document download
+  (`/evidence/{evidenceId}/documents/{documentId}/download`)
+
+### Tests
+
+- `go test -short ./...` — PASS
+- `npx playwright test --workers=1` — PASS (69 tests)
+- `npx @redocly/cli lint` — VALID
+- `go vet ./...` — PASS
+- `gofmt -l .` — CLEAN
+- `go build ./...` — PASS
+
+---
+
 ## [0.6.0] - 2026-09-16
 
 ### Added

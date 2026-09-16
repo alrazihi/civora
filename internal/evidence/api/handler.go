@@ -36,7 +36,7 @@ type EvidenceService interface {
 	UpdateEvidenceMetadata(ctx context.Context, params application.UpdateEvidenceMetadataParams) (*domain.Evidence, error)
 	ListVerificationHistory(ctx context.Context, params application.ListVerificationHistoryParams) ([]*domain.VerificationRecord, int, error)
 	UploadDocument(ctx context.Context, params application.UploadDocumentParams) (*application.UploadDocumentResult, error)
-	GetDocumentStream(ctx context.Context, orgID, evidenceID, downloaderID uuid.UUID) (*application.DownloadDocumentResult, error)
+	GetDocumentStream(ctx context.Context, orgID, evidenceID, documentID, downloaderID uuid.UUID) (*application.DownloadDocumentResult, error)
 	ListDocuments(ctx context.Context, params application.ListDocumentsParams) ([]*domain.Document, int, error)
 	DeleteDocument(ctx context.Context, params application.DeleteDocumentParams) error
 }
@@ -55,7 +55,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Route("/{evidenceId}", func(r chi.Router) {
 				r.Post("/upload", h.UploadDocument)
 				r.Get("/documents", h.ListDocuments)
-				r.Get("/document", h.DownloadDocument)
+				r.Get("/documents/{documentId}/download", h.DownloadDocument)
 				r.Delete("/documents/{documentId}", h.DeleteDocument)
 				r.Post("/verify", h.VerifyEvidence)
 				r.Post("/reject", h.RejectEvidence)
@@ -490,13 +490,19 @@ func (h *Handler) DownloadDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	documentID, ok := parseUUID(r, "documentId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid document ID")
+		return
+	}
+
 	actorID := getUserID(r)
 	if actorID == uuid.Nil {
 		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
 		return
 	}
 
-	result, err := h.svc.GetDocumentStream(r.Context(), orgID, evidenceID, actorID)
+	result, err := h.svc.GetDocumentStream(r.Context(), orgID, evidenceID, documentID, actorID)
 	if err != nil {
 		writeEvidenceError(w, err)
 		return

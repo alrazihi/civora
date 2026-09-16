@@ -491,7 +491,7 @@ type DownloadDocumentResult struct {
 	FileName    string
 }
 
-func (s *EvidenceService) GetDocumentStream(ctx context.Context, orgID, evidenceID uuid.UUID, downloaderID uuid.UUID) (*DownloadDocumentResult, error) {
+func (s *EvidenceService) GetDocumentStream(ctx context.Context, orgID, evidenceID, documentID, downloaderID uuid.UUID) (*DownloadDocumentResult, error) {
 	if downloaderID == uuid.Nil {
 		return nil, fmt.Errorf("%w: downloader ID is required", ErrEvidenceInput)
 	}
@@ -509,8 +509,11 @@ func (s *EvidenceService) GetDocumentStream(ctx context.Context, orgID, evidence
 		return nil, ErrEvidenceNotFound
 	}
 
-	doc, err := s.repo.FindDocumentByEvidence(ctx, orgID, evidenceID)
+	doc, err := s.repo.FindDocumentByID(ctx, orgID, documentID)
 	if err != nil {
+		return nil, evidencedomain.ErrDocumentNotFound
+	}
+	if doc.EvidenceID != evidenceID {
 		return nil, evidencedomain.ErrDocumentNotFound
 	}
 

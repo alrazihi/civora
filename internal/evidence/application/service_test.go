@@ -125,7 +125,7 @@ func (m *mockEvidenceRepo) FindDocumentByID(ctx context.Context, orgID, id uuid.
 	defer m.mu.Unlock()
 	for _, docs := range m.documents {
 		for _, d := range docs {
-			if d.ID == id {
+			if d.ID == id && d.OrganizationID == orgID {
 				return d, nil
 			}
 		}
@@ -825,7 +825,7 @@ func TestGetDocumentStream_DocumentNotFound(t *testing.T) {
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
-	_, err := svc.GetDocumentStream(context.Background(), orgID, e.ID, uploadedBy)
+	_, err := svc.GetDocumentStream(context.Background(), orgID, e.ID, uuid.New(), uploadedBy)
 	require.Error(t, err)
 }
 
@@ -962,7 +962,7 @@ func TestGetDocumentStream_DownloadAudit(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	dlResult, err := svc.GetDocumentStream(context.Background(), orgID, e.ID, uploadedBy)
+	dlResult, err := svc.GetDocumentStream(context.Background(), orgID, e.ID, result.Document.ID, uploadedBy)
 	require.NoError(t, err)
 	dlResult.Content.Close()
 
@@ -1008,7 +1008,7 @@ func TestDeleteDocument_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = svc.GetDocumentStream(context.Background(), orgID, e.ID, uploadedBy)
+	_, err = svc.GetDocumentStream(context.Background(), orgID, e.ID, result.Document.ID, uploadedBy)
 	require.Error(t, err)
 
 	docs, total, err := svc.ListDocuments(context.Background(), ListDocumentsParams{
