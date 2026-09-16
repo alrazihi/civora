@@ -5,34 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-09-16
 
 ### Added
 
-- `eligibility` module: eligibility checks for service requests
-- `assistance` module: assistance provisioning and tracking
-- `followup` module: follow-up scheduling and management
-- New OpenAPI schemas: `Person`, `Eligibility`, `Evidence`, `Assessment`, `Decision`, `Assistance`, `FollowUp`
-- New API endpoints for eligibility, assistance, and follow-up resources
-- Configurable rate limiter (`ServerConfig.RateLimit`, `ServerConfig.RateLimitBurst`)
+- `decisions` module: human decision domain with full provenance (case, workflow state, rule evaluations, evidence, form submissions)
+- `review_queue` module: human review work queue with state machine (PENDING → ASSIGNED → IN_REVIEW → COMPLETED/ESCALATED/WAITING_INFORMATION)
+- Decision versioning and supersession: immutable history with audit trail
+- Decision types: APPROVED, REJECTED, NEEDS_MORE_INFORMATION, ESCALATE with configurable reason requirements
+- Secure review assignment with PostgreSQL SKIP LOCKED for concurrency safety
+- Human decision actions: CompleteReview (approve/reject), EscalateReview, RequestInformation
+- Decision-to-workflow-transition mapping via `decision_type` column on workflow transitions
+- Atomic decision + workflow transition + audit in single database transaction
+- Workflow transition observer pattern for extensibility
+- Comprehensive security test suite (30 attack vectors covering cross-tenant access, IDOR, impersonation, replay, concurrency, tampering, audit manipulation)
+- Platform configurability validation: two distinct processes (Emergency Assistance + Education Assistance) with zero source-code changes
+- Reviewer workspace frontend: case context, rule evaluations with trace, evidence, form submissions, previous decisions, decision controls
+- Historical reproducibility: decisions reference exact rule/form/evidence versions; supersession preserves audit chain
 
 ### Changed
 
-- `eligibility_repository.go`: fixed JSONB scanning for `Criteria` field using `[]byte` + `json.Unmarshal`
-- `eligibility_repository.go`, `assistance_repository.go`, `followup_repository.go`: converted `SaveTx` operations to UPSERT (`INSERT ... ON CONFLICT DO UPDATE`)
-- E2E tests: `registerUser` now returns created user ID; `TestServiceRequestFullLifecycle` uses valid `responsible_staff` UUID
-- OpenAPI spec: extended with all new endpoint paths and schemas; corrected `Case.status` enum to match actual code values
+- OpenAPI spec: extended with review queue and decision endpoints; version bumped to 0.5.0
+- Workflow transitions: added `decision_type` column for human decision integration
+- Review queue provenance: added `evidence_ids` and `form_submission_id` columns
+- Decision provenance: linked to review queue entries and workflow transition history
+
+### Security
+
+- Cross-tenant isolation enforced at repository, service, and API layers
+- IDOR prevention via organization-scoped queries
+- Authorization checked server-side on every operation
+- Concurrent assignment/decision safety via DB-level locking
+- Replay, duplicate, and stale-state protection via state machine
+- Payload size limits (5000 char reason max)
+- Error leakage controlled
 
 ### Fixed
 
-- JSONB scan panic in eligibility repository
-- Foreign key violation in E2E test due to nil UUID for `responsible_staff`
-- Dashboard loading/error element IDs in `web/js/app.js` now match `web/index.html` (`dashboard-stats-loading`/`dashboard-stats-error`)
-- `isCaseTerminal()` no longer hardcodes `REJECTED`; uses only `CLOSED` plus workflow definition terminal states for generic workflow support
-- `buildSectionTransitionMap()` uses name-based matching and fallback to map all transitions to all sections for generic workflows
-- Removed dead `steps`/`connectors` code in `renderWorkflowProgress()` in `web/js/app.js`
-- Simplified tautological condition in `GetValidTransitions()` (`internal/workflow/application/service.go`)
-- Corrected contradictory seed data comments for Case A in `cmd/seed/main.go`
+- Decision domain: reason validation for REJECTED/ESCALATE/NEEDS_MORE_INFORMATION
+- Review queue: state machine transitions enforce valid flows
+- Workflow integration: atomic decision+transition prevents orphaned records
+
+---
+
+## [Unreleased]
 
 ---
 

@@ -88,16 +88,25 @@ eligibility assessment, assistance provisioning, and follow-up management.
 
 **Dependencies**: 0.4
 
-### 0.6 Audit & Governance
+### 0.6 Human Review & Decision
 
-**Goal**: Mature auditing, governance controls, and compliance features.
+**Goal**: Implement human-in-the-loop decision-making with full provenance, review queue, and workflow integration.
 
-**Scope**:
-- Tamper-evident audit log (signed/hashed).
-- Granular access logs.
-- Policy management and enforcement.
-- Data retention and deletion automation.
-- Audit export and reporting.
+**Status**: Complete.
+
+**Implemented**:
+- Decision domain: immutable decision records with versioning, supersession, and full provenance (case, workflow state, rule evaluations, evidence, form submissions)
+- Decision types: APPROVED, REJECTED, NEEDS_MORE_INFORMATION, ESCALATE
+- Review queue with state machine: PENDING → ASSIGNED → IN_REVIEW → COMPLETED/ESCALATED/WAITING_INFORMATION
+- Secure review assignment with PostgreSQL SKIP LOCKED for concurrency safety
+- Human decision actions: APPROVE, REJECT, ESCALATE, REQUEST_INFORMATION with reason requirements
+- Decision-to-workflow-transition mapping via `decision_type` column on workflow transitions
+- Atomic decision + workflow transition + audit in single database transaction
+- Workflow transition observer integration for automatic review queue creation
+- Comprehensive security test suite (30 attack vectors: cross-tenant, IDOR, impersonation, replay, concurrency, tampering, audit manipulation)
+- Platform configurability proof: Emergency Assistance + Education Assistance workflows with different states, forms, rules, and decision flows
+- Historical reproducibility: decisions reference exact rule/form/evidence versions; supersession preserves audit chain
+- Reviewer workspace frontend with case context, rule evaluations, evidence, forms, previous decisions
 
 **Dependencies**: 0.5
 

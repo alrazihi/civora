@@ -25,7 +25,7 @@ info:
       every state transition, form submission, rule evaluation, evidence
       addition, and human decision is recorded in a tamper-evident, hash-chained
       audit log isolated in a dedicated PostgreSQL schema.
-  version: 0.5.0
+  version: 0.6.0
   contact:
     name: CIVORA
     url: https://github.com/alrazihi/civora
