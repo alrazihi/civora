@@ -110,9 +110,12 @@ func (s *AIService) WithDocumentContent(documents DocumentContentProvider) *AISe
 	return s
 }
 
-// WithPIISanitizer wires optional PII redaction applied to documents before
-// they are sent to a provider.
+// WithPIISanitizer wires mandatory PII redaction applied to documents before
+// they are sent to a provider. A sanitizer must always be configured.
 func (s *AIService) WithPIISanitizer(sanitizer PIISanitizer) *AIService {
+	if sanitizer == nil {
+		panic("PII sanitizer is required and must not be nil")
+	}
 	s.sanitizer = sanitizer
 	return s
 }
@@ -906,13 +909,11 @@ func (s *AIService) loadDocumentContent(ctx context.Context, orgID, evidenceID, 
 		data = data[:domain.MaxDocumentBytes]
 	}
 
-	if s.sanitizer != nil {
-		sanitized, err := s.sanitizer.SanitizeDocumentContent(data, doc.ContentType, doc.FileName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to sanitize document content: %w", err)
-		}
-		data = sanitized
+	sanitized, err := s.sanitizer.SanitizeDocumentContent(data, doc.ContentType, doc.FileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sanitize document content: %w", err)
 	}
+	data = sanitized
 
 	return data, nil
 }

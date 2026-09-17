@@ -330,11 +330,8 @@ func main() {
 	userRateLimiter.Stop()
 }
 
-// piiSanitizer returns a PII redactor when AI is configured for an external
-// provider, or nil when the operator has disabled sanitization.
+// piiSanitizer returns a PII redactor. PII sanitization is mandatory and
+// cannot be disabled.
 func piiSanitizer(cfg *config.Config) aiapplication.PIISanitizer {
-	if !cfg.AI.PIISanitization {
-		return nil
-	}
 	return aisanitizer.NewRedactingSanitizer()
 }

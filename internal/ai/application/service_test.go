@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alrazihi/civora/internal/ai/domain"
+	aisanitizer "github.com/alrazihi/civora/internal/ai/infrastructure/sanitizer"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	evidencedomain "github.com/alrazihi/civora/internal/evidence/domain"
 	formsubdomain "github.com/alrazihi/civora/internal/form_submission/domain"
@@ -903,7 +904,7 @@ func TestAIService_GenerateObservations_MaliciousDocument(t *testing.T) {
 	obsRepo := &mockObservationRepo{}
 	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider).WithDocumentContent(&mockDocumentContentProvider{content: oversizedContent})
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider).WithDocumentContent(&mockDocumentContentProvider{content: oversizedContent}).WithPIISanitizer(aisanitizer.NewRedactingSanitizer())
 
 	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
 		OrganizationID: orgID,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/alrazihi/civora/internal/ai/application"
 	"github.com/alrazihi/civora/internal/ai/domain"
+	"github.com/alrazihi/civora/internal/ai/infrastructure/guard"
 )
 
 const (
@@ -30,6 +31,7 @@ type OpenAIProvider struct {
 	model      string
 	skipAuth   bool
 	httpClient *http.Client
+	guard      *guard.PromptInjectionGuard
 }
 
 type OpenAIProviderConfig struct {
@@ -38,6 +40,7 @@ type OpenAIProviderConfig struct {
 	Model      string
 	SkipAuth   bool
 	HTTPClient *http.Client
+	Guard      *guard.PromptInjectionGuard
 }
 
 func NewOpenAIProvider(cfg OpenAIProviderConfig) *OpenAIProvider {
@@ -50,6 +53,9 @@ func NewOpenAIProvider(cfg OpenAIProviderConfig) *OpenAIProvider {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{Timeout: defaultOpenAITimeout}
 	}
+	if cfg.Guard == nil {
+		cfg.Guard = guard.NewPromptInjectionGuard()
+	}
 
 	return &OpenAIProvider{
 		apiKey:     cfg.APIKey,
@@ -57,6 +63,7 @@ func NewOpenAIProvider(cfg OpenAIProviderConfig) *OpenAIProvider {
 		model:      cfg.Model,
 		skipAuth:   cfg.SkipAuth,
 		httpClient: cfg.HTTPClient,
+		guard:      cfg.Guard,
 	}
 }
 
@@ -192,7 +199,12 @@ func (p *OpenAIProvider) GenerateObservations(ctx context.Context, req applicati
 
 	outputHash := computeSHA256(string(body))
 
-	result, err := p.parseObservations(apiResp.Choices[0].Message.Content)
+	validatedContent, err := p.guard.ValidateResponse(apiResp.Choices[0].Message.Content)
+	if err != nil {
+		return nil, fmt.Errorf("LLM response validation failed: %w", err)
+	}
+
+	result, err := p.parseObservations(validatedContent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse observations: %w", err)
 	}
