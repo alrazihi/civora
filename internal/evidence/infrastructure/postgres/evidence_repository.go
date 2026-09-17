@@ -206,12 +206,14 @@ func (r *PostgresEvidenceRepository) scanEvidence(row interface {
 	var e domain.Evidence
 	var customType sql.NullString
 	var metadataJSON []byte
+	var verificationReason sql.NullString
+	var verificationMethod sql.NullString
 
 	if err := row.Scan(
 		&e.ID, &e.OrganizationID, &e.ServiceRequestID, &e.Type, &customType,
 		&e.Description, &e.StorageReference, &e.UploadedBy, &e.PersonID,
 		&e.Source, &metadataJSON, &e.VerificationStatus,
-		&e.VerifiedBy, &e.VerifiedAt, &e.VerificationReason, &e.VerificationMethod,
+		&e.VerifiedBy, &e.VerifiedAt, &verificationReason, &verificationMethod,
 		&e.CreatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -220,6 +222,8 @@ func (r *PostgresEvidenceRepository) scanEvidence(row interface {
 		return nil, fmt.Errorf("failed to scan evidence: %w", err)
 	}
 	e.CustomType = nullableStringPtr(customType)
+	e.VerificationReason = nullString(verificationReason)
+	e.VerificationMethod = nullString(verificationMethod)
 	if len(metadataJSON) > 0 {
 		_ = json.Unmarshal(metadataJSON, &e.Metadata)
 	}
@@ -230,21 +234,32 @@ func (r *PostgresEvidenceRepository) scanEvidenceFromRows(rows *sql.Rows) (*doma
 	var e domain.Evidence
 	var customType sql.NullString
 	var metadataJSON []byte
+	var verificationReason sql.NullString
+	var verificationMethod sql.NullString
 
 	if err := rows.Scan(
 		&e.ID, &e.OrganizationID, &e.ServiceRequestID, &e.Type, &customType,
 		&e.Description, &e.StorageReference, &e.UploadedBy, &e.PersonID,
 		&e.Source, &metadataJSON, &e.VerificationStatus,
-		&e.VerifiedBy, &e.VerifiedAt, &e.VerificationReason, &e.VerificationMethod,
+		&e.VerifiedBy, &e.VerifiedAt, &verificationReason, &verificationMethod,
 		&e.CreatedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to scan evidence: %w", err)
 	}
 	e.CustomType = nullableStringPtr(customType)
+	e.VerificationReason = nullString(verificationReason)
+	e.VerificationMethod = nullString(verificationMethod)
 	if len(metadataJSON) > 0 {
 		_ = json.Unmarshal(metadataJSON, &e.Metadata)
 	}
 	return &e, nil
+}
+
+func nullString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
 }
 
 func nullableStringPtr(ns sql.NullString) *string {
