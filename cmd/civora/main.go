@@ -128,6 +128,7 @@ func main() {
 	formRepo := formpostgres.NewPostgresFormRepository(db.DB)
 	formVersionRepo := formpostgres.NewPostgresFormVersionRepository(db.DB)
 	formFieldRepo := formpostgres.NewPostgresFormFieldRepository(db.DB)
+	formSubmissionRepo := submissionpostgres.NewPostgresFormSubmissionRepository(db.DB)
 
 	ruleSetRepo := rulespostgres.NewPostgresRuleSetRepository(db.DB)
 	evalRepo := rulespostgres.NewPostgresEvaluationRepository(db.DB)
@@ -206,7 +207,7 @@ func main() {
 		formVersionRepo,
 		formFieldRepo,
 		workflowAssignmentRepo,
-		submissionpostgres.NewPostgresFormSubmissionRepository(db.DB),
+		formSubmissionRepo,
 	)
 	caseHandler := caseapi.NewHandler(caseService)
 
@@ -270,7 +271,7 @@ func main() {
 	default:
 		aiProvider = aiprovider.NewNoopProvider()
 	}
-	aiService := aiapplication.NewAIService(aiObsRepo, evidenceRepo, domain.NewOrganizationUserChecker(userRepo), auditService, aiProvider).
+	aiService := aiapplication.NewAIService(aiObsRepo, evidenceRepo, formSubmissionRepo, domain.NewOrganizationUserChecker(userRepo), auditService, aiProvider).
 		WithTransaction(db.DB).
 		WithDocumentContent(aiadapter.NewDocumentContentProvider(evidenceService)).
 		WithPIISanitizer(piiSanitizer(cfg))

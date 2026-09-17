@@ -1,15 +1,18 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/alrazihi/civora/internal/ai/domain"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	evidencedomain "github.com/alrazihi/civora/internal/evidence/domain"
+	formsubdomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	"github.com/google/uuid"
 )
 
@@ -30,10 +33,12 @@ func (m *mockAIProvider) ProviderInfo() domain.ModelInfo {
 }
 
 type mockEvidenceRepo struct {
-	evidence  *evidencedomain.Evidence
-	documents []*evidencedomain.Document
-	findErr   error
-	docErr    error
+	evidence          *evidencedomain.Evidence
+	documents         []*evidencedomain.Document
+	findErr           error
+	docErr            error
+	serviceRequest    []*evidencedomain.Evidence
+	serviceRequestErr error
 }
 
 func (m *mockEvidenceRepo) FindByID(ctx context.Context, orgID, id uuid.UUID) (*evidencedomain.Evidence, error) {
@@ -46,6 +51,13 @@ func (m *mockEvidenceRepo) FindByID(ctx context.Context, orgID, id uuid.UUID) (*
 	return m.evidence, nil
 }
 
+func (m *mockEvidenceRepo) FindByServiceRequest(ctx context.Context, orgID, serviceRequestID uuid.UUID, limit, offset int) ([]*evidencedomain.Evidence, error) {
+	if m.serviceRequestErr != nil {
+		return nil, m.serviceRequestErr
+	}
+	return m.serviceRequest, nil
+}
+
 func (m *mockEvidenceRepo) ListDocuments(ctx context.Context, orgID, evidenceID uuid.UUID, limit, offset int) ([]*evidencedomain.Document, int, error) {
 	if m.docErr != nil {
 		return nil, 0, m.docErr
@@ -55,6 +67,18 @@ func (m *mockEvidenceRepo) ListDocuments(ctx context.Context, orgID, evidenceID 
 
 func (m *mockEvidenceRepo) SaveTx(ctx context.Context, tx *sql.Tx, e *evidencedomain.Evidence) error {
 	return nil
+}
+
+type mockFormRepo struct {
+	submissions []*formsubdomain.FormSubmission
+	listErr     error
+}
+
+func (m *mockFormRepo) ListByCase(ctx context.Context, tenantID, caseID uuid.UUID) ([]*formsubdomain.FormSubmission, error) {
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
+	return m.submissions, nil
 }
 
 type mockObservationRepo struct {
@@ -94,6 +118,13 @@ func (m *mockObservationRepo) FindByEvidence(ctx context.Context, orgID, evidenc
 	return m.listResult, m.listTotal, nil
 }
 
+func (m *mockObservationRepo) FindByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*domain.Observation, int, error) {
+	if m.listErr != nil {
+		return nil, 0, m.listErr
+	}
+	return m.listResult, m.listTotal, nil
+}
+
 func (m *mockObservationRepo) UpdateStatus(ctx context.Context, orgID, observationID uuid.UUID, status domain.ObservationStatus, reviewerID *uuid.UUID, notes string) error {
 	return m.updateErr
 }
@@ -103,6 +134,10 @@ func (m *mockObservationRepo) UpdateStatusTx(ctx context.Context, tx *sql.Tx, or
 }
 
 func (m *mockObservationRepo) CountByEvidence(ctx context.Context, orgID, evidenceID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+func (m *mockObservationRepo) CountByCase(ctx context.Context, orgID, caseID uuid.UUID) (int, error) {
 	return 0, nil
 }
 
@@ -149,10 +184,11 @@ func TestAIService_GenerateObservations_Success(t *testing.T) {
 		},
 	}
 
-	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}}
+	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}, serviceRequest: []*evidencedomain.Evidence{evidence}}
 	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, provider)
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
 
 	result, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
 		OrganizationID: orgID,
@@ -175,8 +211,8 @@ func TestAIService_GenerateObservations_Success(t *testing.T) {
 	if *obs.Confidence != 0.95 {
 		t.Errorf("expected confidence 0.95, got %v", obs.Confidence)
 	}
-	if obs.Status != domain.ObservationStatusPendingReview {
-		t.Errorf("expected status PENDING_REVIEW, got %s", obs.Status)
+	if obs.Status != domain.ObservationStatusOpen {
+		t.Errorf("expected status OPEN, got %s", obs.Status)
 	}
 	if obs.InputHash == "" || obs.OutputHash == "" {
 		t.Error("expected non-empty hashes")
@@ -209,10 +245,11 @@ func TestAIService_GenerateObservations_ProviderError(t *testing.T) {
 		err:  errors.New("provider unavailable"),
 	}
 
-	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}}
+	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}, serviceRequest: []*evidencedomain.Evidence{evidence}}
 	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, provider)
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
 
 	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
 		OrganizationID: orgID,
@@ -254,10 +291,11 @@ func TestAIService_GenerateObservations_UserNotInOrg(t *testing.T) {
 		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
 	}
 
-	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}}
+	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}, serviceRequest: []*evidencedomain.Evidence{evidence}}
 	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: false}, nil, provider)
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: false}, nil, provider)
 
 	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
 		OrganizationID: orgID,
@@ -279,10 +317,11 @@ func TestAIService_GenerateObservations_EvidenceNotFound(t *testing.T) {
 		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
 	}
 
-	evRepo := &mockEvidenceRepo{evidence: nil}
+	evRepo := &mockEvidenceRepo{evidence: nil, serviceRequest: nil}
 	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, provider)
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
 
 	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
 		OrganizationID: orgID,
@@ -298,53 +337,135 @@ func TestAIService_GenerateObservations_EvidenceNotFound(t *testing.T) {
 	}
 }
 
-func TestAIService_ReviewObservation_Accept(t *testing.T) {
+func TestAIService_GenerateCaseObservations_Success(t *testing.T) {
 	orgID := uuid.New()
-	obsID := uuid.New()
-	reviewerID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
 
-	evidence := makeTestEvidence()
-	evidence.OrganizationID = orgID
-
-	obs := &domain.Observation{
-		ID:             obsID,
-		OrganizationID: orgID,
-		EvidenceID:     evidence.ID,
-		Type:           domain.ObservationTypeSummary,
-		Source:         domain.ObservationSourceAIModel,
-		Status:         domain.ObservationStatusPendingReview,
-		Content:        map[string]any{"text": "test"},
-		CreatedAt:      time.Now().UTC(),
+	evidence := &evidencedomain.Evidence{
+		ID:                 uuid.New(),
+		OrganizationID:     orgID,
+		ServiceRequestID:   caseID,
+		Type:               evidencedomain.EvidenceTypeProofOfResidence,
+		Description:        "proof of residence",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
 	}
 
-	obsRepo := &mockObservationRepo{obs: obs}
-	evRepo := &mockEvidenceRepo{evidence: evidence}
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		results: []ObservationResult{
+			{
+				Type:       domain.ObservationTypeMissingInformation,
+				Content:    map[string]any{"statement": "Missing proof of income", "source_references": []interface{}{map[string]interface{}{"type": "evidence", "id": evidence.ID.String()}}},
+				Confidence: floatPtr(0.9),
+				Model:      domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+			},
+		},
+	}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{evidence}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
 
-	result, err := svc.ReviewObservation(context.Background(), ReviewObservationParams{
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
+
+	result, err := svc.GenerateCaseObservations(context.Background(), GenerateCaseObservationsParams{
 		OrganizationID: orgID,
-		ObservationID:  obsID,
-		ReviewerID:     reviewerID,
-		Action:         domain.ObservationStatusAccepted,
-		Notes:          "looks good",
+		CaseID:         caseID,
+		ActorID:        actorID,
+		Types:          []domain.ObservationType{domain.ObservationTypeMissingInformation},
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if result.Status != domain.ObservationStatusAccepted {
-		t.Errorf("expected status ACCEPTED, got %s", result.Status)
+	if len(result.Observations) != 1 {
+		t.Fatalf("expected 1 observation, got %d", len(result.Observations))
 	}
-	if *result.ReviewedBy != reviewerID {
-		t.Error("expected reviewed_by to be set")
+
+	obs := result.Observations[0]
+	if obs.Type != domain.ObservationTypeMissingInformation {
+		t.Errorf("expected type MISSING_INFORMATION, got %s", obs.Type)
 	}
-	if result.ReviewNotes != "looks good" {
-		t.Errorf("expected notes 'looks good', got %s", result.ReviewNotes)
+	if obs.Statement != "Missing proof of income" {
+		t.Errorf("expected statement 'Missing proof of income', got %s", obs.Statement)
+	}
+	if len(obs.SourceReferences) != 1 || obs.SourceReferences[0].Type != "evidence" {
+		t.Errorf("expected source references, got %v", obs.SourceReferences)
+	}
+	if obs.CaseID == nil || *obs.CaseID != caseID {
+		t.Errorf("expected case ID %s, got %v", caseID, obs.CaseID)
+	}
+	if obs.Status != domain.ObservationStatusOpen {
+		t.Errorf("expected status OPEN, got %s", obs.Status)
 	}
 }
 
-func TestAIService_ReviewObservation_Reject(t *testing.T) {
+func TestAIService_GenerateCaseObservations_ProviderError(t *testing.T) {
+	orgID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		err:  errors.New("provider unavailable"),
+	}
+
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
+
+	_, err := svc.GenerateCaseObservations(context.Background(), GenerateCaseObservationsParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+	})
+
+	if err == nil {
+		t.Fatal("expected error from provider failure")
+	}
+
+	if !errors.Is(err, ErrAIProviderUnavailable) {
+		t.Errorf("expected ErrAIProviderUnavailable, got: %v", err)
+	}
+
+	if len(obsRepo.saved) != 0 {
+		t.Errorf("expected 0 saved observations on provider failure, got %d", len(obsRepo.saved))
+	}
+}
+
+func TestAIService_GenerateCaseObservations_UserNotInOrg(t *testing.T) {
+	orgID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+	}
+
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: false}, nil, provider)
+
+	_, err := svc.GenerateCaseObservations(context.Background(), GenerateCaseObservationsParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+	})
+
+	if err == nil {
+		t.Fatal("expected error for user not in org")
+	}
+}
+
+func TestAIService_ReviewObservation_Correct(t *testing.T) {
 	orgID := uuid.New()
 	obsID := uuid.New()
 	reviewerID := uuid.New()
@@ -355,32 +476,77 @@ func TestAIService_ReviewObservation_Reject(t *testing.T) {
 	obs := &domain.Observation{
 		ID:             obsID,
 		OrganizationID: orgID,
-		EvidenceID:     evidence.ID,
+		CaseID:         &evidence.ServiceRequestID,
 		Type:           domain.ObservationTypeSummary,
 		Source:         domain.ObservationSourceAIModel,
-		Status:         domain.ObservationStatusPendingReview,
+		Status:         domain.ObservationStatusOpen,
 		Content:        map[string]any{"text": "test"},
 		CreatedAt:      time.Now().UTC(),
 	}
 
 	obsRepo := &mockObservationRepo{obs: obs}
-	evRepo := &mockEvidenceRepo{evidence: evidence}
+	evRepo := &mockEvidenceRepo{evidence: evidence, serviceRequest: []*evidencedomain.Evidence{evidence}}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
 
 	result, err := svc.ReviewObservation(context.Background(), ReviewObservationParams{
 		OrganizationID: orgID,
 		ObservationID:  obsID,
 		ReviewerID:     reviewerID,
-		Action:         domain.ObservationStatusRejected,
-		Notes:          "not useful",
+		Action:         domain.ObservationStatusCorrected,
+		Notes:          "corrected data",
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if result.Status != domain.ObservationStatusRejected {
-		t.Errorf("expected status REJECTED, got %s", result.Status)
+	if result.Status != domain.ObservationStatusCorrected {
+		t.Errorf("expected status CORRECTED, got %s", result.Status)
+	}
+	if result.ReviewNotes != "corrected data" {
+		t.Errorf("expected notes 'corrected data', got %s", result.ReviewNotes)
+	}
+}
+
+func TestAIService_ReviewObservation_Dismiss(t *testing.T) {
+	orgID := uuid.New()
+	obsID := uuid.New()
+	reviewerID := uuid.New()
+
+	evidence := makeTestEvidence()
+	evidence.OrganizationID = orgID
+
+	obs := &domain.Observation{
+		ID:             obsID,
+		OrganizationID: orgID,
+		CaseID:         &evidence.ServiceRequestID,
+		Type:           domain.ObservationTypeSummary,
+		Source:         domain.ObservationSourceAIModel,
+		Status:         domain.ObservationStatusOpen,
+		Content:        map[string]any{"text": "test"},
+		CreatedAt:      time.Now().UTC(),
+	}
+
+	obsRepo := &mockObservationRepo{obs: obs}
+	evRepo := &mockEvidenceRepo{evidence: evidence, serviceRequest: []*evidencedomain.Evidence{evidence}}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+
+	result, err := svc.ReviewObservation(context.Background(), ReviewObservationParams{
+		OrganizationID: orgID,
+		ObservationID:  obsID,
+		ReviewerID:     reviewerID,
+		Action:         domain.ObservationStatusDismissed,
+		Notes:          "not applicable",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if result.Status != domain.ObservationStatusDismissed {
+		t.Errorf("expected status DISMISSED, got %s", result.Status)
 	}
 }
 
@@ -395,18 +561,19 @@ func TestAIService_ReviewObservation_InvalidAction(t *testing.T) {
 	obs := &domain.Observation{
 		ID:             obsID,
 		OrganizationID: orgID,
-		EvidenceID:     evidence.ID,
+		CaseID:         &evidence.ServiceRequestID,
 		Type:           domain.ObservationTypeSummary,
 		Source:         domain.ObservationSourceAIModel,
-		Status:         domain.ObservationStatusPendingReview,
+		Status:         domain.ObservationStatusOpen,
 		Content:        map[string]any{"text": "test"},
 		CreatedAt:      time.Now().UTC(),
 	}
 
 	obsRepo := &mockObservationRepo{obs: obs}
-	evRepo := &mockEvidenceRepo{evidence: evidence}
+	evRepo := &mockEvidenceRepo{evidence: evidence, serviceRequest: []*evidencedomain.Evidence{evidence}}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
 
 	_, err := svc.ReviewObservation(context.Background(), ReviewObservationParams{
 		OrganizationID: orgID,
@@ -440,13 +607,14 @@ func TestAIService_ListObservations(t *testing.T) {
 
 	obsRepo := &mockObservationRepo{
 		listResult: []*domain.Observation{
-			{ID: uuid.New(), OrganizationID: orgID, EvidenceID: evidenceID, Type: domain.ObservationTypeSummary, Status: domain.ObservationStatusPendingReview},
+			{ID: uuid.New(), OrganizationID: orgID, EvidenceID: &evidenceID, Type: domain.ObservationTypeSummary, Status: domain.ObservationStatusOpen},
 		},
 		listTotal: 1,
 	}
-	evRepo := &mockEvidenceRepo{evidence: evidence}
+	evRepo := &mockEvidenceRepo{evidence: evidence, serviceRequest: []*evidencedomain.Evidence{evidence}}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
 
 	items, total, err := svc.ListObservations(context.Background(), ListObservationsParams{
 		OrganizationID: orgID,
@@ -470,10 +638,11 @@ func TestAIService_ListObservations_EvidenceNotFound(t *testing.T) {
 	evidenceID := uuid.New()
 	actorID := uuid.New()
 
-	evRepo := &mockEvidenceRepo{evidence: nil}
+	evRepo := &mockEvidenceRepo{evidence: nil, serviceRequest: nil}
 	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
 
-	svc := NewAIService(obsRepo, evRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
 
 	_, _, err := svc.ListObservations(context.Background(), ListObservationsParams{
 		OrganizationID: orgID,
@@ -486,6 +655,73 @@ func TestAIService_ListObservations_EvidenceNotFound(t *testing.T) {
 	}
 	if !errors.Is(err, ErrEvidenceNotFound) {
 		t.Errorf("expected ErrEvidenceNotFound, got: %v", err)
+	}
+}
+
+func TestAIService_ListCaseObservations_Success(t *testing.T) {
+	orgID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	evidence := &evidencedomain.Evidence{
+		ID:                 uuid.New(),
+		OrganizationID:     orgID,
+		ServiceRequestID:   caseID,
+		Type:               evidencedomain.EvidenceTypeProofOfResidence,
+		Description:        "proof of residence",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
+	}
+
+	obsRepo := &mockObservationRepo{
+		listResult: []*domain.Observation{
+			{ID: uuid.New(), OrganizationID: orgID, CaseID: &caseID, Type: domain.ObservationTypeMissingInformation, Status: domain.ObservationStatusOpen},
+		},
+		listTotal: 1,
+	}
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{evidence}}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+
+	items, total, err := svc.ListCaseObservations(context.Background(), ListCaseObservationsParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if total != 1 {
+		t.Errorf("expected total 1, got %d", total)
+	}
+	if len(items) != 1 {
+		t.Errorf("expected 1 item, got %d", len(items))
+	}
+}
+
+func TestAIService_ListCaseObservations_CaseHasNoEvidence(t *testing.T) {
+	orgID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, &mockAIProvider{})
+
+	_, _, err := svc.ListCaseObservations(context.Background(), ListCaseObservationsParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+	})
+
+	if err == nil {
+		t.Fatal("expected error for case with no evidence")
 	}
 }
 
@@ -508,4 +744,185 @@ func (m *mockAuditor) RecordEvent(ctx context.Context, params auditdomain.Record
 
 func floatPtr(f float64) *float64 {
 	return &f
+}
+
+func TestAIService_GenerateCaseObservations_AuditRecorded(t *testing.T) {
+	orgID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	evidence := &evidencedomain.Evidence{
+		ID:                 uuid.New(),
+		OrganizationID:     orgID,
+		ServiceRequestID:   caseID,
+		Type:               evidencedomain.EvidenceTypeProofOfResidence,
+		Description:        "proof of residence",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
+	}
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		results: []ObservationResult{
+			{
+				Type:       domain.ObservationTypeMissingInformation,
+				Content:    map[string]any{"statement": "Missing proof of income"},
+				Confidence: floatPtr(0.9),
+				Model:      domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+			},
+		},
+	}
+
+	auditor := &mockAuditor{}
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{evidence}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, auditor, provider)
+
+	_, err := svc.GenerateCaseObservations(context.Background(), GenerateCaseObservationsParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+		Types:          []domain.ObservationType{domain.ObservationTypeMissingInformation},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	foundGenerated := false
+	foundCreated := false
+	for _, event := range auditor.events {
+		if event.Action == "ai.observations_generated" {
+			foundGenerated = true
+		}
+		if event.Action == "ai.observation.created" {
+			foundCreated = true
+		}
+	}
+
+	if !foundGenerated {
+		t.Error("expected ai.observations_generated audit event")
+	}
+	if !foundCreated {
+		t.Error("expected ai.observation.created audit event")
+	}
+}
+
+func TestAIService_GenerateCaseObservations_ConflictingSources(t *testing.T) {
+	orgID := uuid.New()
+	caseID := uuid.New()
+	actorID := uuid.New()
+
+	evidence := &evidencedomain.Evidence{
+		ID:                 uuid.New(),
+		OrganizationID:     orgID,
+		ServiceRequestID:   caseID,
+		Type:               evidencedomain.EvidenceTypeProofOfResidence,
+		Description:        "proof of residence",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
+	}
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		results: []ObservationResult{
+			{
+				Type:       domain.ObservationTypeInconsistency,
+				Content:    map[string]any{"statement": "Income mismatch between form and document", "source_references": []interface{}{map[string]interface{}{"type": "form_submission", "id": "form-1"}, map[string]interface{}{"type": "evidence", "id": evidence.ID.String()}}},
+				Confidence: floatPtr(0.85),
+				Model:      domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+			},
+		},
+	}
+
+	evRepo := &mockEvidenceRepo{serviceRequest: []*evidencedomain.Evidence{evidence}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
+
+	result, err := svc.GenerateCaseObservations(context.Background(), GenerateCaseObservationsParams{
+		OrganizationID: orgID,
+		CaseID:         caseID,
+		ActorID:        actorID,
+		Types:          []domain.ObservationType{domain.ObservationTypeInconsistency},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if len(result.Observations) != 1 {
+		t.Fatalf("expected 1 observation, got %d", len(result.Observations))
+	}
+
+	obs := result.Observations[0]
+	if obs.Type != domain.ObservationTypeInconsistency {
+		t.Errorf("expected type INCONSISTENCY, got %s", obs.Type)
+	}
+	if len(obs.SourceReferences) != 2 {
+		t.Errorf("expected 2 source references, got %d", len(obs.SourceReferences))
+	}
+}
+
+func TestAIService_GenerateObservations_MaliciousDocument(t *testing.T) {
+	orgID := uuid.New()
+	evidenceID := uuid.New()
+	actorID := uuid.New()
+
+	evidence := &evidencedomain.Evidence{
+		ID:                 evidenceID,
+		OrganizationID:     orgID,
+		ServiceRequestID:   evidenceID,
+		Type:               evidencedomain.EvidenceTypeOther,
+		Description:        "test",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
+	}
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+	}
+
+	oversizedContent := make([]byte, domain.MaxDocumentBytes+1)
+	for i := range oversizedContent {
+		oversizedContent[i] = byte('a' + (i % 26))
+	}
+
+	evRepo := &mockEvidenceRepo{
+		evidence:       evidence,
+		documents:      []*evidencedomain.Document{{ID: uuid.New(), FileName: "test.txt", ContentType: "text/plain", SizeBytes: int64(len(oversizedContent)), Checksum: "abc"}},
+		serviceRequest: []*evidencedomain.Evidence{evidence},
+	}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider).WithDocumentContent(&mockDocumentContentProvider{content: oversizedContent})
+
+	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
+		OrganizationID: orgID,
+		EvidenceID:     evidenceID,
+		ActorID:        actorID,
+	})
+	if err == nil {
+		t.Fatal("expected error for oversized document")
+	}
+}
+
+type mockDocumentContentProvider struct {
+	content []byte
+	err     error
+}
+
+func (m *mockDocumentContentProvider) GetDocumentContent(ctx context.Context, orgID, evidenceID, documentID, actorID uuid.UUID) (io.ReadCloser, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return io.NopCloser(bytes.NewReader(m.content)), nil
 }

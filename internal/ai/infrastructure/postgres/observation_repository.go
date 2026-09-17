@@ -51,16 +51,36 @@ func (r *PostgresObservationRepository) save(ctx context.Context, ex sqlExecutor
 		}
 	}
 
+	var sourceRefsJSON []byte
+	if len(o.SourceReferences) > 0 {
+		sourceRefsJSON, err = json.Marshal(o.SourceReferences)
+		if err != nil {
+			return fmt.Errorf("failed to marshal source references: %w", err)
+		}
+	}
+
+	var caseID interface{} = nil
+	if o.CaseID != nil {
+		caseID = *o.CaseID
+	}
+
+	var evidenceID interface{} = nil
+	if o.EvidenceID != nil {
+		evidenceID = *o.EvidenceID
+	}
+
 	query := `
 		INSERT INTO ai_observations (
-			id, organization_id, evidence_id, observation_type, observation_source,
-			status, model, content, confidence, input_hash, output_hash,
+			id, organization_id, case_id, evidence_id, observation_type, observation_source,
+			status, model, content, confidence, statement, source_references,
+			input_hash, output_hash,
 			created_at, created_by, reviewed_at, reviewed_by, review_notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	`
 	_, err = ex.ExecContext(ctx, query,
-		o.ID, o.OrganizationID, o.EvidenceID, o.Type, o.Source,
+		o.ID, o.OrganizationID, caseID, evidenceID, o.Type, o.Source,
 		o.Status, modelJSON, contentJSON, o.Confidence,
+		o.Statement, sourceRefsJSON,
 		o.InputHash, o.OutputHash, o.CreatedAt, o.CreatedBy,
 		o.ReviewedAt, o.ReviewedBy, o.ReviewNotes,
 	)
@@ -72,8 +92,9 @@ func (r *PostgresObservationRepository) save(ctx context.Context, ex sqlExecutor
 
 func (r *PostgresObservationRepository) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.Observation, error) {
 	query := `
-		SELECT id, organization_id, evidence_id, observation_type, observation_source,
-			   status, model, content, confidence, input_hash, output_hash,
+		SELECT id, organization_id, case_id, evidence_id, observation_type, observation_source,
+			   status, model, content, confidence, statement, source_references,
+			   input_hash, output_hash,
 			   created_at, created_by, reviewed_at, reviewed_by, review_notes
 		FROM ai_observations
 		WHERE organization_id = $1 AND id = $2
@@ -83,8 +104,9 @@ func (r *PostgresObservationRepository) FindByID(ctx context.Context, orgID, id 
 
 func (r *PostgresObservationRepository) FindByEvidence(ctx context.Context, orgID, evidenceID uuid.UUID, limit, offset int) ([]*domain.Observation, int, error) {
 	query := `
-		SELECT id, organization_id, evidence_id, observation_type, observation_source,
-			   status, model, content, confidence, input_hash, output_hash,
+		SELECT id, organization_id, case_id, evidence_id, observation_type, observation_source,
+			   status, model, content, confidence, statement, source_references,
+			   input_hash, output_hash,
 			   created_at, created_by, reviewed_at, reviewed_by, review_notes
 		FROM ai_observations
 		WHERE organization_id = $1 AND evidence_id = $2
@@ -117,10 +139,57 @@ func (r *PostgresObservationRepository) FindByEvidence(ctx context.Context, orgI
 	return items, total, nil
 }
 
+func (r *PostgresObservationRepository) FindByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*domain.Observation, int, error) {
+	query := `
+		SELECT id, organization_id, case_id, evidence_id, observation_type, observation_source,
+			   status, model, content, confidence, statement, source_references,
+			   input_hash, output_hash,
+			   created_at, created_by, reviewed_at, reviewed_by, review_notes
+		FROM ai_observations
+		WHERE organization_id = $1 AND case_id = $2
+		ORDER BY created_at ASC
+		LIMIT $3 OFFSET $4
+	`
+	countQuery := `SELECT COUNT(*) FROM ai_observations WHERE organization_id = $1 AND case_id = $2`
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, orgID, caseID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count observations: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, orgID, caseID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query observations: %w", err)
+	}
+	defer rows.Close()
+
+	var items []*domain.Observation
+	for rows.Next() {
+		obs, err := r.scanObservation(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, obs)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return items, total, nil
+}
+
 func (r *PostgresObservationRepository) CountByEvidence(ctx context.Context, orgID, evidenceID uuid.UUID) (int, error) {
 	query := `SELECT COUNT(*) FROM ai_observations WHERE organization_id = $1 AND evidence_id = $2`
 	var total int
 	err := r.db.QueryRowContext(ctx, query, orgID, evidenceID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count observations: %w", err)
+	}
+	return total, nil
+}
+
+func (r *PostgresObservationRepository) CountByCase(ctx context.Context, orgID, caseID uuid.UUID) (int, error) {
+	query := `SELECT COUNT(*) FROM ai_observations WHERE organization_id = $1 AND case_id = $2`
+	var total int
+	err := r.db.QueryRowContext(ctx, query, orgID, caseID).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count observations: %w", err)
 	}
@@ -158,10 +227,14 @@ func (r *PostgresObservationRepository) scanObservation(row interface {
 	var o domain.Observation
 	var contentJSON []byte
 	var modelJSON []byte
+	var sourceRefsJSON []byte
+	var caseID sql.NullString
+	var evidenceID sql.NullString
 
 	if err := row.Scan(
-		&o.ID, &o.OrganizationID, &o.EvidenceID, &o.Type, &o.Source,
+		&o.ID, &o.OrganizationID, &caseID, &evidenceID, &o.Type, &o.Source,
 		&o.Status, &modelJSON, &contentJSON, &o.Confidence,
+		&o.Statement, &sourceRefsJSON,
 		&o.InputHash, &o.OutputHash, &o.CreatedAt, &o.CreatedBy,
 		&o.ReviewedAt, &o.ReviewedBy, &o.ReviewNotes,
 	); err != nil {
@@ -169,6 +242,20 @@ func (r *PostgresObservationRepository) scanObservation(row interface {
 			return nil, domain.ErrObservationNotFound
 		}
 		return nil, fmt.Errorf("failed to scan observation: %w", err)
+	}
+
+	if caseID.Valid {
+		id, err := uuid.Parse(caseID.String)
+		if err == nil {
+			o.CaseID = &id
+		}
+	}
+
+	if evidenceID.Valid {
+		id, err := uuid.Parse(evidenceID.String)
+		if err == nil {
+			o.EvidenceID = &id
+		}
 	}
 
 	if len(contentJSON) > 0 {
@@ -179,6 +266,9 @@ func (r *PostgresObservationRepository) scanObservation(row interface {
 		if err := json.Unmarshal(modelJSON, &mi); err == nil {
 			o.Model = &mi
 		}
+	}
+	if len(sourceRefsJSON) > 0 {
+		_ = json.Unmarshal(sourceRefsJSON, &o.SourceReferences)
 	}
 
 	return &o, nil

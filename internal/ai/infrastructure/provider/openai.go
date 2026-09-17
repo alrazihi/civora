@@ -134,7 +134,7 @@ func (p *OpenAIProvider) GenerateObservations(ctx context.Context, req applicati
 		return nil, fmt.Errorf("failed to compute input hash: %w", err)
 	}
 
-	prompt := p.buildPrompt(types, req.Documents)
+	prompt := p.buildPrompt(types, req.Documents, req.CaseFacts)
 	sysPrompt := systemPrompt()
 
 	openAIReq := openAIRequest{
@@ -231,40 +231,59 @@ func (p *OpenAIProvider) computeInputHash(docs []domain.DocumentContent, types [
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func (p *OpenAIProvider) buildPrompt(types []domain.ObservationType, docs []domain.DocumentContent) string {
+func (p *OpenAIProvider) buildPrompt(types []domain.ObservationType, docs []domain.DocumentContent, caseFacts []map[string]any) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("You are an AI assistant helping with case evidence review. Analyze the following documents and produce observations.\n\n"))
-	sb.WriteString(fmt.Sprintf("Observation types requested: %v\n\n", types))
-
-	sb.WriteString("Documents:\n")
-	count := 0
-	for i, doc := range docs {
-		if i >= maxPromptDocuments {
-			break
+	if len(caseFacts) > 0 {
+		sb.WriteString("You are an AI assistant helping with case-level review. Analyze the following case facts and produce observations.\n\n")
+		sb.WriteString(fmt.Sprintf("Observation types requested: %v\n\n", types))
+		sb.WriteString("Case Facts:\n")
+		for i, fact := range caseFacts {
+			factJSON, _ := json.Marshal(fact)
+			sb.WriteString(fmt.Sprintf("--- Fact %d: %s ---\n%s\n\n", i+1, fact["type"], string(factJSON)))
 		}
-		if len(doc.Content) > maxDocumentBytes {
-			doc.Content = doc.Content[:maxDocumentBytes]
-		}
-		count++
+		sb.WriteString("Detect the following issues if present:\n")
+		sb.WriteString("1. MISSING_INFORMATION: Required evidence or data is absent\n")
+		sb.WriteString("2. INCONSISTENCY: Conflicting information between sources\n")
+		sb.WriteString("3. RELEVANT_EVIDENCE: Evidence that may be relevant but is not linked\n")
+		sb.WriteString("4. INCOMPLETE_DOCUMENTATION: Documents missing required content or metadata\n\n")
+	} else {
+		sb.WriteString("You are an AI assistant helping with case evidence review. Analyze the following documents and produce observations.\n\n")
+		sb.WriteString(fmt.Sprintf("Observation types requested: %v\n\n", types))
+		sb.WriteString("Documents:\n")
+		count := 0
+		for i, doc := range docs {
+			if i >= maxPromptDocuments {
+				break
+			}
+			if len(doc.Content) > maxDocumentBytes {
+				doc.Content = doc.Content[:maxDocumentBytes]
+			}
+			count++
 
-		preview := string(doc.Content)
-		if len(preview) > 5000 {
-			preview = preview[:5000] + "... (truncated)"
+			preview := string(doc.Content)
+			if len(preview) > 5000 {
+				preview = preview[:5000] + "... (truncated)"
+			}
+
+			sb.WriteString(fmt.Sprintf("--- Document %d: %s (type: %s, checksum: %s) ---\n", i+1, doc.FileName, doc.ContentType, doc.Checksum))
+			sb.WriteString(preview)
+			sb.WriteString("\n\n")
 		}
 
-		sb.WriteString(fmt.Sprintf("--- Document %d: %s (type: %s, checksum: %s) ---\n", i+1, doc.FileName, doc.ContentType, doc.Checksum))
-		sb.WriteString(preview)
-		sb.WriteString("\n\n")
+		sb.WriteString(fmt.Sprintf("Total documents processed: %d\n\n", count))
 	}
 
-	sb.WriteString(fmt.Sprintf("Total documents processed: %d\n\n", count))
 	sb.WriteString(`Respond with a JSON object in the following format:
 {
   "observations": [
     {
-      "type": "SUMMARY" | "ENTITY_EXTRACTION" | "CLASSIFICATION" | "INCONSISTENCY",
-      "content": { ... observation data ... },
+      "type": "SUMMARY" | "ENTITY_EXTRACTION" | "CLASSIFICATION" | "INCONSISTENCY" | "MISSING_INFORMATION" | "RELEVANT_EVIDENCE" | "INCOMPLETE_DOCUMENTATION",
+      "content": {
+        "statement": "human-readable observation statement",
+        "source_references": [{"type": "evidence|form_submission|document", "id": "uuid"}],
+        ... additional observation data ...
+      },
       "confidence": 0.0-1.0
     }
   ]

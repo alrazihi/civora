@@ -2,22 +2,23 @@ package domain
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
 
 func TestNewObservation_Success(t *testing.T) {
 	orgID := uuid.New()
-	evidenceID := uuid.New()
+	caseID := uuid.New()
 
 	obs, err := NewObservation(ObservationParams{
-		OrganizationID: orgID,
-		EvidenceID:     evidenceID,
-		Type:           ObservationTypeSummary,
-		Content:        map[string]any{"text": "sample"},
-		InputHash:      "abc123",
-		OutputHash:     "def456",
+		OrganizationID:   orgID,
+		CaseID:           &caseID,
+		Type:             ObservationTypeSummary,
+		Content:          map[string]any{"text": "sample"},
+		InputHash:        "abc123",
+		OutputHash:       "def456",
+		Statement:        "Case summary statement",
+		SourceReferences: []SourceReference{{Type: "evidence", ID: "uuid"}},
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -29,8 +30,8 @@ func TestNewObservation_Success(t *testing.T) {
 	if obs.OrganizationID != orgID {
 		t.Errorf("expected org ID %s, got %s", orgID, obs.OrganizationID)
 	}
-	if obs.EvidenceID != evidenceID {
-		t.Errorf("expected evidence ID %s, got %s", evidenceID, obs.EvidenceID)
+	if obs.CaseID == nil || *obs.CaseID != caseID {
+		t.Errorf("expected case ID %s, got %v", caseID, obs.CaseID)
 	}
 	if obs.Type != ObservationTypeSummary {
 		t.Errorf("expected type %s, got %s", ObservationTypeSummary, obs.Type)
@@ -38,8 +39,14 @@ func TestNewObservation_Success(t *testing.T) {
 	if obs.Source != ObservationSourceAIModel {
 		t.Errorf("expected source %s, got %s", ObservationSourceAIModel, obs.Source)
 	}
-	if obs.Status != ObservationStatusPendingReview {
-		t.Errorf("expected status %s, got %s", ObservationStatusPendingReview, obs.Status)
+	if obs.Status != ObservationStatusOpen {
+		t.Errorf("expected status %s, got %s", ObservationStatusOpen, obs.Status)
+	}
+	if obs.Statement != "Case summary statement" {
+		t.Errorf("expected statement 'Case summary statement', got %s", obs.Statement)
+	}
+	if len(obs.SourceReferences) != 1 || obs.SourceReferences[0].Type != "evidence" {
+		t.Errorf("expected source references, got %v", obs.SourceReferences)
 	}
 	if obs.CreatedAt.IsZero() {
 		t.Error("expected non-zero CreatedAt")
@@ -54,12 +61,26 @@ func TestNewObservation_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name:    "missing organization ID",
-			params:  ObservationParams{EvidenceID: uuid.New()},
+			params:  ObservationParams{CaseID: uuidPtr(uuid.New())},
 			wantErr: true,
 		},
 		{
-			name:    "missing evidence ID",
+			name:    "missing case and evidence ID",
 			params:  ObservationParams{OrganizationID: uuid.New()},
+			wantErr: true,
+		},
+		{
+			name:    "invalid observation type",
+			params:  ObservationParams{OrganizationID: uuid.New(), CaseID: uuidPtr(uuid.New()), Type: "INVALID_TYPE"},
+			wantErr: true,
+		},
+		{
+			name: "confidence out of range",
+			params: ObservationParams{
+				OrganizationID: uuid.New(),
+				CaseID:         uuidPtr(uuid.New()),
+				Confidence:     floatPtr(1.5),
+			},
 			wantErr: true,
 		},
 	}
@@ -78,8 +99,8 @@ func TestObservation_Accept(t *testing.T) {
 	obs := &Observation{
 		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		EvidenceID:     uuid.New(),
-		Status:         ObservationStatusPendingReview,
+		CaseID:         uuidPtr(uuid.New()),
+		Status:         ObservationStatusOpen,
 	}
 
 	reviewerID := uuid.New()
@@ -106,8 +127,8 @@ func TestObservation_Accept_NilReviewerID(t *testing.T) {
 	obs := &Observation{
 		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		EvidenceID:     uuid.New(),
-		Status:         ObservationStatusPendingReview,
+		CaseID:         uuidPtr(uuid.New()),
+		Status:         ObservationStatusOpen,
 	}
 
 	err := obs.Accept(uuid.Nil, "test")
@@ -123,8 +144,8 @@ func TestObservation_Reject(t *testing.T) {
 	obs := &Observation{
 		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		EvidenceID:     uuid.New(),
-		Status:         ObservationStatusPendingReview,
+		CaseID:         uuidPtr(uuid.New()),
+		Status:         ObservationStatusOpen,
 	}
 
 	reviewerID := uuid.New()
@@ -141,33 +162,124 @@ func TestObservation_Reject(t *testing.T) {
 	}
 }
 
-func TestObservation_Defaults(t *testing.T) {
-	now := time.Now().UTC()
+func TestObservation_Correct(t *testing.T) {
 	obs := &Observation{
 		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		EvidenceID:     uuid.New(),
-		Type:           "",
-		Source:         "",
-		Status:         "",
-		CreatedAt:      now,
+		CaseID:         uuidPtr(uuid.New()),
+		Status:         ObservationStatusOpen,
 	}
 
-	// Verify defaults are applied in NewObservation
-	obs2, err := NewObservation(ObservationParams{
+	reviewerID := uuid.New()
+	err := obs.Correct(reviewerID, "corrected statement")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if obs.Status != ObservationStatusCorrected {
+		t.Errorf("expected status %s, got %s", ObservationStatusCorrected, obs.Status)
+	}
+	if obs.ReviewNotes != "corrected statement" {
+		t.Errorf("expected notes 'corrected statement', got %s", obs.ReviewNotes)
+	}
+}
+
+func TestObservation_Dismiss(t *testing.T) {
+	obs := &Observation{
+		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		EvidenceID:     uuid.New(),
+		CaseID:         uuidPtr(uuid.New()),
+		Status:         ObservationStatusOpen,
+	}
+
+	reviewerID := uuid.New()
+	err := obs.Dismiss(reviewerID, "not applicable")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if obs.Status != ObservationStatusDismissed {
+		t.Errorf("expected status %s, got %s", ObservationStatusDismissed, obs.Status)
+	}
+	if obs.ReviewNotes != "not applicable" {
+		t.Errorf("expected notes 'not applicable', got %s", obs.ReviewNotes)
+	}
+}
+
+func TestObservation_Defaults(t *testing.T) {
+	obs, err := NewObservation(ObservationParams{
+		OrganizationID: uuid.New(),
+		CaseID:         uuidPtr(uuid.New()),
 	})
 	if err != nil {
 		t.Fatalf("expected no error: %v", err)
 	}
-	if obs2.Source != ObservationSourceAIModel {
-		t.Errorf("expected default source %s, got %s", ObservationSourceAIModel, obs2.Source)
+	if obs.Source != ObservationSourceAIModel {
+		t.Errorf("expected default source %s, got %s", ObservationSourceAIModel, obs.Source)
 	}
-	if obs2.Status != ObservationStatusPendingReview {
-		t.Errorf("expected default status %s, got %s", ObservationStatusPendingReview, obs2.Status)
+	if obs.Status != ObservationStatusOpen {
+		t.Errorf("expected default status %s, got %s", ObservationStatusOpen, obs.Status)
+	}
+	if obs.Statement != "" {
+		t.Errorf("expected empty statement, got %s", obs.Statement)
+	}
+	if obs.SourceReferences != nil {
+		t.Errorf("expected nil source references, got %v", obs.SourceReferences)
+	}
+	_ = obs
+}
+
+func TestIsValidObservationType(t *testing.T) {
+	tests := []struct {
+		t     ObservationType
+		valid bool
+	}{
+		{ObservationTypeSummary, true},
+		{ObservationTypeEntityExtraction, true},
+		{ObservationTypeClassification, true},
+		{ObservationTypeInconsistency, true},
+		{ObservationTypeMissingInformation, true},
+		{ObservationTypeRelevantEvidence, true},
+		{ObservationTypeIncompleteDoc, true},
+		{"INVALID", false},
+		{"", false},
 	}
 
-	// Verify obs is untouched by defaults test
-	_ = obs
+	for _, tt := range tests {
+		got := isValidObservationType(tt.t)
+		if got != tt.valid {
+			t.Errorf("isValidObservationType(%q) = %v, want %v", tt.t, got, tt.valid)
+		}
+	}
+}
+
+func TestIsValidObservationStatus(t *testing.T) {
+	tests := []struct {
+		s     ObservationStatus
+		valid bool
+	}{
+		{ObservationStatusOpen, true},
+		{ObservationStatusPendingReview, true},
+		{ObservationStatusAccepted, true},
+		{ObservationStatusRejected, true},
+		{ObservationStatusCorrected, true},
+		{ObservationStatusDismissed, true},
+		{"INVALID", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		got := isValidObservationStatus(tt.s)
+		if got != tt.valid {
+			t.Errorf("isValidObservationStatus(%q) = %v, want %v", tt.s, got, tt.valid)
+		}
+	}
+}
+
+func uuidPtr(u uuid.UUID) *uuid.UUID {
+	return &u
+}
+
+func floatPtr(f float64) *float64 {
+	return &f
 }

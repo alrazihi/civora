@@ -15,6 +15,7 @@ import (
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
 	evidencedomain "github.com/alrazihi/civora/internal/evidence/domain"
+	formsubdomain "github.com/alrazihi/civora/internal/form_submission/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/google/uuid"
 )
@@ -28,8 +29,13 @@ var (
 
 type EvidenceRepository interface {
 	FindByID(ctx context.Context, orgID, id uuid.UUID) (*evidencedomain.Evidence, error)
+	FindByServiceRequest(ctx context.Context, orgID, serviceRequestID uuid.UUID, limit, offset int) ([]*evidencedomain.Evidence, error)
 	ListDocuments(ctx context.Context, orgID, evidenceID uuid.UUID, limit, offset int) ([]*evidencedomain.Document, int, error)
 	SaveTx(ctx context.Context, tx *sql.Tx, e *evidencedomain.Evidence) error
+}
+
+type FormSubmissionRepository interface {
+	ListByCase(ctx context.Context, tenantID, caseID uuid.UUID) ([]*formsubdomain.FormSubmission, error)
 }
 
 // DocumentContentProvider retrieves the raw content of a single document.
@@ -54,6 +60,7 @@ type ProviderRequest struct {
 	OrganizationID uuid.UUID
 	EvidenceID     uuid.UUID
 	Documents      []domain.DocumentContent
+	CaseFacts      []map[string]any
 	Options        domain.ProviderOptions
 }
 
@@ -69,6 +76,7 @@ type ObservationResult struct {
 type AIService struct {
 	repo         domain.ObservationRepository
 	evidenceRepo EvidenceRepository
+	formRepo     FormSubmissionRepository
 	userChecker  shared.UserChecker
 	auditor      auditdomain.EventRecorder
 	provider     AIProvider
@@ -77,10 +85,11 @@ type AIService struct {
 	sanitizer    PIISanitizer
 }
 
-func NewAIService(repo domain.ObservationRepository, evidenceRepo EvidenceRepository, userChecker shared.UserChecker, auditor auditdomain.EventRecorder, provider AIProvider) *AIService {
+func NewAIService(repo domain.ObservationRepository, evidenceRepo EvidenceRepository, formRepo FormSubmissionRepository, userChecker shared.UserChecker, auditor auditdomain.EventRecorder, provider AIProvider) *AIService {
 	return &AIService{
 		repo:         repo,
 		evidenceRepo: evidenceRepo,
+		formRepo:     formRepo,
 		userChecker:  userChecker,
 		auditor:      auditor,
 		provider:     provider,
@@ -126,22 +135,25 @@ type GenerateObservationsParams struct {
 }
 
 type ObservationDTO struct {
-	ID             uuid.UUID                `json:"id"`
-	OrganizationID uuid.UUID                `json:"organization_id"`
-	EvidenceID     uuid.UUID                `json:"evidence_id"`
-	Type           domain.ObservationType   `json:"type"`
-	Source         domain.ObservationSource `json:"source"`
-	Status         domain.ObservationStatus `json:"status"`
-	Model          *domain.ModelInfo        `json:"model,omitempty"`
-	Content        map[string]any           `json:"content"`
-	Confidence     *float64                 `json:"confidence,omitempty"`
-	InputHash      string                   `json:"input_hash"`
-	OutputHash     string                   `json:"output_hash"`
-	CreatedAt      time.Time                `json:"created_at"`
-	CreatedBy      *uuid.UUID               `json:"created_by,omitempty"`
-	ReviewedAt     *time.Time               `json:"reviewed_at,omitempty"`
-	ReviewedBy     *uuid.UUID               `json:"reviewed_by,omitempty"`
-	ReviewNotes    string                   `json:"review_notes,omitempty"`
+	ID               uuid.UUID                `json:"id"`
+	OrganizationID   uuid.UUID                `json:"organization_id"`
+	CaseID           *uuid.UUID               `json:"case_id,omitempty"`
+	EvidenceID       *uuid.UUID               `json:"evidence_id,omitempty"`
+	Type             domain.ObservationType   `json:"type"`
+	Source           domain.ObservationSource `json:"source"`
+	Status           domain.ObservationStatus `json:"status"`
+	Model            *domain.ModelInfo        `json:"model,omitempty"`
+	Content          map[string]any           `json:"content"`
+	Confidence       *float64                 `json:"confidence,omitempty"`
+	Statement        string                   `json:"statement,omitempty"`
+	SourceReferences []domain.SourceReference `json:"source_references,omitempty"`
+	InputHash        string                   `json:"input_hash"`
+	OutputHash       string                   `json:"output_hash"`
+	CreatedAt        time.Time                `json:"created_at"`
+	CreatedBy        *uuid.UUID               `json:"created_by,omitempty"`
+	ReviewedAt       *time.Time               `json:"reviewed_at,omitempty"`
+	ReviewedBy       *uuid.UUID               `json:"reviewed_by,omitempty"`
+	ReviewNotes      string                   `json:"review_notes,omitempty"`
 }
 
 type GenerateObservationsResult struct {
@@ -218,8 +230,6 @@ func (s *AIService) GenerateObservations(ctx context.Context, params GenerateObs
 		return nil, fmt.Errorf("%w: %v", ErrAIProviderUnavailable, err)
 	}
 
-	// Capture inputs before persisting so the result can be returned even if
-	// the provider call later fails in a way we don't expect.
 	providerInfo := s.provider.ProviderInfo()
 
 	result := &GenerateObservationsResult{
@@ -259,10 +269,10 @@ func (s *AIService) GenerateObservations(ctx context.Context, params GenerateObs
 
 			obs, err := domain.NewObservation(domain.ObservationParams{
 				OrganizationID: params.OrganizationID,
-				EvidenceID:     params.EvidenceID,
+				EvidenceID:     &params.EvidenceID,
 				Type:           res.Type,
 				Source:         domain.ObservationSourceAIModel,
-				Status:         domain.ObservationStatusPendingReview,
+				Status:         domain.ObservationStatusOpen,
 				Model:          &res.Model,
 				Content:        res.Content,
 				Confidence:     res.Confidence,
@@ -307,6 +317,222 @@ func (s *AIService) GenerateObservations(ctx context.Context, params GenerateObs
 	}
 
 	return result, nil
+}
+
+type GenerateCaseObservationsParams struct {
+	OrganizationID uuid.UUID
+	CaseID         uuid.UUID
+	ActorID        uuid.UUID
+	Types          []domain.ObservationType
+	MaxTokens      int
+}
+
+type GenerateCaseObservationsResult struct {
+	Observations []ObservationDTO `json:"observations"`
+}
+
+func (s *AIService) GenerateCaseObservations(ctx context.Context, params GenerateCaseObservationsParams) (*GenerateCaseObservationsResult, error) {
+	if params.ActorID == uuid.Nil {
+		return nil, fmt.Errorf("%w: actor ID is required", ErrInvalidInput)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate actor: %w", err)
+	}
+	if !valid {
+		return nil, fmt.Errorf("%w: user does not belong to organization", ErrInvalidInput)
+	}
+
+	evidenceList, err := s.evidenceRepo.FindByServiceRequest(ctx, params.OrganizationID, params.CaseID, 100, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve evidence: %w", err)
+	}
+
+	formSubmissions, err := s.formRepo.ListByCase(ctx, params.OrganizationID, params.CaseID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve form submissions: %w", err)
+	}
+
+	caseFacts := s.buildCaseFacts(evidenceList, formSubmissions)
+
+	providerOpts := domain.ProviderOptions{
+		Types:     params.Types,
+		MaxTokens: params.MaxTokens,
+	}
+	if providerOpts.MaxTokens <= 0 {
+		providerOpts.MaxTokens = 4096
+	}
+
+	req := ProviderRequest{
+		OrganizationID: params.OrganizationID,
+		EvidenceID:     uuid.Nil,
+		Documents:      nil,
+		CaseFacts:      caseFacts,
+		Options:        providerOpts,
+	}
+
+	results, err := s.provider.GenerateObservations(ctx, req)
+	if err != nil {
+		s.recordAudit(ctx, params.OrganizationID, &params.ActorID, "ai.observation.failed", "case", shared.StrPtr(params.CaseID.String()), "failure", map[string]interface{}{
+			"reason": err.Error(),
+			"model":  s.provider.ProviderInfo().Name,
+		})
+		return nil, fmt.Errorf("%w: %v", ErrAIProviderUnavailable, err)
+	}
+
+	providerInfo := s.provider.ProviderInfo()
+
+	result := &GenerateCaseObservationsResult{
+		Observations: make([]ObservationDTO, 0, len(results)),
+	}
+
+	if err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if s.auditor != nil {
+			if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+				OrganizationID: params.OrganizationID,
+				ActorID:        &params.ActorID,
+				Action:         "ai.observations_generated",
+				Resource:       "case",
+				ResourceID:     shared.StrPtr(params.CaseID.String()),
+				Outcome:        "success",
+				Metadata: map[string]interface{}{
+					"count":           len(results),
+					"model":           providerInfo.Name,
+					"model_version":   providerInfo.Version,
+					"provider":        providerInfo.Provider,
+					"types_requested": params.Types,
+				},
+			}); err != nil {
+				return fmt.Errorf("failed to record audit event: %w", err)
+			}
+		}
+
+		for _, res := range results {
+			inputHash := res.InputHash
+			if inputHash == "" {
+				inputHash = computeCaseInputHash(caseFacts, params.Types, providerOpts.MaxTokens)
+			}
+			outputHash := res.OutputHash
+			if outputHash == "" {
+				outputHash = computeSHA256(res.Content)
+			}
+
+			sourceRefs := extractSourceReferences(res.Content)
+			statement := extractStatement(res.Content)
+
+			obs, err := domain.NewObservation(domain.ObservationParams{
+				OrganizationID:   params.OrganizationID,
+				CaseID:           &params.CaseID,
+				Type:             res.Type,
+				Source:           domain.ObservationSourceAIModel,
+				Status:           domain.ObservationStatusOpen,
+				Model:            &res.Model,
+				Content:          res.Content,
+				Confidence:       res.Confidence,
+				Statement:        statement,
+				SourceReferences: sourceRefs,
+				InputHash:        inputHash,
+				OutputHash:       outputHash,
+				CreatedBy:        nil,
+			})
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+			}
+
+			if s.auditor != nil {
+				if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+					OrganizationID: params.OrganizationID,
+					ActorID:        &params.ActorID,
+					Action:         "ai.observation.created",
+					Resource:       "ai_observation",
+					ResourceID:     shared.StrPtr(obs.ID.String()),
+					Outcome:        "success",
+					Metadata: map[string]interface{}{
+						"case_id":          obs.CaseID.String(),
+						"observation_type": string(obs.Type),
+						"model":            obs.Model.Name,
+						"confidence":       obs.Confidence,
+						"input_hash":       obs.InputHash,
+						"output_hash":      obs.OutputHash,
+					},
+				}); err != nil {
+					return fmt.Errorf("failed to record audit event: %w", err)
+				}
+			}
+
+			if err := s.repo.SaveTx(ctx, tx, obs); err != nil {
+				return fmt.Errorf("failed to save observation: %w", err)
+			}
+
+			result.Observations = append(result.Observations, serializeObservation(obs))
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *AIService) buildCaseFacts(evidenceList []*evidencedomain.Evidence, formSubmissions []*formsubdomain.FormSubmission) []map[string]any {
+	var facts []map[string]any
+
+	for _, e := range evidenceList {
+		fact := map[string]any{
+			"type":                "evidence",
+			"id":                  e.ID.String(),
+			"evidence_type":       e.Type,
+			"description":         e.Description,
+			"verification_status": e.VerificationStatus,
+			"source":              e.Source,
+			"metadata":            e.Metadata,
+			"created_at":          e.CreatedAt,
+		}
+		facts = append(facts, fact)
+	}
+
+	for _, sub := range formSubmissions {
+		fact := map[string]any{
+			"type":         "form_submission",
+			"id":           sub.ID.String(),
+			"form_id":      sub.FormID.String(),
+			"form_version": sub.FormVersionID.String(),
+			"status":       sub.Status,
+			"data":         sub.Data,
+			"submitted_at": sub.SubmittedAt,
+		}
+		facts = append(facts, fact)
+	}
+
+	return facts
+}
+
+func extractSourceReferences(content map[string]any) []domain.SourceReference {
+	raw, ok := content["source_references"]
+	if !ok {
+		return nil
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	var refs []domain.SourceReference
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		refType, _ := m["type"].(string)
+		refID, _ := m["id"].(string)
+		refs = append(refs, domain.SourceReference{Type: refType, ID: refID})
+	}
+	return refs
+}
+
+func extractStatement(content map[string]any) string {
+	stmt, _ := content["statement"].(string)
+	return stmt
 }
 
 func (s *AIService) recordAudit(ctx context.Context, orgID uuid.UUID, actorID *uuid.UUID, action, resource string, resourceID *string, outcome string, metadata map[string]interface{}) {
@@ -356,6 +582,41 @@ func (s *AIService) ListObservations(ctx context.Context, params ListObservation
 	return items, total, nil
 }
 
+type ListCaseObservationsParams struct {
+	OrganizationID uuid.UUID
+	CaseID         uuid.UUID
+	ActorID        uuid.UUID
+	Limit          int
+	Offset         int
+}
+
+func (s *AIService) ListCaseObservations(ctx context.Context, params ListCaseObservationsParams) ([]*domain.Observation, int, error) {
+	if params.Limit <= 0 {
+		params.Limit = 20
+	}
+	if params.Limit > 200 {
+		params.Limit = 200
+	}
+	if params.Offset < 0 {
+		params.Offset = 0
+	}
+
+	evidenceList, err := s.evidenceRepo.FindByServiceRequest(ctx, params.OrganizationID, params.CaseID, 1, 0)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%w: case not found or has no evidence", ErrEvidenceNotFound)
+	}
+	if len(evidenceList) == 0 {
+		return nil, 0, fmt.Errorf("%w: case has no evidence", ErrEvidenceNotFound)
+	}
+
+	items, total, err := s.repo.FindByCase(ctx, params.OrganizationID, params.CaseID, params.Limit, params.Offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list observations: %w", err)
+	}
+
+	return items, total, nil
+}
+
 type ReviewObservationParams struct {
 	OrganizationID uuid.UUID
 	ObservationID  uuid.UUID
@@ -391,6 +652,14 @@ func (s *AIService) ReviewObservation(ctx context.Context, params ReviewObservat
 		if err := obs.Reject(params.ReviewerID, params.Notes); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
 		}
+	case domain.ObservationStatusCorrected:
+		if err := obs.Correct(params.ReviewerID, params.Notes); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	case domain.ObservationStatusDismissed:
+		if err := obs.Dismiss(params.ReviewerID, params.Notes); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
 	default:
 		return nil, fmt.Errorf("%w: invalid action %q", ErrInvalidInput, params.Action)
 	}
@@ -398,6 +667,10 @@ func (s *AIService) ReviewObservation(ctx context.Context, params ReviewObservat
 	auditAction := "ai.observation.rejected"
 	if params.Action == domain.ObservationStatusAccepted {
 		auditAction = "ai.observation.accepted"
+	} else if params.Action == domain.ObservationStatusCorrected {
+		auditAction = "ai.observation.corrected"
+	} else if params.Action == domain.ObservationStatusDismissed {
+		auditAction = "ai.observation.dismissed"
 	}
 
 	if err := s.withTx(ctx, func(tx *sql.Tx) error {
@@ -431,22 +704,25 @@ func (s *AIService) ReviewObservation(ctx context.Context, params ReviewObservat
 
 func serializeObservation(o *domain.Observation) ObservationDTO {
 	return ObservationDTO{
-		ID:             o.ID,
-		OrganizationID: o.OrganizationID,
-		EvidenceID:     o.EvidenceID,
-		Type:           o.Type,
-		Source:         o.Source,
-		Status:         o.Status,
-		Model:          o.Model,
-		Content:        o.Content,
-		Confidence:     o.Confidence,
-		InputHash:      o.InputHash,
-		OutputHash:     o.OutputHash,
-		CreatedAt:      o.CreatedAt,
-		CreatedBy:      o.CreatedBy,
-		ReviewedAt:     o.ReviewedAt,
-		ReviewedBy:     o.ReviewedBy,
-		ReviewNotes:    o.ReviewNotes,
+		ID:               o.ID,
+		OrganizationID:   o.OrganizationID,
+		CaseID:           o.CaseID,
+		EvidenceID:       o.EvidenceID,
+		Type:             o.Type,
+		Source:           o.Source,
+		Status:           o.Status,
+		Model:            o.Model,
+		Content:          o.Content,
+		Confidence:       o.Confidence,
+		Statement:        o.Statement,
+		SourceReferences: o.SourceReferences,
+		InputHash:        o.InputHash,
+		OutputHash:       o.OutputHash,
+		CreatedAt:        o.CreatedAt,
+		CreatedBy:        o.CreatedBy,
+		ReviewedAt:       o.ReviewedAt,
+		ReviewedBy:       o.ReviewedBy,
+		ReviewNotes:      o.ReviewNotes,
 	}
 }
 
@@ -511,6 +787,21 @@ func computeInputHash(docs []domain.DocumentContent, types []domain.ObservationT
 		h.Write([]byte(doc.ContentType))
 		h.Write([]byte(doc.Checksum))
 		h.Write(doc.Content)
+	}
+	for _, t := range types {
+		h.Write([]byte(t))
+	}
+	h.Write([]byte(fmt.Sprintf("%d", maxTokens)))
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum)
+}
+
+// computeCaseInputHash produces a SHA-256 over case facts plus the requested
+// types and token budget.
+func computeCaseInputHash(facts []map[string]any, types []domain.ObservationType, maxTokens int) string {
+	h := sha256.New()
+	for _, fact := range facts {
+		h.Write([]byte(fmt.Sprintf("%v", fact)))
 	}
 	for _, t := range types {
 		h.Write([]byte(t))
