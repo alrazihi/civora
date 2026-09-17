@@ -75,7 +75,7 @@ func (r *PostgresObservationRepository) save(ctx context.Context, ex sqlExecutor
 			status, model, content, confidence, statement, source_references,
 			input_hash, output_hash,
 			created_at, created_by, reviewed_at, reviewed_by, review_notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 	_, err = ex.ExecContext(ctx, query,
 		o.ID, o.OrganizationID, caseID, evidenceID, o.Type, o.Source,

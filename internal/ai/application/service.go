@@ -743,8 +743,11 @@ func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifie
 	if obs.CaseID != nil {
 		caseID = obs.CaseID
 	} else if obs.EvidenceID != nil {
-		sr := &evidencedomain.Evidence{}
-		_ = sr
+		ev, err := s.evidenceRepo.FindByID(ctx, params.OrganizationID, *obs.EvidenceID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrEvidenceNotFound, err)
+		}
+		caseID = &ev.ServiceRequestID
 	}
 
 	value := make(map[string]any)
