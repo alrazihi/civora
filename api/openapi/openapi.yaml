@@ -104,18 +104,23 @@ components:
         organization_id:
           type: string
           format: uuid
+        case_id:
+          type: string
+          format: uuid
+          nullable: true
         evidence_id:
           type: string
           format: uuid
+          nullable: true
         type:
           type: string
-          enum: [SUMMARY, ENTITY_EXTRACTION, CLASSIFICATION, INCONSISTENCY]
+          enum: [SUMMARY, ENTITY_EXTRACTION, CLASSIFICATION, INCONSISTENCY, MISSING_INFORMATION, RELEVANT_EVIDENCE, INCOMPLETE_DOCUMENTATION]
         source:
           type: string
           enum: [AI_MODEL, HUMAN]
         status:
           type: string
-          enum: [PENDING_REVIEW, ACCEPTED, REJECTED]
+          enum: [OPEN, PENDING_REVIEW, ACCEPTED, REJECTED, CORRECTED, DISMISSED]
         model:
           $ref: '#/components/schemas/AIModelInfo'
         content:
@@ -126,6 +131,12 @@ components:
           minimum: 0
           maximum: 1
           nullable: true
+        statement:
+          type: string
+        source_references:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceReference'
         input_hash:
           type: string
         output_hash:
@@ -133,9 +144,17 @@ components:
         created_at:
           type: string
           format: date-time
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
         reviewed_at:
           type: string
           format: date-time
+          nullable: true
+        reviewed_by:
+          type: string
+          format: uuid
           nullable: true
         review_notes:
           type: string
@@ -2729,6 +2748,262 @@ components:
         notes:
           type: string
           maxLength: 5000
+    VerifiedFact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        case_id:
+          type: string
+          format: uuid
+          nullable: true
+        observation_id:
+          type: string
+          format: uuid
+        observation_type:
+          type: string
+        value:
+          type: object
+        original_value:
+          type: object
+        corrected_value:
+          type: object
+          nullable: true
+        provenance:
+          type: object
+        review_action:
+          type: string
+          enum: [ACCEPTED, REJECTED, CORRECTED, DISMISSED]
+        reviewer_id:
+          type: string
+          format: uuid
+        review_notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        verified_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [AI_OBSERVATION, HUMAN_CORRECTION, HUMAN_ACCEPTED]
+        model:
+          $ref: '#/components/schemas/AIModelInfo'
+        input_hash:
+          type: string
+        output_hash:
+          type: string
+    DocumentAnalysis:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        evidence_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [CLASSIFICATION, TEXT_EXTRACTION, STRUCTURED_EXTRACTION, SUMMARIZATION, RELEVANCE_DETECTION]
+        source:
+          type: string
+          enum: [AI_MODEL, HUMAN]
+        status:
+          type: string
+          enum: [PENDING_REVIEW, ACCEPTED, REJECTED]
+        model:
+          $ref: '#/components/schemas/AIModelInfo'
+        content:
+          type: object
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          nullable: true
+        input_hash:
+          type: string
+        output_hash:
+          type: string
+        schema_version:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_notes:
+          type: string
+          nullable: true
+    DocumentAnalysisRequest:
+      type: object
+      properties:
+        types:
+          type: array
+          items:
+            type: string
+            enum: [CLASSIFICATION, TEXT_EXTRACTION, STRUCTURED_EXTRACTION, SUMMARIZATION, RELEVANCE_DETECTION]
+        max_tokens:
+          type: integer
+          minimum: 1
+          default: 4096
+    CaseContext:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        case_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+        facts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fact'
+        token_estimate:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        authorization:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AuthorizationEntry'
+    Fact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        case_id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+        source_id:
+          type: string
+          format: uuid
+        provenance:
+          type: string
+          enum: [SOURCE_FACT, AI_OBSERVATION, HUMAN_VERIFIED_FACT, RULE_RESULT, HUMAN_DECISION, FORM_SUBMISSION, WORKFLOW_HISTORY]
+        key:
+          type: string
+        value:
+          type: object
+        value_type:
+          type: string
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          nullable: true
+        retrieved_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        references:
+          type: array
+          items:
+            type: string
+            format: uuid
+    AuthorizationEntry:
+      type: object
+      properties:
+        resource_type:
+          type: string
+        resource_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        granted:
+          type: boolean
+        reason:
+          type: string
+    ContextBuildRequest:
+      type: object
+      properties:
+        include_case_metadata:
+          type: boolean
+          default: true
+        include_person:
+          type: boolean
+          default: true
+        include_evidence:
+          type: boolean
+          default: true
+        include_verified_evidence:
+          type: boolean
+          default: true
+        include_documents:
+          type: boolean
+          default: true
+        include_form_submissions:
+          type: boolean
+          default: true
+        include_rule_evaluations:
+          type: boolean
+          default: true
+        include_workflow_history:
+          type: boolean
+          default: true
+        include_decisions:
+          type: boolean
+          default: true
+        include_ai_observations:
+          type: boolean
+          default: true
+        max_tokens:
+          type: integer
+          minimum: 1
+          default: 8000
+        max_facts:
+          type: integer
+          minimum: 1
+          default: 200
+        only_verified:
+          type: boolean
+          default: false
+        only_human_verified:
+          type: boolean
+          default: false
 
   responses:
     BadRequest:
@@ -4134,6 +4409,128 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/cases/{caseId}/context:
+    post:
+      operationId: buildCaseContext
+      tags:
+        - CaseContext
+      summary: Build case context
+      description: Builds an authorized case context from multiple domain sources. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextBuildRequest'
+      responses:
+        '200':
+          description: Context built successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseContext'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Insufficient information to build context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      operationId: getLatestCaseContext
+      tags:
+        - CaseContext
+      summary: Get latest case context
+      description: Retrieves the latest built context for a case. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Latest context retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseContext'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/cases/{caseId}/context/{contextId}:
+    get:
+      operationId: getCaseContext
+      tags:
+        - CaseContext
+      summary: Get case context by ID
+      description: Retrieves a specific built context by ID. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: contextId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Context retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseContext'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/workflows:
@@ -6086,6 +6483,233 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/documents/{documentId}/analysis:
+    post:
+      operationId: generateDocumentAnalyses
+      tags:
+        - DocumentIntelligence
+      summary: Generate AI document analyses
+      description: Generates AI-powered analyses for a document (classification, extraction, summarization). Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentAnalysisRequest'
+      responses:
+        '200':
+          description: Analyses generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      analyses:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DocumentAnalysis'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: AI provider unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      operationId: listDocumentAnalyses
+      tags:
+        - DocumentIntelligence
+      summary: List document analyses
+      description: Lists AI-generated analyses for a document with pagination. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: evidence_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Analyses listed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      analyses:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DocumentAnalysis'
+                      total:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/documents/{documentId}/analysis/{analysisId}/accept:
+    post:
+      operationId: acceptDocumentAnalysis
+      tags:
+        - DocumentIntelligence
+      summary: Accept a document analysis
+      description: Marks an AI-generated document analysis as ACCEPTED. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: analysisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '200':
+          description: Analysis accepted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentAnalysis'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/documents/{documentId}/analysis/{analysisId}/reject:
+    post:
+      operationId: rejectDocumentAnalysis
+      tags:
+        - DocumentIntelligence
+      summary: Reject a document analysis
+      description: Marks an AI-generated document analysis as REJECTED. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: analysisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '200':
+          description: Analysis rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentAnalysis'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/evidence/{evidenceId}/ai/observations:
     parameters:
     - name: orgId
@@ -6644,6 +7268,116 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/evidence/{evidenceId}/ai/observations/{observationId}/verified-facts:
+    post:
+      operationId: createEvidenceVerifiedFact
+      tags:
+        - AI
+      summary: Create verified fact from evidence observation
+      description: Creates a verified fact from an accepted or corrected AI observation attached to evidence. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: evidenceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: observationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [ACCEPTED, REJECTED, CORRECTED, DISMISSED]
+                  default: ACCEPTED
+                notes:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '201':
+          description: Verified fact created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifiedFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{orgId}/cases/{caseId}/ai/observations/{observationId}/verified-facts:
+    post:
+      operationId: createCaseVerifiedFact
+      tags:
+        - AI
+      summary: Create verified fact from case observation
+      description: Creates a verified fact from an accepted or corrected AI observation attached to a case. Requires authentication.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: observationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [ACCEPTED, REJECTED, CORRECTED, DISMISSED]
+                  default: ACCEPTED
+                notes:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '201':
+          description: Verified fact created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifiedFact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
   /organizations/{orgId}/assessments:
