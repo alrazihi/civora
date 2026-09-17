@@ -57,7 +57,7 @@ func TestPostgresVerifiedFactRepo_SaveAndFindByID(t *testing.T) {
 	reviewerID := uuid.New()
 
 	fact, err := domain.NewVerifiedFact(domain.VerifiedFactParams{
-		OrganizationID:  orgID,
+		OrganizationID: orgID,
 		CaseID:         &caseID,
 		ObservationID:  observationID,
 		Type:           domain.ObservationTypeSummary,
@@ -120,7 +120,7 @@ func TestPostgresVerifiedFactRepo_FindByObservation(t *testing.T) {
 	reviewerID := uuid.New()
 
 	fact, err := domain.NewVerifiedFact(domain.VerifiedFactParams{
-		OrganizationID:  orgID,
+		OrganizationID: orgID,
 		ObservationID:  observationID,
 		Type:           domain.ObservationTypeSummary,
 		Value:          map[string]any{"text": "sample"},
@@ -165,7 +165,7 @@ func TestPostgresVerifiedFactRepo_UniqueObservation(t *testing.T) {
 	reviewerID := uuid.New()
 
 	fact1, _ := domain.NewVerifiedFact(domain.VerifiedFactParams{
-		OrganizationID:  orgID,
+		OrganizationID: orgID,
 		ObservationID:  observationID,
 		Type:           domain.ObservationTypeSummary,
 		Value:          map[string]any{"text": "sample"},
@@ -179,7 +179,7 @@ func TestPostgresVerifiedFactRepo_UniqueObservation(t *testing.T) {
 	})
 
 	fact2, _ := domain.NewVerifiedFact(domain.VerifiedFactParams{
-		OrganizationID:  orgID,
+		OrganizationID: orgID,
 		ObservationID:  observationID,
 		Type:           domain.ObservationTypeSummary,
 		Value:          map[string]any{"text": "sample"},

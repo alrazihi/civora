@@ -74,16 +74,16 @@ type ObservationResult struct {
 }
 
 type AIService struct {
-	repo              domain.ObservationRepository
-	evidenceRepo      EvidenceRepository
-	formRepo          FormSubmissionRepository
-	userChecker       shared.UserChecker
-	auditor           auditdomain.EventRecorder
-	provider          AIProvider
-	db                *sql.DB
-	documents         DocumentContentProvider
-	sanitizer         PIISanitizer
-	verifiedFactRepo  domain.VerifiedFactRepository
+	repo             domain.ObservationRepository
+	evidenceRepo     EvidenceRepository
+	formRepo         FormSubmissionRepository
+	userChecker      shared.UserChecker
+	auditor          auditdomain.EventRecorder
+	provider         AIProvider
+	db               *sql.DB
+	documents        DocumentContentProvider
+	sanitizer        PIISanitizer
+	verifiedFactRepo domain.VerifiedFactRepository
 }
 
 func NewAIService(repo domain.ObservationRepository, evidenceRepo EvidenceRepository, formRepo FormSubmissionRepository, userChecker shared.UserChecker, auditor auditdomain.EventRecorder, provider AIProvider) *AIService {
@@ -793,20 +793,20 @@ func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifie
 	}
 
 	fact, err := domain.NewVerifiedFact(domain.VerifiedFactParams{
-		OrganizationID:  params.OrganizationID,
-		CaseID:          caseID,
-		ObservationID:   params.ObservationID,
-		Type:            obs.Type,
-		Value:           value,
-		OriginalValue:   originalValue,
-		CorrectedValue:  correctedValue,
-		ReviewAction:    params.ReviewAction,
-		ReviewerID:      params.ReviewerID,
-		ReviewNotes:     params.ReviewNotes,
-		Source:          source,
-		Model:           model,
-		InputHash:       inputHash,
-		OutputHash:      outputHash,
+		OrganizationID: params.OrganizationID,
+		CaseID:         caseID,
+		ObservationID:  params.ObservationID,
+		Type:           obs.Type,
+		Value:          value,
+		OriginalValue:  originalValue,
+		CorrectedValue: correctedValue,
+		ReviewAction:   params.ReviewAction,
+		ReviewerID:     params.ReviewerID,
+		ReviewNotes:    params.ReviewNotes,
+		Source:         source,
+		Model:          model,
+		InputHash:      inputHash,
+		OutputHash:     outputHash,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)

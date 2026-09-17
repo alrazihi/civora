@@ -19,24 +19,24 @@ var (
 )
 
 type VerifiedFact struct {
-	ID              uuid.UUID         `json:"id"`
-	OrganizationID  uuid.UUID         `json:"organization_id"`
-	CaseID          *uuid.UUID        `json:"case_id,omitempty"`
-	ObservationID   uuid.UUID         `json:"observation_id"`
-	Type            ObservationType   `json:"type"`
-	Value           map[string]any    `json:"value"`
-	OriginalValue   map[string]any    `json:"original_value"`
-	CorrectedValue  map[string]any    `json:"corrected_value,omitempty"`
-	Provenance      *Provenance       `json:"provenance,omitempty"`
-	ReviewAction    ObservationStatus `json:"review_action"`
-	ReviewerID      uuid.UUID         `json:"reviewer_id"`
-	ReviewNotes     string            `json:"review_notes"`
-	CreatedAt       time.Time         `json:"created_at"`
-	VerifiedAt      time.Time         `json:"verified_at"`
-	Source          string            `json:"source"`
-	Model           *ModelInfo        `json:"model,omitempty"`
-	InputHash       string            `json:"input_hash"`
-	OutputHash      string            `json:"output_hash"`
+	ID             uuid.UUID         `json:"id"`
+	OrganizationID uuid.UUID         `json:"organization_id"`
+	CaseID         *uuid.UUID        `json:"case_id,omitempty"`
+	ObservationID  uuid.UUID         `json:"observation_id"`
+	Type           ObservationType   `json:"type"`
+	Value          map[string]any    `json:"value"`
+	OriginalValue  map[string]any    `json:"original_value"`
+	CorrectedValue map[string]any    `json:"corrected_value,omitempty"`
+	Provenance     *Provenance       `json:"provenance,omitempty"`
+	ReviewAction   ObservationStatus `json:"review_action"`
+	ReviewerID     uuid.UUID         `json:"reviewer_id"`
+	ReviewNotes    string            `json:"review_notes"`
+	CreatedAt      time.Time         `json:"created_at"`
+	VerifiedAt     time.Time         `json:"verified_at"`
+	Source         string            `json:"source"`
+	Model          *ModelInfo        `json:"model,omitempty"`
+	InputHash      string            `json:"input_hash"`
+	OutputHash     string            `json:"output_hash"`
 }
 
 type Provenance struct {
@@ -50,20 +50,20 @@ type Provenance struct {
 }
 
 type VerifiedFactParams struct {
-	OrganizationID  uuid.UUID
-	CaseID          *uuid.UUID
-	ObservationID   uuid.UUID
-	Type            ObservationType
-	Value           map[string]any
-	OriginalValue   map[string]any
-	CorrectedValue  map[string]any
-	ReviewAction    ObservationStatus
-	ReviewerID      uuid.UUID
-	ReviewNotes     string
-	Source          string
-	Model           *ModelInfo
-	InputHash       string
-	OutputHash      string
+	OrganizationID uuid.UUID
+	CaseID         *uuid.UUID
+	ObservationID  uuid.UUID
+	Type           ObservationType
+	Value          map[string]any
+	OriginalValue  map[string]any
+	CorrectedValue map[string]any
+	ReviewAction   ObservationStatus
+	ReviewerID     uuid.UUID
+	ReviewNotes    string
+	Source         string
+	Model          *ModelInfo
+	InputHash      string
+	OutputHash     string
 }
 
 const MaxVerifiedFactValueSize = 100_000
@@ -138,24 +138,24 @@ func NewVerifiedFact(params VerifiedFactParams) (*VerifiedFact, error) {
 	}
 
 	return &VerifiedFact{
-		ID:              uuid.New(),
-		OrganizationID:  params.OrganizationID,
-		CaseID:          params.CaseID,
-		ObservationID:   params.ObservationID,
-		Type:            params.Type,
-		Value:           copyMap(params.Value),
-		OriginalValue:   copyMap(params.OriginalValue),
-		CorrectedValue:  correctedValue,
-		Provenance:      provenance,
-		ReviewAction:    params.ReviewAction,
-		ReviewerID:      params.ReviewerID,
-		ReviewNotes:     params.ReviewNotes,
-		CreatedAt:       now,
-		VerifiedAt:      now,
-		Source:          source,
-		Model:           params.Model,
-		InputHash:       params.InputHash,
-		OutputHash:      params.OutputHash,
+		ID:             uuid.New(),
+		OrganizationID: params.OrganizationID,
+		CaseID:         params.CaseID,
+		ObservationID:  params.ObservationID,
+		Type:           params.Type,
+		Value:          copyMap(params.Value),
+		OriginalValue:  copyMap(params.OriginalValue),
+		CorrectedValue: correctedValue,
+		Provenance:     provenance,
+		ReviewAction:   params.ReviewAction,
+		ReviewerID:     params.ReviewerID,
+		ReviewNotes:    params.ReviewNotes,
+		CreatedAt:      now,
+		VerifiedAt:     now,
+		Source:         source,
+		Model:          params.Model,
+		InputHash:      params.InputHash,
+		OutputHash:     params.OutputHash,
 	}, nil
 }
 

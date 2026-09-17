@@ -915,6 +915,48 @@ func TestAIService_GenerateObservations_MaliciousDocument(t *testing.T) {
 	}
 }
 
+func TestAIService_GenerateObservations_CrossTenantBlocked(t *testing.T) {
+	orgA := uuid.New()
+	actorID := uuid.New()
+
+	evidence := &evidencedomain.Evidence{
+		ID:                 uuid.New(),
+		OrganizationID:     orgA,
+		ServiceRequestID:   uuid.New(),
+		Type:               evidencedomain.EvidenceTypeOther,
+		Description:        "test",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
+	}
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+	}
+
+	evRepo := &mockEvidenceRepo{
+		evidence:       evidence,
+		documents:      []*evidencedomain.Document{{ID: uuid.New(), FileName: "test.txt", ContentType: "text/plain", Checksum: "abc"}},
+		serviceRequest: []*evidencedomain.Evidence{evidence},
+	}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+
+	// Actor belongs to orgB (mockUserChecker{valid: false}), tries to generate observations for orgA evidence
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: false}, nil, provider).
+		WithDocumentContent(&mockDocumentContentProvider{content: []byte("test content")})
+
+	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
+		OrganizationID: orgA,
+		EvidenceID:     evidence.ID,
+		ActorID:        actorID,
+	})
+	if err == nil {
+		t.Fatal("expected error for cross-tenant observation generation")
+	}
+}
+
 type mockDocumentContentProvider struct {
 	content []byte
 	err     error
@@ -1056,20 +1098,20 @@ func TestAIService_CreateVerifiedFact_Corrected(t *testing.T) {
 	reviewerID := uuid.New()
 
 	obs := &domain.Observation{
-		ID:               observationID,
-		OrganizationID:   orgID,
-		CaseID:           uuidPtr(uuid.New()),
-		Type:             domain.ObservationTypeSummary,
-		Source:           domain.ObservationSourceAIModel,
-		Status:           domain.ObservationStatusCorrected,
-		Model:            &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
-		Content:          map[string]any{"text": "sample observation"},
-		Statement:        "Sample statement",
-		InputHash:        "abc123",
-		OutputHash:       "def456",
-		ReviewedAt:       timePtr(time.Now()),
-		ReviewedBy:       &reviewerID,
-		ReviewNotes:      "corrected",
+		ID:             observationID,
+		OrganizationID: orgID,
+		CaseID:         uuidPtr(uuid.New()),
+		Type:           domain.ObservationTypeSummary,
+		Source:         domain.ObservationSourceAIModel,
+		Status:         domain.ObservationStatusCorrected,
+		Model:          &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		Content:        map[string]any{"text": "sample observation"},
+		Statement:      "Sample statement",
+		InputHash:      "abc123",
+		OutputHash:     "def456",
+		ReviewedAt:     timePtr(time.Now()),
+		ReviewedBy:     &reviewerID,
+		ReviewNotes:    "corrected",
 	}
 
 	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
@@ -1117,19 +1159,19 @@ func TestAIService_CreateVerifiedFact_UserNotInOrg(t *testing.T) {
 	reviewerID := uuid.New()
 
 	obs := &domain.Observation{
-		ID:               observationID,
-		OrganizationID:   orgID,
-		CaseID:           uuidPtr(uuid.New()),
-		Type:             domain.ObservationTypeSummary,
-		Source:           domain.ObservationSourceAIModel,
-		Status:           domain.ObservationStatusAccepted,
-		Model:            &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
-		Content:          map[string]any{"text": "sample"},
-		InputHash:        "abc123",
-		OutputHash:       "def456",
-		ReviewedAt:       timePtr(time.Now()),
-		ReviewedBy:       &reviewerID,
-		ReviewNotes:      "reviewer notes",
+		ID:             observationID,
+		OrganizationID: orgID,
+		CaseID:         uuidPtr(uuid.New()),
+		Type:           domain.ObservationTypeSummary,
+		Source:         domain.ObservationSourceAIModel,
+		Status:         domain.ObservationStatusAccepted,
+		Model:          &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		Content:        map[string]any{"text": "sample"},
+		InputHash:      "abc123",
+		OutputHash:     "def456",
+		ReviewedAt:     timePtr(time.Now()),
+		ReviewedBy:     &reviewerID,
+		ReviewNotes:    "reviewer notes",
 	}
 
 	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
@@ -1183,18 +1225,18 @@ func TestAIService_CreateVerifiedFact_MissingRepo(t *testing.T) {
 	reviewerID := uuid.New()
 
 	obs := &domain.Observation{
-		ID:               observationID,
-		OrganizationID:   orgID,
-		CaseID:           uuidPtr(uuid.New()),
-		Type:             domain.ObservationTypeSummary,
-		Source:           domain.ObservationSourceAIModel,
-		Status:           domain.ObservationStatusAccepted,
-		Content:          map[string]any{"text": "sample"},
-		InputHash:        "abc123",
-		OutputHash:       "def456",
-		ReviewedAt:       timePtr(time.Now()),
-		ReviewedBy:       &reviewerID,
-		ReviewNotes:      "reviewer notes",
+		ID:             observationID,
+		OrganizationID: orgID,
+		CaseID:         uuidPtr(uuid.New()),
+		Type:           domain.ObservationTypeSummary,
+		Source:         domain.ObservationSourceAIModel,
+		Status:         domain.ObservationStatusAccepted,
+		Content:        map[string]any{"text": "sample"},
+		InputHash:      "abc123",
+		OutputHash:     "def456",
+		ReviewedAt:     timePtr(time.Now()),
+		ReviewedBy:     &reviewerID,
+		ReviewNotes:    "reviewer notes",
 	}
 
 	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
