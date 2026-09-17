@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 
 	aiapi "github.com/alrazihi/civora/internal/ai/api"
 	aiapplication "github.com/alrazihi/civora/internal/ai/application"
@@ -28,10 +31,18 @@ import (
 	caseapi "github.com/alrazihi/civora/internal/cases/api"
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
+	casecontextapi "github.com/alrazihi/civora/internal/casecontext/api"
+	casecontextapp "github.com/alrazihi/civora/internal/casecontext/application"
+	casecontextauth "github.com/alrazihi/civora/internal/casecontext/infrastructure/auth"
+	casecontextpostgres "github.com/alrazihi/civora/internal/casecontext/infrastructure/postgres"
 	casesummaryapi "github.com/alrazihi/civora/internal/casesummary/api"
 	casesummaryapp "github.com/alrazihi/civora/internal/casesummary/application"
 	casesummarypostgres "github.com/alrazihi/civora/internal/casesummary/infrastructure/postgres"
 	casesummaryprovider "github.com/alrazihi/civora/internal/casesummary/infrastructure/provider"
+	documentintelligenceapi "github.com/alrazihi/civora/internal/documentintelligence/api"
+	documentintelligenceapp "github.com/alrazihi/civora/internal/documentintelligence/application"
+	documentintelligencepostgres "github.com/alrazihi/civora/internal/documentintelligence/infrastructure/postgres"
+	documentintelligenceprovider "github.com/alrazihi/civora/internal/documentintelligence/infrastructure/provider"
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/database"
 	decisionsapi "github.com/alrazihi/civora/internal/decisions/api"
@@ -136,6 +147,10 @@ func main() {
 	ruleAssignmentRepo := rulespostgres.NewPostgresWorkflowStateRuleAssignmentRepository(db.DB)
 
 	summaryRepo := casesummarypostgres.NewPostgresCaseSummaryRepository(db.DB)
+
+	ctxRepo := casecontextpostgres.NewCaseContextRepository(db.DB)
+
+	documentAnalysisRepo := documentintelligencepostgres.NewPostgresAnalysisRepository(db.DB)
 
 	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
 	workflowStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db.DB)
@@ -282,10 +297,50 @@ func main() {
 		BaseURL: cfg.AI.OpenAIBaseURL,
 		Model:   cfg.AI.OpenAIModel,
 	})
-	summaryService := casesummaryapp.NewCaseSummaryService(summaryRepo, caseRepo, nil, domain.NewOrganizationUserChecker(userRepo), nil).
+	ctxService := casecontextapp.NewCaseContextService(
+		ctxRepo,
+		casecontextauth.NewAuthorizationChecker(domain.NewOrganizationUserChecker(userRepo)),
+		&caseContextCaseRepoAdapter{inner: caseRepo},
+		&caseContextPersonRepoAdapter{inner: personRepo},
+		&caseContextEvidenceRepoAdapter{inner: evidenceRepo},
+		&caseContextFormSubmissionRepoAdapter{inner: formSubmissionRepo},
+		&caseContextRuleRepoAdapter{inner: evalRepo},
+		&caseContextWorkflowRepoAdapter{innerInstance: workflowInstanceRepo, innerHistory: workflowHistoryRepo},
+		&caseContextDecisionRepoAdapter{inner: decisionRepo},
+		&caseContextAIObsRepoAdapter{inner: aiObsRepo},
+		domain.NewOrganizationUserChecker(userRepo),
+	).
+		WithTransaction(db.DB).
+		WithDocumentProvider(&caseContextDocumentContentProviderAdapter{inner: func(ctx context.Context, orgID, evidenceID, documentID, actorID uuid.UUID) (io.ReadCloser, error) {
+			result, err := evidenceService.GetDocumentStream(ctx, orgID, evidenceID, documentID, actorID)
+			if err != nil {
+				return nil, err
+			}
+			return result.Content, nil
+		}})
+	summaryService := casesummaryapp.NewCaseSummaryService(summaryRepo, caseRepo, ctxService, domain.NewOrganizationUserChecker(userRepo), auditService).
 		WithTransaction(db.DB).
 		WithProvider(summaryProvider)
 	summaryHandler := casesummaryapi.NewHandler(summaryService)
+
+	documentIntelligenceProvider := documentintelligenceprovider.NewOpenAIProvider(documentintelligenceprovider.OpenAIProviderConfig{
+		APIKey:  cfg.AI.OpenAIAPIKey,
+		BaseURL: cfg.AI.OpenAIBaseURL,
+		Model:   cfg.AI.OpenAIModel,
+	})
+	documentIntelligenceService := documentintelligenceapp.NewDocumentAnalysisService(documentAnalysisRepo, evidenceRepo, domain.NewOrganizationUserChecker(userRepo), auditService, documentIntelligenceProvider).
+		WithTransaction(db.DB).
+		WithDocumentContent(&documentIntelligenceDocumentContentProviderAdapter{inner: func(ctx context.Context, orgID, evidenceID, documentID, actorID uuid.UUID) (io.ReadCloser, error) {
+			result, err := evidenceService.GetDocumentStream(ctx, orgID, evidenceID, documentID, actorID)
+			if err != nil {
+				return nil, err
+			}
+			return result.Content, nil
+		}}).
+		WithPIISanitizer(piiSanitizer(cfg))
+	documentIntelligenceHandler := documentintelligenceapi.NewHandler(documentIntelligenceService)
+
+	caseContextHandler := casecontextapi.NewHandler(ctxService)
 
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
@@ -319,6 +374,8 @@ func main() {
 	reviewQueueHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	aiHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	summaryHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	documentIntelligenceHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	caseContextHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
