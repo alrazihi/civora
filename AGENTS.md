@@ -29,6 +29,11 @@ go test -p 1 -count=1 ./...               # all tests (serial, for DB integratio
 go test -short -c ./test/e2e/            # compile e2e tests without running
 ```
 
+> **Note:** The Go race detector (`-race`) may fail on Windows due to
+> memory limits. If you encounter `fatal error: runtime: out of memory`
+> or `The paging file is too small`, either increase the Windows paging
+> file size or omit `-race` on that platform.
+
 Integration and e2e tests require a PostgreSQL instance with a `civora_test` user
 and database. They are skipped automatically when `-short` is passed.
 

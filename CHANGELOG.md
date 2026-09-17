@@ -98,21 +98,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.8.0] - 2026-09-16
+## [0.8.0] - 2026-09-17
 
-### AI Observations
+### AI Platform
 
-- AI observation domain: observation entities with human review and provider
-  abstraction (Noop, Local, OpenAI)
-- Observations are off by default via `CIVORA_AI_ENABLED` (default off)
-- Transactional audit integration: all AI observations produce hash-chained
-  audit events
-- Document content retrieval: extract text content from stored documents for
-  observation input
-- AI audit event types: `observation_created`, `observation_reviewed`,
-  `observation_provided`
+- AI module: first-class platform capability with provider abstraction
+  (`OpenAIProvider`, `LocalProvider`, `NoopProvider`)
+- AI is off by default via `CIVORA_AI_ENABLED` (default: `false`)
+- Evidence-level observations: generate AI summaries and entity extractions
+  from uploaded documents
+- Case-level observations: generate case-centric summaries, missing information
+  detection, and relevant evidence identification
+- Human-in-the-loop verification: accept, reject, correct, or dismiss
+  observations before creating verified facts
+- Verified facts: immutable provenance records linking accepted AI output
+  to cases with reviewer attribution and input/output hashes
+- PII sanitization: mandatory redaction of sensitive data before sending
+  document content to external LLM providers
+- Prompt injection defense: system-prompt instructions plus architectural
+  response validation via `PromptInjectionGuard`
+- Document size limits: 100KB per document to prevent excessive context
+- Input/output hashing: SHA-256 hashes for reproducibility and tamper detection
 
-## [Unreleased]
+### AI Modules
+
+- `internal/ai/domain` — observation and verified-fact aggregates
+- `internal/ai/application` — AI service orchestration, provider port,
+  sanitizer port, document content provider port
+- `internal/ai/infrastructure/postgres` — observation and verified-fact
+  repositories with tenant-scoped queries
+- `internal/ai/infrastructure/provider` — OpenAI, Local/Ollama, and Noop
+  providers
+- `internal/ai/infrastructure/sanitizer` — PII redaction sanitizer
+- `internal/ai/infrastructure/guard` — prompt injection guard
+- `internal/ai/infrastructure/adapter` — document content provider adapter
+- `internal/ai/api` — REST endpoints for observation generation and review
+
+### Case Context
+
+- `internal/casecontext/domain` — case context aggregation interfaces
+  (case, person, evidence, documents, form submissions, rules, workflow,
+  decisions, AI observations)
+- `internal/casecontext/application` — case context builder service
+- `internal/casecontext/infrastructure/postgres` — case context repository
+- `internal/casecontext/infrastructure/auth` — authorization checker
+- `internal/casecontext/api` — REST endpoints for building and retrieving
+  case context
+
+### Case Summary
+
+- `internal/casesummary/domain` — case summary domain types
+- `internal/casesummary/application` — case summary generation service
+  with provider abstraction
+- `internal/casesummary/infrastructure/postgres` — case summary repository
+- `internal/casesummary/infrastructure/provider` — OpenAI case summary provider
+- `internal/casesummary/api` — REST endpoint for case summary generation
+
+### Document Intelligence
+
+- `internal/documentintelligence/domain` — document analysis domain types
+- `internal/documentintelligence/application` — document analysis service
+  with provider abstraction, PII sanitization, and document content retrieval
+- `internal/documentintelligence/infrastructure/postgres` — document analysis
+  repository
+- `internal/documentintelligence/infrastructure/provider` — OpenAI document
+  analysis provider
+- `internal/documentintelligence/api` — REST endpoints for document analysis
+  generation, listing, accept, and reject
+
+### Security
+
+- Stage 8 hostile AI security review: 28 attack vectors tested, all critical
+  and high-severity gaps resolved
+- Prompt injection defense at both prompt layer and response validation layer
+- PII sanitization enforced by default for text content types
+- AI decision boundary architecturally enforced: AI has no code path to
+  decisions, workflow, rules, forms, or evidence modification
+- Tenant isolation enforced at all layers for AI operations
+- Human verification is mandatory before any consequential AI output use
+- Comprehensive audit trail for all AI operations with full provenance
+
+### Platform Proof
+
+- Stage 9 AI platform proof: cross-process, cross-organization verification
+- Two unrelated processes tested: Emergency Assistance (Org A) and
+  Education Assistance (Org B) with genuinely different forms, fields,
+  evidence, rules, workflows, and decisions
+- Tenant isolation proven: Org A cannot access Org B's data at any layer
+- AI disable proven: NoopProvider returns disabled error; core CIVORA
+  functions normally
+
+### Production Wiring
+
+- `cmd/civora/main.go` now registers `casecontext`, `casesummary`, and
+  `documentintelligence` handlers
+- Adapter layer bridges postgres repositories to `casecontext` domain
+  interfaces
+- `casesummary` nil-pointer panic fixed by passing real `ctxService`
+
+### Changed
+
+- OpenAPI spec: added AI observation, case summary, case context, and
+  document intelligence endpoints
+- Evidence schema: added `custom_type` column for custom evidence types
+- AI observations schema: made `evidence_id` nullable for case-level
+  observations
+- Audit vocabulary: added `ai.verified_fact.created`,
+  `ai.observations_generated`, `ai.observation.created`,
+  `evidence.document_uploaded`, `evidence.document_downloaded`,
+  `evidence.document_deleted`, `case_summary.generated`,
+  `document_analyses_generated`, `document_analysis.created`,
+  `decision.superseded`
+
+### Tests
+
+- `go test -short ./...` — PASS
+- `go test -count=1 -run TestAIPlatformProof ./test/integration/` — PASS
+- `go build ./cmd/civora` — PASS
+- `go vet ./...` — PASS
+- `gofmt -l .` — CLEAN
+
+### Documentation
+
+- Stage 8 hostile AI security review report
+- Stage 9 AI platform proof report
+- Architecture updated with AI module diagrams and module boundaries
+
+[Unreleased]: https://github.com/alrazihi/civora/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/alrazihi/civora/releases/tag/v0.8.0
 
 ---
 

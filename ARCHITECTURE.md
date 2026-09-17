@@ -29,9 +29,12 @@ module boundaries, data flow, and deployment model.
 │  ┌────────┐ ┌───────────┐ ┌────────┐ ┌────────┐        │
 │  │Assess. │ │Decisions  │ │Assistan│ │People  │        │
 │  └────────┘ └───────────┘ └────────┘ └────────┘        │
-│  ┌────────┐ ┌───────────┐                            │
-│  │Followup│ │FormSubmit │                            │
-│  └────────┘ └───────────┘                            │
+│  ┌────────┐ ┌───────────┐ ┌────────┐ ┌────────┐        │
+│  │Followup│ │FormSubmit │ │CaseCtx │ │CaseSum │        │
+│  └────────┘ └───────────┘ └────────┘ └────────┘        │
+│  ┌────────┐ ┌───────────┐ ┌────────┐ ┌────────┐        │
+│  │DocIntel│ │ AI Obs    │ │RulesAI │ │Context │        │
+│  └────────┘ └───────────┘ └────────┘ └────────┘        │
 ├─────────────────────────────────────────────────────────┤
 │                    Shared Infrastructure                │
 │   Config │ Logging │ Metrics    │
@@ -64,6 +67,9 @@ communicate through:
 | **Form Submission** | Completed form submissions scoped to organizations | Cases, Rules (fact source) |
 | **Evidence** | Evidence items, document references | Cases |
 | **AI Observations** | Observation entities, human review, provider abstraction | Evidence, Audit |
+| **Case Context** | Aggregated case context from multiple domains | Cases, Evidence, Rules, Workflow, Decisions, AI Observations |
+| **Case Summary** | AI-generated case summaries with provider abstraction | Case Context, Cases, AI Provider |
+| **Document Intelligence** | AI-generated document analyses with provider abstraction | Evidence, AI Provider |
 | **Assessments** | Needs assessments, recommendations | Cases |
 | **Decisions** | Human decisions, rationale | Cases, Workflow |
 | **Assistance** | Assistance actions, service delivery | Cases |
@@ -82,6 +88,103 @@ communicate through:
    audit store.
 4. Direct cross-module calls are allowed for synchronous operations
    within a transaction boundary.
+
+---
+
+## AI Module Architecture
+
+The AI module is a first-class, platform-level capability that provides
+intelligence features across all CIVORA processes. It is designed as
+an isolated, configurable, multi-tenant module with strict boundaries
+against consequential system functions.
+
+### AI module diagram
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    AI API Layer                         │
+│  /api/v1/organizations/{orgId}/cases/{caseId}/         │
+│    summary/generate                                      │
+│  /api/v1/organizations/{orgId}/cases/{caseId}/         │
+│    context/build                                         │
+│  /api/v1/organizations/{orgId}/evidence/{evidenceId}/  │
+│    observations/generate                                 │
+│  /api/v1/organizations/{orgId}/documents/{docId}/      │
+│    analysis/generate                                     │
+├─────────────────────────────────────────────────────────┤
+│                 AI Application Services                 │
+│                                                         │
+│  ┌──────────────────┐  ┌──────────────────────┐        │
+│  │ CaseSummaryService│  │ DocumentAnalysisSvc │        │
+│  └──────────────────┘  └──────────────────────┘        │
+│  ┌──────────────────┐  ┌──────────────────────┐        │
+│  │ CaseContextService│  │  AIObservationSvc   │        │
+│  └──────────────────┘  └──────────────────────┘        │
+├─────────────────────────────────────────────────────────┤
+│                    AI Provider Abstraction              │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐          │
+│  │ OpenAI     │ │ Local/Ollama│ │   Noop     │          │
+│  │ Provider   │ │  Provider   │ │ Provider   │          │
+│  └────────────┘ └────────────┘ └────────────┘          │
+├─────────────────────────────────────────────────────────┤
+│                 AI Infrastructure                       │
+│  ┌──────────────────┐  ┌──────────────────────┐        │
+│  │ Postgres Obs/Fact│  │ PII Sanitizer        │        │
+│  │ Repositories     │  │ Prompt Injection Guard│        │
+│  └──────────────────┘  └──────────────────────┘        │
+├─────────────────────────────────────────────────────────┤
+│                    Data & Storage Layer                 │
+│  Primary DB (PostgreSQL) │ Object Storage (S3)   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### AI decision boundary
+
+The AI module is architecturally isolated from consequential system
+functions. There is **no code path** from AI outputs to:
+
+- Decisions
+- Workflow transitions
+- Rule evaluation results
+- Form submission data
+- Evidence modification
+- Case status changes
+
+AI outputs require explicit human review (accept/reject/correct/dismiss)
+before any downstream system may use them. This is enforced by the
+absence of code paths, not by policy alone.
+
+### AI module subcomponents
+
+| Submodule | Responsibility |
+|-----------|----------------|
+| **AI Observations** | Evidence-level and case-level observation generation, human review, verified facts |
+| **Case Context** | Aggregates case data from multiple domains for AI input |
+| **Case Summary** | Generates case summaries using AI provider abstraction |
+| **Document Intelligence** | Generates document analyses using AI provider abstraction |
+
+### AI provider abstraction
+
+```text
+AIProvider interface
+├── GenerateObservations(ctx, req) ([]ObservationResult, error)
+├── GenerateDocumentAnalyses(ctx, req) ([]AnalysisResult, error)
+├── GenerateCaseSummary(ctx, req) (*CaseSummaryResult, error)
+└── ProviderInfo() ModelInfo
+
+Implementations:
+├── OpenAIProvider — external API calls to OpenAI
+├── LocalProvider — local Ollama-compatible endpoint
+└── NoopProvider — disabled mode, returns ErrProviderDisabled
+```
+
+### AI data flow
+
+```text
+Document → Evidence → DocumentContentProvider → PII Sanitizer
+    → AI Provider → PromptInjectionGuard → Observation
+    → Human Review → Verified Fact → Audit Event
+```
 
 ---
 

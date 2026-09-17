@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
+	aiapp "github.com/alrazihi/civora/internal/ai/application"
+	ai_domain "github.com/alrazihi/civora/internal/ai/domain"
+	aiadapter "github.com/alrazihi/civora/internal/ai/infrastructure/adapter"
+	aiinfra "github.com/alrazihi/civora/internal/ai/infrastructure/postgres"
+	aiprovider "github.com/alrazihi/civora/internal/ai/infrastructure/provider"
+	aisanitizer "github.com/alrazihi/civora/internal/ai/infrastructure/sanitizer"
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
-	aiadapter "github.com/alrazihi/civora/internal/ai/infrastructure/adapter"
-	ai_domain "github.com/alrazihi/civora/internal/ai/domain"
-	aiinfra "github.com/alrazihi/civora/internal/ai/infrastructure/postgres"
-	aiapp "github.com/alrazihi/civora/internal/ai/application"
-	aiprovider "github.com/alrazihi/civora/internal/ai/infrastructure/provider"
-	aisanitizer "github.com/alrazihi/civora/internal/ai/infrastructure/sanitizer"
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
 	casedomain "github.com/alrazihi/civora/internal/cases/domain"
 	caseinfra "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
@@ -718,4 +718,3 @@ func TestAIPlatformProof_AIDisabled_CoreFunctionality(t *testing.T) {
 func floatPtr(f float64) *float64 {
 	return &f
 }
-
