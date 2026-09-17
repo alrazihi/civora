@@ -25,9 +25,9 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.7** — Evidence & Documents
+Current focus: **Milestone 0.8** — AI Observations & Evidence (0.7 complete).
 (document upload, evidence chains, audit integrity verification, drag-and-drop
-upload UI, OpenAPI documentation).
+upload UI).
 
 ## Quick Start
 
@@ -506,10 +506,12 @@ forever reproducible. The audit trail is hash-chained and tamper-evident.
 
 ### Does CIVORA use AI?
 
-No. CIVORA's current foundation is deterministic infrastructure: workflow,
-forms, rules, auditability, and human decisions. AI assistance is planned for a
-future milestone (0.7) and will be optional, human-supervised, and auditable.
-CIVORA is not an AI platform.
+AI observation assistance is available in 0.8, optional and off by default via
+`CIVORA_AI_ENABLED` (default off). It supports Noop, Local, and OpenAI providers
+and generates observations that always require human review. CIVORA's foundation
+remains deterministic infrastructure: workflow, forms, rules, auditability, and
+human decisions. AI is an observation aid, never an autonomous actor. CIVORA is
+not an AI platform.
 
 ### Is CIVORA production-ready?
 

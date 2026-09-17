@@ -82,12 +82,22 @@ type ObservationParams struct {
 
 const MaxObservationContentSize = 100_000
 
+const MaxDocumentBytes = 100_000
+
 func NewObservation(params ObservationParams) (*Observation, error) {
 	if params.OrganizationID == uuid.Nil {
 		return nil, fmt.Errorf("%w: organization ID is required", ErrObservationInvalidInput)
 	}
 	if params.EvidenceID == uuid.Nil {
 		return nil, fmt.Errorf("%w: evidence ID is required", ErrObservationInvalidInput)
+	}
+	if params.Type != "" && !isValidObservationType(params.Type) {
+		return nil, fmt.Errorf("%w: invalid observation type %q", ErrObservationInvalidInput, params.Type)
+	}
+	if params.Confidence != nil {
+		if *params.Confidence < 0 || *params.Confidence > 1 {
+			return nil, fmt.Errorf("%w: confidence must be between 0 and 1", ErrObservationInvalidInput)
+		}
 	}
 	if params.Source == "" {
 		params.Source = ObservationSourceAIModel
@@ -97,6 +107,19 @@ func NewObservation(params ObservationParams) (*Observation, error) {
 	}
 	if params.CreatedAt.IsZero() {
 		params.CreatedAt = time.Now().UTC()
+	}
+
+	contentSize := 0
+	for _, v := range params.Content {
+		switch s := v.(type) {
+		case string:
+			contentSize += len(s)
+		case []byte:
+			contentSize += len(s)
+		}
+	}
+	if contentSize > MaxObservationContentSize {
+		return nil, fmt.Errorf("%w: observation content exceeds max size of %d bytes", ErrObservationInvalidInput, MaxObservationContentSize)
 	}
 
 	obs := &Observation{
@@ -153,6 +176,18 @@ func (o *Observation) Reject(reviewerID uuid.UUID, notes string) error {
 	return nil
 }
 
+func isValidObservationType(t ObservationType) bool {
+	switch t {
+	case ObservationTypeSummary,
+		ObservationTypeEntityExtraction,
+		ObservationTypeClassification,
+		ObservationTypeInconsistency:
+		return true
+	default:
+		return false
+	}
+}
+
 type DocumentContent struct {
 	DocumentID  uuid.UUID
 	FileName    string
@@ -172,5 +207,6 @@ type ObservationRepository interface {
 	FindByID(ctx context.Context, orgID, id uuid.UUID) (*Observation, error)
 	FindByEvidence(ctx context.Context, orgID, evidenceID uuid.UUID, limit, offset int) ([]*Observation, int, error)
 	UpdateStatus(ctx context.Context, orgID, observationID uuid.UUID, status ObservationStatus, reviewerID *uuid.UUID, notes string) error
+	UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, observationID uuid.UUID, status ObservationStatus, reviewerID *uuid.UUID, notes string) error
 	CountByEvidence(ctx context.Context, orgID, evidenceID uuid.UUID) (int, error)
 }

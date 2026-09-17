@@ -63,6 +63,7 @@ communicate through:
 | **Forms** | Form definitions (field schemas, field-type vocab) | Organizations |
 | **Form Submission** | Completed form submissions scoped to organizations | Cases, Rules (fact source) |
 | **Evidence** | Evidence items, document references | Cases |
+| **AI Observations** | Observation entities, human review, provider abstraction | Evidence, Audit |
 | **Assessments** | Needs assessments, recommendations | Cases |
 | **Decisions** | Human decisions, rationale | Cases, Workflow |
 | **Assistance** | Assistance actions, service delivery | Cases |
@@ -167,7 +168,7 @@ direct writes. Examples:
 - Payment systems
 - Email/SMS providers
 - Storage backends
-- AI model providers (future)
+- AI model providers (0.8: OpenAI, Local/Ollama, Noop)
 
 ---
 

@@ -11,8 +11,10 @@ import (
 
 	aiapi "github.com/alrazihi/civora/internal/ai/api"
 	aiapplication "github.com/alrazihi/civora/internal/ai/application"
+	aiadapter "github.com/alrazihi/civora/internal/ai/infrastructure/adapter"
 	aiinfrapostgres "github.com/alrazihi/civora/internal/ai/infrastructure/postgres"
 	aiprovider "github.com/alrazihi/civora/internal/ai/infrastructure/provider"
+	aisanitizer "github.com/alrazihi/civora/internal/ai/infrastructure/sanitizer"
 	assessmentapi "github.com/alrazihi/civora/internal/assessment/api"
 	assessmentapp "github.com/alrazihi/civora/internal/assessment/application"
 	assessmentpostgres "github.com/alrazihi/civora/internal/assessment/infrastructure/postgres"
@@ -26,6 +28,10 @@ import (
 	caseapi "github.com/alrazihi/civora/internal/cases/api"
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
+	casesummaryapi "github.com/alrazihi/civora/internal/casesummary/api"
+	casesummaryapp "github.com/alrazihi/civora/internal/casesummary/application"
+	casesummarypostgres "github.com/alrazihi/civora/internal/casesummary/infrastructure/postgres"
+	casesummaryprovider "github.com/alrazihi/civora/internal/casesummary/infrastructure/provider"
 	"github.com/alrazihi/civora/internal/config"
 	"github.com/alrazihi/civora/internal/database"
 	decisionsapi "github.com/alrazihi/civora/internal/decisions/api"
@@ -127,6 +133,8 @@ func main() {
 	evalRepo := rulespostgres.NewPostgresEvaluationRepository(db.DB)
 	ruleTemplateRepo := rulespostgres.NewRuleTemplateRepository(db.DB)
 	ruleAssignmentRepo := rulespostgres.NewPostgresWorkflowStateRuleAssignmentRepository(db.DB)
+
+	summaryRepo := casesummarypostgres.NewPostgresCaseSummaryRepository(db.DB)
 
 	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
 	workflowStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db.DB)
@@ -262,8 +270,21 @@ func main() {
 	default:
 		aiProvider = aiprovider.NewNoopProvider()
 	}
-	aiService := aiapplication.NewAIService(aiObsRepo, evidenceRepo, domain.NewOrganizationUserChecker(userRepo), auditService, aiProvider)
+	aiService := aiapplication.NewAIService(aiObsRepo, evidenceRepo, domain.NewOrganizationUserChecker(userRepo), auditService, aiProvider).
+		WithTransaction(db.DB).
+		WithDocumentContent(aiadapter.NewDocumentContentProvider(evidenceService)).
+		WithPIISanitizer(piiSanitizer(cfg))
 	aiHandler := aiapi.NewHandler(aiService)
+
+	summaryProvider := casesummaryprovider.NewOpenAICaseSummaryProvider(casesummaryprovider.OpenAIProviderConfig{
+		APIKey:  cfg.AI.OpenAIAPIKey,
+		BaseURL: cfg.AI.OpenAIBaseURL,
+		Model:   cfg.AI.OpenAIModel,
+	})
+	summaryService := casesummaryapp.NewCaseSummaryService(summaryRepo, caseRepo, nil, domain.NewOrganizationUserChecker(userRepo), nil).
+		WithTransaction(db.DB).
+		WithProvider(summaryProvider)
+	summaryHandler := casesummaryapi.NewHandler(summaryService)
 
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
@@ -296,6 +317,7 @@ func main() {
 	assignmentHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	reviewQueueHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	aiHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	summaryHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -305,4 +327,13 @@ func main() {
 		log.Fatalf("server error: %v", err)
 	}
 	userRateLimiter.Stop()
+}
+
+// piiSanitizer returns a PII redactor when AI is configured for an external
+// provider, or nil when the operator has disabled sanitization.
+func piiSanitizer(cfg *config.Config) aiapplication.PIISanitizer {
+	if !cfg.AI.PIISanitization {
+		return nil
+	}
+	return aisanitizer.NewRedactingSanitizer()
 }

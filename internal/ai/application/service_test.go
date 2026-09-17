@@ -98,6 +98,10 @@ func (m *mockObservationRepo) UpdateStatus(ctx context.Context, orgID, observati
 	return m.updateErr
 }
 
+func (m *mockObservationRepo) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, observationID uuid.UUID, status domain.ObservationStatus, reviewerID *uuid.UUID, notes string) error {
+	return m.updateErr
+}
+
 func (m *mockObservationRepo) CountByEvidence(ctx context.Context, orgID, evidenceID uuid.UUID) (int, error) {
 	return 0, nil
 }

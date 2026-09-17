@@ -128,6 +128,14 @@ func (r *PostgresObservationRepository) CountByEvidence(ctx context.Context, org
 }
 
 func (r *PostgresObservationRepository) UpdateStatus(ctx context.Context, orgID, observationID uuid.UUID, status domain.ObservationStatus, reviewerID *uuid.UUID, notes string) error {
+	return r.updateStatus(ctx, r.db, orgID, observationID, status, reviewerID, notes)
+}
+
+func (r *PostgresObservationRepository) UpdateStatusTx(ctx context.Context, tx *sql.Tx, orgID, observationID uuid.UUID, status domain.ObservationStatus, reviewerID *uuid.UUID, notes string) error {
+	return r.updateStatus(ctx, tx, orgID, observationID, status, reviewerID, notes)
+}
+
+func (r *PostgresObservationRepository) updateStatus(ctx context.Context, ex sqlExecutor, orgID, observationID uuid.UUID, status domain.ObservationStatus, reviewerID *uuid.UUID, notes string) error {
 	query := `
 		UPDATE ai_observations SET
 			status = $1,
@@ -137,7 +145,7 @@ func (r *PostgresObservationRepository) UpdateStatus(ctx context.Context, orgID,
 		WHERE organization_id = $5 AND id = $6
 	`
 	now := sql.NullTime{Time: readTime(), Valid: true}
-	_, err := r.db.ExecContext(ctx, query, status, now, reviewerID, notes, orgID, observationID)
+	_, err := ex.ExecContext(ctx, query, status, now, reviewerID, notes, orgID, observationID)
 	if err != nil {
 		return fmt.Errorf("failed to update observation status: %w", err)
 	}

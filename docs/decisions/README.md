@@ -20,6 +20,7 @@ technical decision must be recorded as an ADR.
 | [0005](0005-why-react-typescript.md) | Why React and TypeScript for the Frontend | Superseded | 2026-09-06 |
 | [0006](0006-configurable-workflow-engine.md) | Configurable Workflow Engine | Accepted | 2026-09-06 |
 | [0006-b](0006-public-interest-domain-model.md) | Public-Interest Domain Model | Accepted | 2026-09-06 |
+| [0007](0007-ai-observation-integration-boundaries.md) | AI Observation Integration Boundaries | Accepted | 2026-09-17 |
 
 The second 0006 document uses the file `0006-public-interest-domain-model.md`;
 it is indexed here as `0006-b` to avoid a numbering collision while preserving
@@ -50,6 +51,7 @@ details.
 - [0004](0004-why-rest-openapi.md) — Why REST and OpenAPI
 - [0006](0006-configurable-workflow-engine.md) — Configurable Workflow Engine
 - [0006-b](0006-public-interest-domain-model.md) — Public-Interest Domain Model
+- [0007](0007-ai-observation-integration-boundaries.md) — AI Observation Integration Boundaries
 
 ### Superseded
 - [0005](0005-why-react-typescript.md) — Why React and TypeScript for the Frontend (frontend implemented as a static HTML/CSS/JS SPA; React deferred)

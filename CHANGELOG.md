@@ -98,6 +98,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-09-16
+
+### AI Observations
+
+- AI observation domain: observation entities with human review and provider
+  abstraction (Noop, Local, OpenAI)
+- Observations are off by default via `CIVORA_AI_ENABLED` (default off)
+- Transactional audit integration: all AI observations produce hash-chained
+  audit events
+- Document content retrieval: extract text content from stored documents for
+  observation input
+- AI audit event types: `observation_created`, `observation_reviewed`,
+  `observation_provided`
+
 ## [Unreleased]
 
 ---
