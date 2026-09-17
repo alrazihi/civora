@@ -152,6 +152,8 @@ func main() {
 
 	documentAnalysisRepo := documentintelligencepostgres.NewPostgresAnalysisRepository(db.DB)
 
+	aiVerifiedFactRepo := aiinfrapostgres.NewPostgresVerifiedFactRepository(db.DB)
+
 	workflowDefRepo := workflowpostgres.NewPostgresWorkflowDefinitionRepository(db.DB)
 	workflowStateRepo := workflowpostgres.NewPostgresWorkflowStateRepository(db.DB)
 	workflowTransitionRepo := workflowpostgres.NewPostgresWorkflowTransitionRepository(db.DB)
@@ -289,7 +291,8 @@ func main() {
 	aiService := aiapplication.NewAIService(aiObsRepo, evidenceRepo, formSubmissionRepo, domain.NewOrganizationUserChecker(userRepo), auditService, aiProvider).
 		WithTransaction(db.DB).
 		WithDocumentContent(aiadapter.NewDocumentContentProvider(evidenceService)).
-		WithPIISanitizer(piiSanitizer(cfg))
+		WithPIISanitizer(piiSanitizer(cfg)).
+		WithVerifiedFactRepo(aiVerifiedFactRepo)
 	aiHandler := aiapi.NewHandler(aiService)
 
 	summaryProvider := casesummaryprovider.NewOpenAICaseSummaryProvider(casesummaryprovider.OpenAIProviderConfig{

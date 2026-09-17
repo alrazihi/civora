@@ -713,6 +713,13 @@ func (s *AIService) ReviewObservation(ctx context.Context, params ReviewObservat
 				return fmt.Errorf("failed to record audit event: %w", err)
 			}
 		}
+		if params.Action == domain.ObservationStatusAccepted || params.Action == domain.ObservationStatusCorrected {
+			if s.verifiedFactRepo != nil {
+				if _, err := s.createVerifiedFactInTx(ctx, tx, params.OrganizationID, obs, params.Action, params.ReviewerID, params.Notes); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -739,11 +746,23 @@ func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifie
 		return nil, fmt.Errorf("%w: %v", ErrObservationNotFound, err)
 	}
 
+	var fact *domain.VerifiedFact
+	if err := s.withTx(ctx, func(tx *sql.Tx) error {
+		fact, err = s.createVerifiedFactInTx(ctx, tx, params.OrganizationID, obs, params.ReviewAction, params.ReviewerID, params.ReviewNotes)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	return fact, nil
+}
+
+func (s *AIService) createVerifiedFactInTx(ctx context.Context, tx *sql.Tx, orgID uuid.UUID, obs *domain.Observation, action domain.ObservationStatus, reviewerID uuid.UUID, notes string) (*domain.VerifiedFact, error) {
 	var caseID *uuid.UUID
 	if obs.CaseID != nil {
 		caseID = obs.CaseID
 	} else if obs.EvidenceID != nil {
-		ev, err := s.evidenceRepo.FindByID(ctx, params.OrganizationID, *obs.EvidenceID)
+		ev, err := s.evidenceRepo.FindByID(ctx, orgID, *obs.EvidenceID)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrEvidenceNotFound, err)
 		}
@@ -767,13 +786,13 @@ func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifie
 	}
 
 	var correctedValue map[string]any
-	if params.ReviewAction == domain.ObservationStatusCorrected {
+	if action == domain.ObservationStatusCorrected {
 		correctedValue = make(map[string]any)
 		for k, v := range originalValue {
 			correctedValue[k] = v
 		}
-		if len(params.ReviewNotes) > 0 {
-			correctedValue["human_correction"] = params.ReviewNotes
+		if len(notes) > 0 {
+			correctedValue["human_correction"] = notes
 		}
 	}
 
@@ -792,23 +811,23 @@ func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifie
 	}
 
 	source := "AI_OBSERVATION"
-	if params.ReviewAction == domain.ObservationStatusCorrected {
+	if action == domain.ObservationStatusCorrected {
 		source = "HUMAN_CORRECTION"
-	} else if params.ReviewAction == domain.ObservationStatusAccepted {
+	} else if action == domain.ObservationStatusAccepted {
 		source = "HUMAN_ACCEPTED"
 	}
 
 	fact, err := domain.NewVerifiedFact(domain.VerifiedFactParams{
-		OrganizationID: params.OrganizationID,
+		OrganizationID: orgID,
 		CaseID:         caseID,
-		ObservationID:  params.ObservationID,
+		ObservationID:  obs.ID,
 		Type:           obs.Type,
 		Value:          value,
 		OriginalValue:  originalValue,
 		CorrectedValue: correctedValue,
-		ReviewAction:   params.ReviewAction,
-		ReviewerID:     params.ReviewerID,
-		ReviewNotes:    params.ReviewNotes,
+		ReviewAction:   action,
+		ReviewerID:     reviewerID,
+		ReviewNotes:    notes,
 		Source:         source,
 		Model:          model,
 		InputHash:      inputHash,
@@ -822,41 +841,30 @@ func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifie
 		return nil, fmt.Errorf("%w: verified fact repository not configured", ErrInvalidInput)
 	}
 
-	if err := s.withTx(ctx, func(tx *sql.Tx) error {
-		if s.auditor != nil {
-			auditAction := "ai.verified_fact.created"
-			auditOutcome := "success"
-			auditResource := "ai_verified_fact"
-			auditResourceID := shared.StrPtr(fact.ID.String())
-
-			if s.auditor != nil {
-				if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
-					OrganizationID: params.OrganizationID,
-					ActorID:        &params.ReviewerID,
-					Action:         auditAction,
-					Resource:       auditResource,
-					ResourceID:     auditResourceID,
-					Outcome:        auditOutcome,
-					Metadata: map[string]interface{}{
-						"observation_id":   fact.ObservationID.String(),
-						"observation_type": string(fact.Type),
-						"review_action":    string(fact.ReviewAction),
-						"source":           fact.Source,
-						"model":            model.Name,
-						"reviewer_id":      fact.ReviewerID.String(),
-					},
-				}); err != nil {
-					return fmt.Errorf("failed to record verified fact audit event: %w", err)
-				}
-			}
+	if s.auditor != nil {
+		auditAction := "ai.verified_fact.created"
+		if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+			OrganizationID: orgID,
+			ActorID:        &reviewerID,
+			Action:         auditAction,
+			Resource:       "ai_verified_fact",
+			ResourceID:     shared.StrPtr(fact.ID.String()),
+			Outcome:        "success",
+			Metadata: map[string]interface{}{
+				"observation_id":   fact.ObservationID.String(),
+				"observation_type": string(fact.Type),
+				"review_action":    string(fact.ReviewAction),
+				"source":           fact.Source,
+				"model":            model.Name,
+				"reviewer_id":      fact.ReviewerID.String(),
+			},
+		}); err != nil {
+			return nil, fmt.Errorf("failed to record verified fact audit event: %w", err)
 		}
+	}
 
-		if err := s.verifiedFactRepo.SaveTx(ctx, tx, fact); err != nil {
-			return fmt.Errorf("failed to save verified fact: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
+	if err := s.verifiedFactRepo.SaveTx(ctx, tx, fact); err != nil {
+		return nil, fmt.Errorf("failed to save verified fact: %w", err)
 	}
 
 	return fact, nil
