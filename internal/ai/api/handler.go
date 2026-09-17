@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -25,6 +26,7 @@ type AIService interface {
 	ListObservations(ctx context.Context, params application.ListObservationsParams) ([]*domain.Observation, int, error)
 	ListCaseObservations(ctx context.Context, params application.ListCaseObservationsParams) ([]*domain.Observation, int, error)
 	ReviewObservation(ctx context.Context, params application.ReviewObservationParams) (*domain.Observation, error)
+	CreateVerifiedFact(ctx context.Context, params application.CreateVerifiedFactParams) (*domain.VerifiedFact, error)
 }
 
 func NewHandler(svc AIService) *Handler {
@@ -41,6 +43,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Get("/observations", h.ListObservations)
 			r.Post("/observations/{observationId}/accept", h.AcceptObservation)
 			r.Post("/observations/{observationId}/reject", h.RejectObservation)
+			r.Post("/observations/{observationId}/verified-facts", h.CreateVerifiedFact)
 		})
 	})
 
@@ -55,6 +58,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 			r.Post("/observations/{observationId}/reject", h.RejectObservation)
 			r.Post("/observations/{observationId}/correct", h.CorrectObservation)
 			r.Post("/observations/{observationId}/dismiss", h.DismissObservation)
+			r.Post("/observations/{observationId}/verified-facts", h.CreateVerifiedFact)
 		})
 	})
 }
@@ -439,6 +443,70 @@ func (h *Handler) DismissObservation(w http.ResponseWriter, r *http.Request) {
 	shared.WriteSuccess(w, http.StatusOK, serializeObservation(obs), nil)
 }
 
+func (h *Handler) CreateVerifiedFact(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := parseUUID(r, "orgId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid organization ID")
+		return
+	}
+
+	observationID, ok := parseUUID(r, "observationId")
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid observation ID")
+		return
+	}
+
+	actorID := getUserID(r)
+	if actorID == uuid.Nil {
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "authentication required")
+		return
+	}
+
+	var req struct {
+		Action string `json:"action,omitempty"`
+		Notes  string `json:"notes,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	action := domain.ObservationStatus(req.Action)
+	if action == "" {
+		action = domain.ObservationStatusAccepted
+	}
+	if err := validateVerifiedFactAction(action); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, err.Error())
+		return
+	}
+
+	fact, err := h.svc.CreateVerifiedFact(r.Context(), application.CreateVerifiedFactParams{
+		OrganizationID: orgID,
+		ObservationID:  observationID,
+		ReviewerID:     actorID,
+		ReviewAction:   action,
+		ReviewNotes:    req.Notes,
+	})
+	if err != nil {
+		writeAIError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusCreated, serializeVerifiedFact(fact), nil)
+}
+
+func validateVerifiedFactAction(action domain.ObservationStatus) error {
+	switch action {
+	case domain.ObservationStatusAccepted,
+		domain.ObservationStatusRejected,
+		domain.ObservationStatusCorrected,
+		domain.ObservationStatusDismissed:
+		return nil
+	default:
+		return fmt.Errorf("invalid action %q", action)
+	}
+}
+
 func parseUUID(r *http.Request, name string) (uuid.UUID, bool) {
 	v := chi.URLParam(r, name)
 	id, err := uuid.Parse(v)
@@ -493,6 +561,34 @@ func serializeObservation(o *domain.Observation) map[string]interface{} {
 	}
 	if o.ReviewedBy != nil {
 		result["reviewed_by"] = o.ReviewedBy
+	}
+	return result
+}
+
+func serializeVerifiedFact(f *domain.VerifiedFact) map[string]interface{} {
+	result := map[string]interface{}{
+		"id":               f.ID,
+		"organization_id":  f.OrganizationID,
+		"observation_id":   f.ObservationID,
+		"observation_type": f.Type,
+		"value":            f.Value,
+		"original_value":   f.OriginalValue,
+		"corrected_value":  f.CorrectedValue,
+		"provenance":       f.Provenance,
+		"review_action":    f.ReviewAction,
+		"reviewer_id":      f.ReviewerID,
+		"review_notes":     f.ReviewNotes,
+		"created_at":       f.CreatedAt,
+		"verified_at":      f.VerifiedAt,
+		"source":           f.Source,
+		"input_hash":       f.InputHash,
+		"output_hash":      f.OutputHash,
+	}
+	if f.CaseID != nil {
+		result["case_id"] = *f.CaseID
+	}
+	if f.Model != nil {
+		result["model"] = f.Model
 	}
 	return result
 }

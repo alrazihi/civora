@@ -74,15 +74,16 @@ type ObservationResult struct {
 }
 
 type AIService struct {
-	repo         domain.ObservationRepository
-	evidenceRepo EvidenceRepository
-	formRepo     FormSubmissionRepository
-	userChecker  shared.UserChecker
-	auditor      auditdomain.EventRecorder
-	provider     AIProvider
-	db           *sql.DB
-	documents    DocumentContentProvider
-	sanitizer    PIISanitizer
+	repo              domain.ObservationRepository
+	evidenceRepo      EvidenceRepository
+	formRepo          FormSubmissionRepository
+	userChecker       shared.UserChecker
+	auditor           auditdomain.EventRecorder
+	provider          AIProvider
+	db                *sql.DB
+	documents         DocumentContentProvider
+	sanitizer         PIISanitizer
+	verifiedFactRepo  domain.VerifiedFactRepository
 }
 
 func NewAIService(repo domain.ObservationRepository, evidenceRepo EvidenceRepository, formRepo FormSubmissionRepository, userChecker shared.UserChecker, auditor auditdomain.EventRecorder, provider AIProvider) *AIService {
@@ -113,6 +114,13 @@ func (s *AIService) WithDocumentContent(documents DocumentContentProvider) *AISe
 // they are sent to a provider.
 func (s *AIService) WithPIISanitizer(sanitizer PIISanitizer) *AIService {
 	s.sanitizer = sanitizer
+	return s
+}
+
+// WithVerifiedFactRepo wires the repository used to persist verified facts
+// produced when AI observations are accepted or corrected.
+func (s *AIService) WithVerifiedFactRepo(repo domain.VerifiedFactRepository) *AIService {
+	s.verifiedFactRepo = repo
 	return s
 }
 
@@ -625,6 +633,14 @@ type ReviewObservationParams struct {
 	Notes          string
 }
 
+type CreateVerifiedFactParams struct {
+	OrganizationID uuid.UUID
+	ObservationID  uuid.UUID
+	ReviewerID     uuid.UUID
+	ReviewAction   domain.ObservationStatus
+	ReviewNotes    string
+}
+
 func (s *AIService) ReviewObservation(ctx context.Context, params ReviewObservationParams) (*domain.Observation, error) {
 	if params.ReviewerID == uuid.Nil {
 		return nil, fmt.Errorf("%w: reviewer ID is required", ErrInvalidInput)
@@ -700,6 +716,144 @@ func (s *AIService) ReviewObservation(ctx context.Context, params ReviewObservat
 	}
 
 	return obs, nil
+}
+
+func (s *AIService) CreateVerifiedFact(ctx context.Context, params CreateVerifiedFactParams) (*domain.VerifiedFact, error) {
+	if params.ReviewerID == uuid.Nil {
+		return nil, fmt.Errorf("%w: reviewer ID is required", ErrInvalidInput)
+	}
+
+	valid, err := s.userChecker.BelongsToOrganization(ctx, params.OrganizationID, params.ReviewerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate reviewer: %w", err)
+	}
+	if !valid {
+		return nil, fmt.Errorf("%w: user does not belong to organization", ErrInvalidInput)
+	}
+
+	obs, err := s.repo.FindByID(ctx, params.OrganizationID, params.ObservationID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrObservationNotFound, err)
+	}
+
+	var caseID *uuid.UUID
+	if obs.CaseID != nil {
+		caseID = obs.CaseID
+	} else if obs.EvidenceID != nil {
+		sr := &evidencedomain.Evidence{}
+		_ = sr
+	}
+
+	value := make(map[string]any)
+	for k, v := range obs.Content {
+		value[k] = v
+	}
+	if obs.Statement != "" {
+		value["statement"] = obs.Statement
+	}
+
+	originalValue := make(map[string]any)
+	for k, v := range obs.Content {
+		originalValue[k] = v
+	}
+	if obs.Statement != "" {
+		originalValue["statement"] = obs.Statement
+	}
+
+	var correctedValue map[string]any
+	if params.ReviewAction == domain.ObservationStatusCorrected {
+		correctedValue = make(map[string]any)
+		for k, v := range originalValue {
+			correctedValue[k] = v
+		}
+		if len(params.ReviewNotes) > 0 {
+			correctedValue["human_correction"] = params.ReviewNotes
+		}
+	}
+
+	model := &domain.ModelInfo{}
+	if obs.Model != nil {
+		model = obs.Model
+	}
+
+	inputHash := obs.InputHash
+	if inputHash == "" {
+		inputHash = computePlaceholderHash(originalValue)
+	}
+	outputHash := obs.OutputHash
+	if outputHash == "" {
+		outputHash = computePlaceholderHash(originalValue)
+	}
+
+	source := "AI_OBSERVATION"
+	if params.ReviewAction == domain.ObservationStatusCorrected {
+		source = "HUMAN_CORRECTION"
+	} else if params.ReviewAction == domain.ObservationStatusAccepted {
+		source = "HUMAN_ACCEPTED"
+	}
+
+	fact, err := domain.NewVerifiedFact(domain.VerifiedFactParams{
+		OrganizationID:  params.OrganizationID,
+		CaseID:          caseID,
+		ObservationID:   params.ObservationID,
+		Type:            obs.Type,
+		Value:           value,
+		OriginalValue:   originalValue,
+		CorrectedValue:  correctedValue,
+		ReviewAction:    params.ReviewAction,
+		ReviewerID:      params.ReviewerID,
+		ReviewNotes:     params.ReviewNotes,
+		Source:          source,
+		Model:           model,
+		InputHash:       inputHash,
+		OutputHash:      outputHash,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+
+	if s.verifiedFactRepo == nil {
+		return nil, fmt.Errorf("%w: verified fact repository not configured", ErrInvalidInput)
+	}
+
+	if err := s.withTx(ctx, func(tx *sql.Tx) error {
+		if s.auditor != nil {
+			auditAction := "ai.verified_fact.created"
+			auditOutcome := "success"
+			auditResource := "ai_verified_fact"
+			auditResourceID := shared.StrPtr(fact.ID.String())
+
+			if s.auditor != nil {
+				if err := shared.RecordAuditEventInTx(ctx, tx, s.auditor, auditdomain.RecordEventParams{
+					OrganizationID: params.OrganizationID,
+					ActorID:        &params.ReviewerID,
+					Action:         auditAction,
+					Resource:       auditResource,
+					ResourceID:     auditResourceID,
+					Outcome:        auditOutcome,
+					Metadata: map[string]interface{}{
+						"observation_id":   fact.ObservationID.String(),
+						"observation_type": string(fact.Type),
+						"review_action":    string(fact.ReviewAction),
+						"source":           fact.Source,
+						"model":            model.Name,
+						"reviewer_id":      fact.ReviewerID.String(),
+					},
+				}); err != nil {
+					return fmt.Errorf("failed to record verified fact audit event: %w", err)
+				}
+			}
+		}
+
+		if err := s.verifiedFactRepo.SaveTx(ctx, tx, fact); err != nil {
+			return fmt.Errorf("failed to save verified fact: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return fact, nil
 }
 
 func serializeObservation(o *domain.Observation) ObservationDTO {

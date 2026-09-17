@@ -926,3 +926,300 @@ func (m *mockDocumentContentProvider) GetDocumentContent(ctx context.Context, or
 	}
 	return io.NopCloser(bytes.NewReader(m.content)), nil
 }
+
+type mockVerifiedFactRepo struct {
+	saved      []*domain.VerifiedFact
+	findErr    error
+	fact       *domain.VerifiedFact
+	updateErr  error
+	listResult []*domain.VerifiedFact
+	listTotal  int
+	listErr    error
+}
+
+func (m *mockVerifiedFactRepo) Save(ctx context.Context, f *domain.VerifiedFact) error {
+	m.saved = append(m.saved, f)
+	return nil
+}
+
+func (m *mockVerifiedFactRepo) SaveTx(ctx context.Context, tx *sql.Tx, f *domain.VerifiedFact) error {
+	m.saved = append(m.saved, f)
+	return nil
+}
+
+func (m *mockVerifiedFactRepo) FindByID(ctx context.Context, orgID, id uuid.UUID) (*domain.VerifiedFact, error) {
+	if m.findErr != nil {
+		return nil, m.findErr
+	}
+	if m.fact == nil {
+		return nil, domain.ErrVerifiedFactNotFound
+	}
+	return m.fact, nil
+}
+
+func (m *mockVerifiedFactRepo) FindByObservation(ctx context.Context, orgID, observationID uuid.UUID) (*domain.VerifiedFact, error) {
+	if m.findErr != nil {
+		return nil, m.findErr
+	}
+	if m.fact == nil {
+		return nil, domain.ErrVerifiedFactNotFound
+	}
+	return m.fact, nil
+}
+
+func (m *mockVerifiedFactRepo) FindByCase(ctx context.Context, orgID, caseID uuid.UUID, limit, offset int) ([]*domain.VerifiedFact, int, error) {
+	if m.listErr != nil {
+		return nil, 0, m.listErr
+	}
+	return m.listResult, m.listTotal, nil
+}
+
+func (m *mockVerifiedFactRepo) CountByCase(ctx context.Context, orgID, caseID uuid.UUID) (int, error) {
+	return 0, nil
+}
+
+func (m *mockVerifiedFactRepo) Delete(ctx context.Context, orgID, id uuid.UUID) error {
+	return nil
+}
+
+func TestAIService_CreateVerifiedFact_Success(t *testing.T) {
+	orgID := uuid.New()
+	observationID := uuid.New()
+	reviewerID := uuid.New()
+
+	obs := &domain.Observation{
+		ID:               observationID,
+		OrganizationID:   orgID,
+		CaseID:           uuidPtr(uuid.New()),
+		Type:             domain.ObservationTypeSummary,
+		Source:           domain.ObservationSourceAIModel,
+		Status:           domain.ObservationStatusAccepted,
+		Model:            &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		Content:          map[string]any{"text": "sample observation"},
+		Statement:        "Sample statement",
+		InputHash:        "abc123",
+		OutputHash:       "def456",
+		SourceReferences: []domain.SourceReference{{Type: "evidence", ID: uuid.New().String()}},
+		ReviewedAt:       timePtr(time.Now()),
+		ReviewedBy:       &reviewerID,
+		ReviewNotes:      "reviewer notes",
+	}
+
+	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
+	obsRepo := &mockObservationRepo{obs: obs}
+	formRepo := &mockFormRepo{}
+	vfRepo := &mockVerifiedFactRepo{}
+	userChecker := &mockUserChecker{valid: true}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, userChecker, nil, &mockAIProvider{}).WithVerifiedFactRepo(vfRepo)
+
+	fact, err := svc.CreateVerifiedFact(context.Background(), CreateVerifiedFactParams{
+		OrganizationID: orgID,
+		ObservationID:  observationID,
+		ReviewerID:     reviewerID,
+		ReviewAction:   domain.ObservationStatusAccepted,
+		ReviewNotes:    "accepted",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if fact == nil {
+		t.Fatal("expected non-nil verified fact")
+	}
+	if fact.ObservationID != observationID {
+		t.Errorf("expected observation ID %s, got %s", observationID, fact.ObservationID)
+	}
+	if fact.ReviewerID != reviewerID {
+		t.Errorf("expected reviewer ID %s, got %s", reviewerID, fact.ReviewerID)
+	}
+	if fact.ReviewAction != domain.ObservationStatusAccepted {
+		t.Errorf("expected review action %s, got %s", domain.ObservationStatusAccepted, fact.ReviewAction)
+	}
+	if fact.Source != "HUMAN_ACCEPTED" {
+		t.Errorf("expected source HUMAN_ACCEPTED, got %s", fact.Source)
+	}
+	if fact.Provenance == nil {
+		t.Fatal("expected non-nil provenance")
+	}
+	if fact.Provenance.Source != "HUMAN_ACCEPTED" {
+		t.Errorf("expected provenance source HUMAN_ACCEPTED, got %s", fact.Provenance.Source)
+	}
+	if len(vfRepo.saved) != 1 {
+		t.Errorf("expected 1 saved verified fact, got %d", len(vfRepo.saved))
+	}
+}
+
+func TestAIService_CreateVerifiedFact_Corrected(t *testing.T) {
+	orgID := uuid.New()
+	observationID := uuid.New()
+	reviewerID := uuid.New()
+
+	obs := &domain.Observation{
+		ID:               observationID,
+		OrganizationID:   orgID,
+		CaseID:           uuidPtr(uuid.New()),
+		Type:             domain.ObservationTypeSummary,
+		Source:           domain.ObservationSourceAIModel,
+		Status:           domain.ObservationStatusCorrected,
+		Model:            &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		Content:          map[string]any{"text": "sample observation"},
+		Statement:        "Sample statement",
+		InputHash:        "abc123",
+		OutputHash:       "def456",
+		ReviewedAt:       timePtr(time.Now()),
+		ReviewedBy:       &reviewerID,
+		ReviewNotes:      "corrected",
+	}
+
+	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
+	obsRepo := &mockObservationRepo{obs: obs}
+	formRepo := &mockFormRepo{}
+	vfRepo := &mockVerifiedFactRepo{}
+	userChecker := &mockUserChecker{valid: true}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, userChecker, nil, &mockAIProvider{}).WithVerifiedFactRepo(vfRepo)
+
+	fact, err := svc.CreateVerifiedFact(context.Background(), CreateVerifiedFactParams{
+		OrganizationID: orgID,
+		ObservationID:  observationID,
+		ReviewerID:     reviewerID,
+		ReviewAction:   domain.ObservationStatusCorrected,
+		ReviewNotes:    "corrected value",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if fact == nil {
+		t.Fatal("expected non-nil verified fact")
+	}
+	if fact.Source != "HUMAN_CORRECTION" {
+		t.Errorf("expected source HUMAN_CORRECTION, got %s", fact.Source)
+	}
+	if fact.Provenance == nil {
+		t.Fatal("expected non-nil provenance")
+	}
+	if fact.Provenance.Source != "HUMAN_CORRECTION" {
+		t.Errorf("expected provenance source HUMAN_CORRECTION, got %s", fact.Provenance.Source)
+	}
+	if fact.CorrectedValue == nil {
+		t.Error("expected non-nil corrected value for corrected action")
+	}
+	if len(vfRepo.saved) != 1 {
+		t.Errorf("expected 1 saved verified fact, got %d", len(vfRepo.saved))
+	}
+}
+
+func TestAIService_CreateVerifiedFact_UserNotInOrg(t *testing.T) {
+	orgID := uuid.New()
+	observationID := uuid.New()
+	reviewerID := uuid.New()
+
+	obs := &domain.Observation{
+		ID:               observationID,
+		OrganizationID:   orgID,
+		CaseID:           uuidPtr(uuid.New()),
+		Type:             domain.ObservationTypeSummary,
+		Source:           domain.ObservationSourceAIModel,
+		Status:           domain.ObservationStatusAccepted,
+		Model:            &domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		Content:          map[string]any{"text": "sample"},
+		InputHash:        "abc123",
+		OutputHash:       "def456",
+		ReviewedAt:       timePtr(time.Now()),
+		ReviewedBy:       &reviewerID,
+		ReviewNotes:      "reviewer notes",
+	}
+
+	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
+	obsRepo := &mockObservationRepo{obs: obs}
+	formRepo := &mockFormRepo{}
+	vfRepo := &mockVerifiedFactRepo{}
+	userChecker := &mockUserChecker{valid: false}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, userChecker, nil, &mockAIProvider{}).WithVerifiedFactRepo(vfRepo)
+
+	_, err := svc.CreateVerifiedFact(context.Background(), CreateVerifiedFactParams{
+		OrganizationID: orgID,
+		ObservationID:  observationID,
+		ReviewerID:     reviewerID,
+		ReviewAction:   domain.ObservationStatusAccepted,
+		ReviewNotes:    "accepted",
+	})
+	if err == nil {
+		t.Fatal("expected error for user not in org")
+	}
+}
+
+func TestAIService_CreateVerifiedFact_ObservationNotFound(t *testing.T) {
+	orgID := uuid.New()
+	observationID := uuid.New()
+	reviewerID := uuid.New()
+
+	evRepo := &mockEvidenceRepo{findErr: evidencedomain.ErrEvidenceNotFound}
+	obsRepo := &mockObservationRepo{findErr: domain.ErrObservationNotFound}
+	formRepo := &mockFormRepo{}
+	vfRepo := &mockVerifiedFactRepo{}
+	userChecker := &mockUserChecker{valid: true}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, userChecker, nil, &mockAIProvider{}).WithVerifiedFactRepo(vfRepo)
+
+	_, err := svc.CreateVerifiedFact(context.Background(), CreateVerifiedFactParams{
+		OrganizationID: orgID,
+		ObservationID:  observationID,
+		ReviewerID:     reviewerID,
+		ReviewAction:   domain.ObservationStatusAccepted,
+		ReviewNotes:    "accepted",
+	})
+	if err == nil {
+		t.Fatal("expected error for observation not found")
+	}
+}
+
+func TestAIService_CreateVerifiedFact_MissingRepo(t *testing.T) {
+	orgID := uuid.New()
+	observationID := uuid.New()
+	reviewerID := uuid.New()
+
+	obs := &domain.Observation{
+		ID:               observationID,
+		OrganizationID:   orgID,
+		CaseID:           uuidPtr(uuid.New()),
+		Type:             domain.ObservationTypeSummary,
+		Source:           domain.ObservationSourceAIModel,
+		Status:           domain.ObservationStatusAccepted,
+		Content:          map[string]any{"text": "sample"},
+		InputHash:        "abc123",
+		OutputHash:       "def456",
+		ReviewedAt:       timePtr(time.Now()),
+		ReviewedBy:       &reviewerID,
+		ReviewNotes:      "reviewer notes",
+	}
+
+	evRepo := &mockEvidenceRepo{evidence: &evidencedomain.Evidence{OrganizationID: orgID}, serviceRequest: []*evidencedomain.Evidence{{OrganizationID: orgID}}}
+	obsRepo := &mockObservationRepo{obs: obs}
+	formRepo := &mockFormRepo{}
+	userChecker := &mockUserChecker{valid: true}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, userChecker, nil, &mockAIProvider{})
+
+	_, err := svc.CreateVerifiedFact(context.Background(), CreateVerifiedFactParams{
+		OrganizationID: orgID,
+		ObservationID:  observationID,
+		ReviewerID:     reviewerID,
+		ReviewAction:   domain.ObservationStatusAccepted,
+		ReviewNotes:    "accepted",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing verified fact repo")
+	}
+}
+
+func uuidPtr(u uuid.UUID) *uuid.UUID {
+	return &u
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
