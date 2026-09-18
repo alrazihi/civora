@@ -39,6 +39,47 @@ async function api(method, path, body) {
   return res.json().catch(() => ({}));
 }
 
+async function apiRaw(method, path, body) {
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if ((method === 'POST' || method === 'PUT') && !headers['Idempotency-Key']) {
+    headers['Idempotency-Key'] = crypto.randomUUID();
+  }
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) { clearAuth(); router.navigate('login'); }
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const msg = errData.error?.message || `HTTP ${res.status}`;
+    const err = new Error(`${res.status} ${msg}`);
+    err.status = res.status;
+    err.data = errData;
+    throw err;
+  }
+  return res;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function triggerExport(opts = {}) {
+  const res = await exportData(opts);
+  const blob = await res.blob();
+  const filename = res.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || `civora-export-${Date.now()}`;
+  downloadBlob(blob, filename);
+}
+
 async function apiJSON(method, path, body) {
   return api(method, path, body);
 }
@@ -747,3 +788,65 @@ if (typeof module !== 'undefined' && module.exports) {
   window.ReviewQueueAPI = { listReviewQueue, getReviewQueueEntry, claimReview, startReview, completeReview, escalateReview, requestReviewInformation };
   window.AIObservationsAPI = { generateAIObservations, listAIObservations, acceptAIObservation, rejectAIObservation };
 }
+
+async function getOperationsDashboard(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.period) params.set('period', opts.period);
+  if (opts.bucket) params.set('bucket', opts.bucket);
+  if (opts.workflow_key) params.set('workflow_key', opts.workflow_key);
+  if (opts.status) params.set('status', opts.status);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/operations/metrics/dashboard${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+async function getAllOperationsMetrics(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.period) params.set('period', opts.period);
+  if (opts.bucket) params.set('bucket', opts.bucket);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/operations/metrics${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+async function getWorkflowAnalysis(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.state_accumulation_threshold) params.set('state_accumulation_threshold', opts.state_accumulation_threshold);
+  if (opts.state_duration_threshold_hours) params.set('state_duration_threshold_hours', opts.state_duration_threshold_hours);
+  if (opts.aging_threshold_hours) params.set('aging_threshold_hours', opts.aging_threshold_hours);
+  if (opts.review_backlog_threshold) params.set('review_backlog_threshold', opts.review_backlog_threshold);
+  if (opts.info_request_frequency_per_case) params.set('info_request_frequency_per_case', opts.info_request_frequency_per_case);
+  if (opts.cycle_time_threshold_hours) params.set('cycle_time_threshold_hours', opts.cycle_time_threshold_hours);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/operations/analysis/workflow${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+async function getAnalysisThresholds() {
+  const path = `/organizations/${orgId}/operations/analysis/thresholds`;
+  return api('GET', path);
+}
+
+async function getImpactReport(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.period) params.set('period', opts.period);
+  if (opts.bucket) params.set('bucket', opts.bucket);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/operations/impact/report${qs ? `?${qs}` : ''}`;
+  return api('GET', path);
+}
+
+async function exportData(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.format) params.set('format', opts.format);
+  if (opts.scope) params.set('scope', opts.scope);
+  if (opts.period) params.set('period', opts.period);
+  if (opts.bucket) params.set('bucket', opts.bucket);
+  if (opts.workflow_key) params.set('workflow_key', opts.workflow_key);
+  if (opts.status) params.set('status', opts.status);
+  const qs = params.toString();
+  const path = `/organizations/${orgId}/operations/export${qs ? `?${qs}` : ''}`;
+  return apiRaw('GET', path);
+}
+
+window.OperationsAPI = { getOperationsDashboard, getAllOperationsMetrics, getWorkflowAnalysis, getAnalysisThresholds, getImpactReport, exportData };

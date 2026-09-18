@@ -46,6 +46,10 @@ const routes = {
   casesSearch: regex(`organizations/${ORG_ID}/cases\\?`),
   caseWorkflow: (id: string) => regex(`organizations/${ORG_ID}/cases/${id}/workflow`),
   dashboardStats: regex(`organizations/${ORG_ID}/cases/dashboard/statistics`),
+  operationsDashboard: regex(`organizations/${ORG_ID}/operations/metrics/dashboard`),
+  workflowAnalysis: regex(`organizations/${ORG_ID}/operations/analysis/workflow`),
+  analysisThresholds: regex(`organizations/${ORG_ID}/operations/analysis/thresholds`),
+  impactReport: regex(`organizations/${ORG_ID}/operations/impact/report`),
 };
 
 // Install request handlers mocking the CIVORA API for the case workflows.
@@ -97,6 +101,109 @@ async function openDashboard(page: Page) {
   await page.goto('/');
   await expect(page).toHaveURL(/#dashboard/);
   await expect(page.locator('#view-dashboard')).toBeVisible();
+}
+
+async function openOperationsDashboard(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('civora_token', 'dev-token');
+    localStorage.setItem('civora_org_id', 'org-test');
+  });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => router.navigate('operations-dashboard'));
+  await expect(page).toHaveURL(/#operations-dashboard/);
+  await expect(page.locator('#view-operations-dashboard')).toBeVisible();
+}
+
+const WORKFLOW_ANALYSIS_REPORT = {
+  organization_id: ORG_ID,
+  calculated_at: new Date().toISOString(),
+  period: 'daily',
+  state_accumulations: [
+    { workflow_key: 'emergency_assistance', state_key: 'IN_PROGRESS', case_count: 15, threshold: 10, observation: 'high volume in state IN_PROGRESS', language: 'high_volume', calculated_at: new Date().toISOString() },
+  ],
+  state_duration_anomalies: [
+    { workflow_key: 'emergency_assistance', state_key: 'REVIEW', avg_duration_hours: 36, median_duration_hours: 32, max_duration_hours: 60, threshold_hours: 24, observation: 'longer observed duration in state REVIEW', language: 'longer_duration', calculated_at: new Date().toISOString() },
+  ],
+  workflow_closure_patterns: [
+    { workflow_key: 'emergency_assistance', total_cases: 100, closed_cases: 80, rejected_cases: 5, closure_rate: 0.8, rejection_rate: 0.05, observation: 'closure rate within expected range', language: 'high_volume', calculated_at: new Date().toISOString() },
+  ],
+  information_request_patterns: [
+    { workflow_key: 'emergency_assistance', total_cases: 100, info_request_count: 180, frequency_per_case: 1.8, threshold_per_case: 1.5, observation: 'higher frequency of information requests', language: 'higher_frequency', calculated_at: new Date().toISOString() },
+  ],
+  review_backlog_observations: [
+    { pending_reviews: 25, assigned_reviews: 10, in_review_reviews: 15, avg_wait_time_hours: 48, threshold: 20, observation: 'increased backlog of pending reviews', language: 'increased_backlog', calculated_at: new Date().toISOString() },
+  ],
+  threshold_exceedances: [
+    { case_id: 'case-1', case_number: 'CAS-001', workflow_key: 'emergency_assistance', current_state: 'REVIEW', threshold_type: 'state_duration_threshold_hours', threshold_value: 24, actual_value: 60, observation: 'longer observed duration in state REVIEW', language: 'longer_duration', calculated_at: new Date().toISOString() },
+  ],
+};
+
+async function openWorkflowAnalysis(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('civora_token', 'dev-token');
+    localStorage.setItem('civora_org_id', 'org-test');
+  });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => router.navigate('workflow-analysis'));
+  await expect(page).toHaveURL(/#workflow-analysis/);
+  await expect(page.locator('#view-workflow-analysis')).toBeVisible();
+}
+
+function attachWorkflowAnalysisMocks(page: Page) {
+  page.route(routes.workflowAnalysis, async (route) => {
+    await route.fulfill({ json: { success: true, data: WORKFLOW_ANALYSIS_REPORT } });
+  });
+  page.route(routes.analysisThresholds, async (route) => {
+    await route.fulfill({ json: { success: true, data: { state_accumulation_threshold: 10, state_duration_threshold_hours: 24, aging_threshold_hours: 720, review_backlog_threshold: 20, info_request_frequency_per_case: 1.5, cycle_time_threshold_hours: 72 } } });
+  });
+}
+
+const IMPACT_REPORT = {
+  organization_id: ORG_ID,
+  calculated_at: new Date().toISOString(),
+  period: 'daily',
+  bucket: new Date().toISOString(),
+  metrics: [
+    { category: 'activity', name: 'cases_created', label: 'Cases Created', description: 'Total cases opened in the period', activity_count: 10, outcome_count: 0, impact_value: 0, unit: 'cases', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'cases_completed', label: 'Cases Completed', description: 'Cases moved to a closed terminal state', activity_count: 0, outcome_count: 6, impact_value: 0, unit: 'cases', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'cases_rejected', label: 'Cases Rejected', description: 'Cases closed with a rejected status', activity_count: 0, outcome_count: 1, impact_value: 0, unit: 'cases', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'cases_needing_information', label: 'Cases Needing Additional Information', description: 'Cases with a decision requesting more information', activity_count: 0, outcome_count: 2, impact_value: 0, unit: 'cases', calculated_at: new Date().toISOString() },
+    { category: 'activity', name: 'assistance_created', label: 'Assistance Created', description: 'Assistance records opened', activity_count: 8, outcome_count: 0, impact_value: 0, unit: 'records', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'assistance_completed', label: 'Assistance Completed', description: 'Assistance records marked as completed', activity_count: 0, outcome_count: 5, impact_value: 0, unit: 'records', calculated_at: new Date().toISOString() },
+    { category: 'activity', name: 'follow_ups_scheduled', label: 'Follow-ups Scheduled', description: 'Follow-up appointments scheduled', activity_count: 4, outcome_count: 0, impact_value: 0, unit: 'records', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'follow_ups_completed', label: 'Follow-ups Completed', description: 'Follow-up appointments marked as completed', activity_count: 0, outcome_count: 3, impact_value: 0, unit: 'records', calculated_at: new Date().toISOString() },
+    { category: 'activity', name: 'evidence_submitted', label: 'Evidence Submitted', description: 'Evidence items uploaded to cases', activity_count: 12, outcome_count: 0, impact_value: 0, unit: 'items', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'evidence_verified', label: 'Evidence Verified', description: 'Evidence items verified by staff', activity_count: 0, outcome_count: 9, impact_value: 0, unit: 'items', calculated_at: new Date().toISOString() },
+    { category: 'activity', name: 'decisions_made', label: 'Decisions Made', description: 'Total human decisions recorded', activity_count: 7, outcome_count: 0, impact_value: 0, unit: 'decisions', calculated_at: new Date().toISOString() },
+    { category: 'outcome', name: 'decisions_approved', label: 'Decisions Approved', description: 'Decisions with an approved outcome', activity_count: 0, outcome_count: 4, impact_value: 0, unit: 'decisions', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'case_completion_rate', label: 'Case Completion Rate', description: 'Share of opened cases that were completed in the period', activity_count: 10, outcome_count: 6, impact_value: 0.6, unit: 'ratio', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'case_rejection_rate', label: 'Case Rejection Rate', description: 'Share of opened cases that were rejected in the period', activity_count: 10, outcome_count: 1, impact_value: 0.1, unit: 'ratio', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'information_request_rate', label: 'Information Request Rate', description: 'Share of opened cases that needed more information', activity_count: 10, outcome_count: 2, impact_value: 0.2, unit: 'ratio', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'assistance_completion_rate', label: 'Assistance Completion Rate', description: 'Share of assistance records completed in the period', activity_count: 8, outcome_count: 5, impact_value: 0.625, unit: 'ratio', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'follow_up_completion_rate', label: 'Follow-up Completion Rate', description: 'Share of scheduled follow-ups completed in the period', activity_count: 4, outcome_count: 3, impact_value: 0.75, unit: 'ratio', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'evidence_verification_rate', label: 'Evidence Verification Rate', description: 'Share of submitted evidence verified in the period', activity_count: 12, outcome_count: 9, impact_value: 0.75, unit: 'ratio', calculated_at: new Date().toISOString() },
+    { category: 'impact', name: 'decision_approval_rate', label: 'Decision Approval Rate', description: 'Share of decisions that were approved', activity_count: 7, outcome_count: 4, impact_value: 0.5714285714285714, unit: 'ratio', calculated_at: new Date().toISOString() },
+  ],
+};
+
+async function openImpactIntelligence(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('civora_token', 'dev-token');
+    localStorage.setItem('civora_org_id', 'org-test');
+  });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => router.navigate('impact-intelligence'));
+  await expect(page).toHaveURL(/#impact-intelligence/);
+  await expect(page.locator('#view-impact-intelligence')).toBeVisible();
+}
+
+function attachImpactMocks(page: Page) {
+  page.route(routes.impactReport, async (route) => {
+    await route.fulfill({ json: { success: true, data: IMPACT_REPORT } });
+  });
 }
 
 const newCaseSubmit = (page: Page) =>
@@ -396,6 +503,8 @@ export {
   ADMIN_TOKEN,
   EMERGENCY_WORKFLOW,
   PERSON,
+  WORKFLOW_ANALYSIS_REPORT,
+  IMPACT_REPORT,
   regex,
   orgPath,
   routes,
@@ -407,6 +516,11 @@ export {
   SAMPLE_WORKFLOWS,
   attachCaseMocks,
   openDashboard,
+  openOperationsDashboard,
+  openWorkflowAnalysis,
+  attachWorkflowAnalysisMocks,
+  openImpactIntelligence,
+  attachImpactMocks,
   newCaseSubmit,
   setupCaseWorkspaceMocks,
   setupFormMockRoutes,

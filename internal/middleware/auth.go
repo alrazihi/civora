@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	tenantKey contextKey = "tenant_id"
-	userIDKey contextKey = "user_id"
-	roleKey   contextKey = "user_role"
-	expiryKey contextKey = "token_exp"
+	TenantKey contextKey = "tenant_id"
+	UserIDKey contextKey = "user_id"
+	RoleKey   contextKey = "user_role"
+	ExpiryKey contextKey = "token_exp"
 )
 
 type JWTService struct {
@@ -111,9 +111,9 @@ func AuthRequired(svc *JWTService) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), userIDKey, userID)
-			ctx = context.WithValue(ctx, tenantKey, orgID)
-			ctx = context.WithValue(ctx, roleKey, role)
+			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+			ctx = context.WithValue(ctx, TenantKey, orgID)
+			ctx = context.WithValue(ctx, RoleKey, role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -166,15 +166,15 @@ func RequireAnyRole(roles ...string) func(http.Handler) http.Handler {
 }
 
 func GetTenantID(r *http.Request) string {
-	return getStringValue(r.Context().Value(tenantKey))
+	return getStringValue(r.Context().Value(TenantKey))
 }
 
 func GetUserID(r *http.Request) string {
-	return getStringValue(r.Context().Value(userIDKey))
+	return getStringValue(r.Context().Value(UserIDKey))
 }
 
 func GetUserRole(r *http.Request) string {
-	return getStringValue(r.Context().Value(roleKey))
+	return getStringValue(r.Context().Value(RoleKey))
 }
 
 func getStringValue(v any) string {

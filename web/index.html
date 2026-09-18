@@ -104,10 +104,11 @@
         </div>
         <nav aria-label="Dashboard actions">
             <button class="btn" onclick="router.navigate('new-case')" aria-label="Create new service request"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span> New Request</button>
-            <button class="btn secondary" id="btn-reviewer-nav" onclick="router.navigate('reviewer-queue')" aria-label="Reviewer workspace"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Reviewer Workspace</button>
+            <button class="btn secondary" id="btn-reviewer-nav" onclick="router.navigate('reviewer-queue')" aria-label="Reviewer workspace"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 16.5-9.5z"/></svg></span> Reviewer Workspace</button>
             <button class="btn secondary" onclick="router.navigate('workflows')" aria-label="View workflows"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span> Workflows</button>
             <button class="btn secondary" id="btn-forms-nav" style="display:none" onclick="router.navigate('forms')" aria-label="Manage forms"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Forms</button>
-            <button class="btn secondary" id="btn-rules-nav" style="display:none" onclick="router.navigate('rules')" aria-label="Manage rules"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 2 2 2 2 0 0 1-2 2h.09a1.65 1.65 0 0 0 1.51 1z"/></svg></span> Rules</button>
+            <button class="btn secondary" id="btn-rules-nav" style="display:none" onclick="router.navigate('rules')" aria-label="Manage rules"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l.06.06a2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82V9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09a1.65 1.65 0 0 0 1.51 1z"/></svg></span> Rules</button>
+            <button class="btn secondary" onclick="router.navigate('operations-dashboard')" aria-label="Operations dashboard"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Operations</button>
             <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Logout</button>
         </nav>
       </div>
@@ -137,6 +138,260 @@
         </table>
         <div id="dashboard-empty" class="empty hidden">No cases yet. <a href="#/new-case" style="color:var(--primary);font-weight:600">Create your first service request</a> to get started.</div>
       </div>
+    </div>
+  </div>
+
+  <div id="view-operations-dashboard" class="hidden">
+    <div class="container" id="main-content">
+      <div class="header">
+        <div>
+          <h1>Operations Dashboard</h1>
+          <p>Operational metrics and insights</p>
+        </div>
+        <nav aria-label="Operations actions">
+          <button class="btn secondary" onclick="router.navigate('dashboard')" aria-label="Back to dashboard"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span> Dashboard</button>
+          <button class="btn secondary" onclick="router.navigate('impact-intelligence')" aria-label="View impact intelligence"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> Impact</button>
+          <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Logout</button>
+        </nav>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h2 style="margin:0 0 12px 0">Filters</h2>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="ops-period">Period</label>
+            <select id="ops-period" class="form-control">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;min-width:160px;margin:0">
+            <label for="ops-workflow-key">Workflow</label>
+            <input id="ops-workflow-key" type="text" class="form-control" placeholder="e.g. emergency_assistance" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="ops-status">Status</label>
+            <input id="ops-status" type="text" class="form-control" placeholder="e.g. IN_PROGRESS" />
+          </div>
+          <button class="btn" id="ops-apply" aria-label="Apply filters">Apply</button>
+          <button class="btn secondary" id="ops-refresh" aria-label="Refresh metrics"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span> Refresh</button>
+          <button class="btn secondary" id="ops-export-json" aria-label="Export JSON">JSON</button>
+          <button class="btn secondary" id="ops-export-csv" aria-label="Export CSV">CSV</button>
+          <button class="btn secondary" id="ops-export-report" aria-label="Export Report">Report</button>
+        </div>
+      </div>
+
+      <div id="ops-loading" class="loading hidden" style="padding:8px 0"><div class="loading-spinner" aria-hidden="true"></div> Loading operations metrics…</div>
+      <div id="ops-error" class="card hidden" style="color:var(--danger);border-color:var(--danger);padding:16px;margin-bottom:16px" role="alert">
+        <strong>Failed to load operations metrics</strong>
+        <p id="ops-error-msg" style="margin:4px 0 0"></p>
+        <button class="btn sm" style="margin-top:8px" id="ops-retry">Retry</button>
+      </div>
+
+      <div id="ops-summary" class="stats-row" aria-live="polite"></div>
+      <div id="ops-breakdown" class="empty hidden"></div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Workflow Distribution</h2>
+        <div id="ops-workflow-dist"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">State Duration</h2>
+        <div id="ops-state-duration"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Case Cycle Time</h2>
+        <div id="ops-cycle-time"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Aging Cases</h2>
+        <div id="ops-aging"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Pending Reviews</h2>
+        <div id="ops-pending"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Decisions</h2>
+        <div id="ops-decisions"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Assistance Delivered</h2>
+        <div id="ops-assistance"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Evidence Requiring Attention</h2>
+        <div id="ops-evidence"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2 style="margin:0 0 12px 0">Information Required</h2>
+        <div id="ops-info-required"></div>
+      </div>
+
+      <p id="ops-calculated-at" class="text-muted" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div id="view-workflow-analysis" class="hidden">
+    <div class="container" id="main-content">
+      <div class="header">
+        <div>
+          <h1>Workflow Analysis</h1>
+          <p>Bottleneck and workflow observations</p>
+        </div>
+        <nav aria-label="Workflow analysis actions">
+          <button class="btn secondary" onclick="router.navigate('operations-dashboard')" aria-label="Back to operations dashboard"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Operations</button>
+          <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Logout</button>
+        </nav>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h2 style="margin:0 0 12px 0">Analysis Thresholds</h2>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="wa-state-accumulation">State accumulation</label>
+            <input id="wa-state-accumulation" type="number" class="form-control" value="10" min="1" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="wa-state-duration">State duration (hrs)</label>
+            <input id="wa-state-duration" type="number" class="form-control" value="24" min="1" step="0.5" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="wa-aging">Aging (hrs)</label>
+            <input id="wa-aging" type="number" class="form-control" value="720" min="1" step="0.5" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="wa-review-backlog-input">Review backlog</label>
+            <input id="wa-review-backlog-input" type="number" class="form-control" value="20" min="1" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="wa-info-frequency">Info request frequency</label>
+            <input id="wa-info-frequency" type="number" class="form-control" value="1.5" min="0.1" step="0.1" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="wa-cycle-time">Cycle time (hrs)</label>
+            <input id="wa-cycle-time" type="number" class="form-control" value="72" min="1" step="0.5" />
+          </div>
+          <button class="btn" id="wa-apply" aria-label="Apply thresholds">Apply</button>
+          <button class="btn secondary" id="wa-refresh" aria-label="Refresh analysis"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span> Refresh</button>
+          <button class="btn secondary" id="wa-export-json" aria-label="Export JSON">JSON</button>
+          <button class="btn secondary" id="wa-export-csv" aria-label="Export CSV">CSV</button>
+          <button class="btn secondary" id="wa-export-report" aria-label="Export Report">Report</button>
+        </div>
+      </div>
+
+      <div id="wa-loading" class="loading hidden" style="padding:8px 0"><div class="loading-spinner" aria-hidden="true"></div> Loading workflow analysis…</div>
+      <div id="wa-error" class="card hidden" style="color:var(--danger);border-color:var(--danger);padding:16px;margin-bottom:16px" role="alert">
+        <strong>Failed to load workflow analysis</strong>
+        <p id="wa-error-msg" style="margin:4px 0 0"></p>
+        <button class="btn sm" style="margin-top:8px" id="wa-retry">Retry</button>
+      </div>
+
+      <div id="wa-content" class="hidden">
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">State Accumulations</h2>
+          <div id="wa-state-accumulations"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">State Duration Anomalies</h2>
+          <div id="wa-state-durations"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Workflow Closure Patterns</h2>
+          <div id="wa-closure-patterns"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Information Request Patterns</h2>
+          <div id="wa-info-request-patterns"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Review Backlog</h2>
+          <div id="wa-review-backlog"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Threshold Exceedances</h2>
+          <div id="wa-threshold-exceedances"></div>
+        </div>
+      </div>
+
+      <p id="wa-calculated-at" class="text-muted" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div id="view-impact-intelligence" class="hidden">
+    <div class="container" id="main-content">
+      <div class="header">
+        <div>
+          <h1>Impact Intelligence</h1>
+          <p>Activity, outcome, and impact metrics</p>
+        </div>
+        <nav aria-label="Impact intelligence actions">
+          <button class="btn secondary" onclick="router.navigate('operations-dashboard')" aria-label="Back to operations dashboard"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Operations</button>
+          <button class="btn secondary" onclick="app.logout()" aria-label="Sign out"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span> Logout</button>
+        </nav>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <h2 style="margin:0 0 12px 0">Period</h2>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="flex:1;min-width:140px;margin:0">
+            <label for="impact-period">Period</label>
+            <select id="impact-period" class="form-control">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <button class="btn" id="impact-apply" aria-label="Apply period">Apply</button>
+          <button class="btn secondary" id="impact-refresh" aria-label="Refresh impact report"><span class="icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span> Refresh</button>
+          <button class="btn secondary" id="impact-export-json" aria-label="Export JSON">JSON</button>
+          <button class="btn secondary" id="impact-export-csv" aria-label="Export CSV">CSV</button>
+          <button class="btn secondary" id="impact-export-report" aria-label="Export Report">Report</button>
+        </div>
+      </div>
+
+      <div id="impact-loading" class="loading hidden" style="padding:8px 0"><div class="loading-spinner" aria-hidden="true"></div> Loading impact intelligence…</div>
+      <div id="impact-error" class="card hidden" style="color:var(--danger);border-color:var(--danger);padding:16px;margin-bottom:16px" role="alert">
+        <strong>Failed to load impact intelligence</strong>
+        <p id="impact-error-msg" style="margin:4px 0 0"></p>
+        <button class="btn sm" style="margin-top:8px" id="impact-retry">Retry</button>
+      </div>
+
+      <div id="impact-content" class="hidden">
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Activity</h2>
+          <p class="text-muted" style="margin-top:0;margin-bottom:12px">Records created or initiated in the selected period.</p>
+          <div id="impact-activity-metrics"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Outcome</h2>
+          <p class="text-muted" style="margin-top:0;margin-bottom:12px">Completed or achieved states recorded in the selected period.</p>
+          <div id="impact-outcome-metrics"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin:0 0 12px 0">Impact</h2>
+          <p class="text-muted" style="margin-top:0;margin-bottom:12px">Rates and ratios derived from activity and outcome data.</p>
+          <div id="impact-impact-metrics"></div>
+        </div>
+      </div>
+
+      <p id="impact-calculated-at" class="text-muted" style="margin-top:12px"></p>
     </div>
   </div>
 
@@ -1199,6 +1454,9 @@
    </div>
 
    <script src="/js/api.js"></script>
+   <script src="/js/operations-dashboard.js"></script>
+   <script src="/js/workflow-analysis.js"></script>
+   <script src="/js/impact-intelligence.js"></script>
    <script src="/js/form-renderer.js"></script>
    <script src="/js/ai-observations.js"></script>
    <script src="/js/app.js"></script>

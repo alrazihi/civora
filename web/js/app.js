@@ -4388,6 +4388,7 @@ router.on('login', () => {
 router.on('dashboard', async () => {
   document.getElementById('view-login').classList.add('hidden');
   document.getElementById('view-dashboard').classList.remove('hidden');
+  document.getElementById('view-operations-dashboard').classList.add('hidden');
   document.getElementById('view-case').classList.add('hidden');
   document.getElementById('view-new-case').classList.add('hidden');
   document.getElementById('view-workflows').classList.add('hidden');
@@ -4406,6 +4407,89 @@ router.on('dashboard', async () => {
   document.getElementById('form-field-modal').classList.add('hidden');
   document.getElementById('form-assign-modal').classList.add('hidden');
   await app.loadDashboard();
+});
+
+router.on('operations-dashboard', async () => {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-dashboard').classList.add('hidden');
+  document.getElementById('view-operations-dashboard').classList.remove('hidden');
+  document.getElementById('view-workflow-analysis').classList.add('hidden');
+  document.getElementById('view-case').classList.add('hidden');
+  document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+  if (typeof OperationsDashboard !== 'undefined') {
+    OperationsDashboard.init();
+  }
+});
+
+router.on('workflow-analysis', async () => {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-dashboard').classList.add('hidden');
+  document.getElementById('view-operations-dashboard').classList.add('hidden');
+  document.getElementById('view-workflow-analysis').classList.remove('hidden');
+  document.getElementById('view-impact-intelligence').classList.add('hidden');
+  document.getElementById('view-case').classList.add('hidden');
+  document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+  if (typeof WorkflowAnalysis !== 'undefined') {
+    WorkflowAnalysis.init();
+  }
+});
+
+router.on('impact-intelligence', async () => {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-dashboard').classList.add('hidden');
+  document.getElementById('view-operations-dashboard').classList.add('hidden');
+  document.getElementById('view-workflow-analysis').classList.add('hidden');
+  document.getElementById('view-impact-intelligence').classList.remove('hidden');
+  document.getElementById('view-case').classList.add('hidden');
+  document.getElementById('view-new-case').classList.add('hidden');
+  document.getElementById('view-workflows').classList.add('hidden');
+  document.getElementById('view-workflow-detail').classList.add('hidden');
+  document.getElementById('view-new-workflow').classList.add('hidden');
+  document.getElementById('view-forms').classList.add('hidden');
+  document.getElementById('view-form-design').classList.add('hidden');
+  document.getElementById('view-form-detail').classList.add('hidden');
+  document.getElementById('view-rules').classList.add('hidden');
+  document.getElementById('view-rule-set-edit').classList.add('hidden');
+  document.getElementById('view-rule-set-detail').classList.add('hidden');
+  document.getElementById('rule-editor-modal').classList.add('hidden');
+  document.getElementById('rule-condition-modal').classList.add('hidden');
+  document.getElementById('evaluation-modal').classList.add('hidden');
+  document.getElementById('form-modal').classList.add('hidden');
+  document.getElementById('form-field-modal').classList.add('hidden');
+  document.getElementById('form-assign-modal').classList.add('hidden');
+  if (typeof ImpactIntelligence !== 'undefined') {
+    ImpactIntelligence.init();
+  }
 });
 
 router.on('case', async (id) => {

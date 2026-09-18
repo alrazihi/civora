@@ -68,6 +68,9 @@ import (
 	"github.com/alrazihi/civora/internal/identity/domain"
 	identitypostgres "github.com/alrazihi/civora/internal/identity/infrastructure/postgres"
 	intmid "github.com/alrazihi/civora/internal/middleware"
+	operationsapi "github.com/alrazihi/civora/internal/operations/api"
+	operationsapp "github.com/alrazihi/civora/internal/operations/application"
+	operationspostgres "github.com/alrazihi/civora/internal/operations/infrastructure/postgres"
 	orgapi "github.com/alrazihi/civora/internal/organizations/api"
 	orgapp "github.com/alrazihi/civora/internal/organizations/application"
 	orgdomain "github.com/alrazihi/civora/internal/organizations/domain"
@@ -345,6 +348,21 @@ func main() {
 
 	caseContextHandler := casecontextapi.NewHandler(ctxService)
 
+	metricsRepo := operationspostgres.NewPostgresMetricsRepository(db.DB)
+	metricsService := operationsapp.NewOperationsService(metricsRepo)
+	metricsHandler := operationsapi.NewHandler(metricsService)
+
+	analysisRepo := operationspostgres.NewPostgresMetricsRepository(db.DB)
+	analysisService := operationsapp.NewAnalysisService(analysisRepo)
+	analysisHandler := operationsapi.NewAnalysisHandler(analysisService)
+
+	impactRepo := operationspostgres.NewPostgresMetricsRepository(db.DB)
+	impactService := operationsapp.NewImpactService(impactRepo)
+	impactHandler := operationsapi.NewImpactHandler(impactService)
+
+	exportService := operationsapp.NewExportService(metricsService, analysisService, impactService)
+	exportHandler := operationsapi.NewExportHandler(exportService)
+
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
 
@@ -379,6 +397,10 @@ func main() {
 	summaryHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	documentIntelligenceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	caseContextHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	metricsHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	analysisHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	impactHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	exportHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
