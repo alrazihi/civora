@@ -1,0 +1,5 @@
+description: Request body too large (exceeds 1MB limit)
+content:
+  application/json:
+    schema:
+      $ref: '#/components/schemas/Error'

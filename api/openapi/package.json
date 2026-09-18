@@ -1,0 +1,12 @@
+{
+  "name": "civora-openapi",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node build-openapi.js",
+    "lint": "npx @redocly/cli lint openapi.yaml"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^1.0.0"
+  }
+}

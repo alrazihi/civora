@@ -1,0 +1,128 @@
+post:
+  operationId: generateCaseSummary
+  tags:
+  - Cases
+  summary: Generate AI case summary
+  description: Generates an AI-assisted case summary with provenance-tagged claims.
+    AI is opt-in (enabled via `CIVORA_AI_ENABLED`) and off by default; when no provider
+    is configured a Noop provider rejects the call. Summaries are created in PENDING_REVIEW
+    and require explicit human accept/reject. All writes (audit events + summaries)
+    are atomic. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: caseId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/GenerateCaseSummaryRequest'
+  responses:
+    '200':
+      description: Summary generated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: object
+                properties:
+                  summary:
+                    $ref: '#/components/schemas/CaseSummary'
+              meta:
+                type: object
+                nullable: true
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'
+    '503':
+      description: AI provider unavailable or disabled
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+get:
+  operationId: listCaseSummaries
+  tags:
+  - Cases
+  summary: List case summaries
+  description: Lists AI-generated case summaries with pagination. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: caseId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      default: 1
+  - name: per_page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 200
+      default: 20
+  responses:
+    '200':
+      description: Paginated list of case summaries
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaseSummary'
+              meta:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

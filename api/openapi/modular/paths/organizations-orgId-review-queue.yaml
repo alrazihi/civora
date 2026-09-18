@@ -1,0 +1,109 @@
+get:
+  operationId: listReviewQueue
+  tags:
+  - ReviewQueue
+  summary: List review queue entries
+  description: Returns paginated review queue entries for the organization.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: status
+    in: query
+    schema:
+      type: string
+      enum:
+      - PENDING
+      - ASSIGNED
+      - IN_REVIEW
+      - COMPLETED
+      - ESCALATED
+      - WAITING_INFORMATION
+  - name: assigned_to_me
+    in: query
+    schema:
+      type: boolean
+  - name: page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+  - name: per_page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 200
+  responses:
+    '200':
+      description: Paginated review queue entries
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewQueueEntry'
+              pagination:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'
+post:
+  operationId: createReviewQueueEntry
+  tags:
+  - ReviewQueue
+  summary: Create a review queue entry
+  description: Creates a new review queue entry for manual human review.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/CreateReviewQueueEntryRequest'
+  responses:
+    '201':
+      description: Review queue entry created
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                $ref: '#/components/schemas/ReviewQueueEntry'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'

@@ -1,0 +1,8 @@
+type: object
+properties:
+  name:
+    type: string
+  version:
+    type: string
+  provider:
+    type: string

@@ -135,7 +135,7 @@ const WORKFLOW_ANALYSIS_REPORT = {
     { pending_reviews: 25, assigned_reviews: 10, in_review_reviews: 15, avg_wait_time_hours: 48, threshold: 20, observation: 'increased backlog of pending reviews', language: 'increased_backlog', calculated_at: new Date().toISOString() },
   ],
   threshold_exceedances: [
-    { case_id: 'case-1', case_number: 'CAS-001', workflow_key: 'emergency_assistance', current_state: 'REVIEW', threshold_type: 'state_duration_threshold_hours', threshold_value: 24, actual_value: 60, observation: 'longer observed duration in state REVIEW', language: 'longer_duration', calculated_at: new Date().toISOString() },
+    { workflow_key: 'emergency_assistance', current_state: 'REVIEW', threshold_type: 'state_duration_threshold_hours', threshold_value: 24, actual_value: 60, observation: 'longer observed duration in state REVIEW', language: 'longer_duration', calculated_at: new Date().toISOString() },
   ],
 };
 

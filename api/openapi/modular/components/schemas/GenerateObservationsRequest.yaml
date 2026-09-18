@@ -1,0 +1,15 @@
+type: object
+properties:
+  types:
+    type: array
+    items:
+      type: string
+      enum:
+      - SUMMARY
+      - ENTITY_EXTRACTION
+      - CLASSIFICATION
+      - INCONSISTENCY
+  max_tokens:
+    type: integer
+    minimum: 1
+    default: 4096

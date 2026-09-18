@@ -1,0 +1,31 @@
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  organization_id:
+    type: string
+    format: uuid
+  workflow_definition_id:
+    type: string
+    format: uuid
+  workflow_definition_version:
+    type: integer
+  case_id:
+    type: string
+    format: uuid
+  current_state:
+    type: string
+  version:
+    type: integer
+    description: Optimistic concurrency version; incremented on each transition
+  started_at:
+    type: string
+    format: date-time
+  completed_at:
+    type: string
+    format: date-time
+    nullable: true
+  metadata:
+    type: object
+    nullable: true

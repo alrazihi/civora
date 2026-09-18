@@ -43,22 +43,18 @@ const OPERATIONS_METRICS = {
   aging_cases: [
     {
       case_id: 'case-aging-1',
-      case_number: 'OP-001',
+      workflow_key: 'emergency_assistance',
       current_state: 'IN_PROGRESS',
       service_type: 'EMERGENCY',
-      created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       age_hours: 48,
       in_current_state_hours: 2,
       calculated_at: new Date().toISOString(),
     },
     {
       case_id: 'case-aging-2',
-      case_number: 'OP-002',
+      workflow_key: 'general_intake',
       current_state: 'NEW',
       service_type: 'GENERAL',
-      created_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
       age_hours: 72,
       in_current_state_hours: 5,
       calculated_at: new Date().toISOString(),
@@ -185,7 +181,7 @@ test.describe('Operations Dashboard', () => {
 
     const rows = page.locator('#ops-aging table.data-table tbody tr');
     await expect(rows).toHaveCount(2);
-    await expect(page.locator('#ops-aging')).toContainText('OP-001');
+    await expect(page.locator('#ops-aging')).toContainText('emergency_assistance');
     await expect(page.locator('#ops-aging')).toContainText('48');
   });
 

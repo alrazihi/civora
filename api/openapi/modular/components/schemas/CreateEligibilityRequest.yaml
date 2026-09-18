@@ -1,0 +1,15 @@
+type: object
+required:
+- service_request_id
+- criteria
+- explanation
+properties:
+  service_request_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  criteria:
+    type: object
+    additionalProperties: true
+  explanation:
+    type: string

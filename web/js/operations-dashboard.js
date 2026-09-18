@@ -256,8 +256,8 @@ const OperationsDashboard = {
     }
     this.el.aging.innerHTML = `
       <table class="data-table" aria-label="Aging cases">
-        <thead><tr><th>Case #</th><th>Status</th><th>Age (hrs)</th><th>Service</th></tr></thead>
-        <tbody>${cases.map(c => `<tr><td>${escapeHTML(c.case_number)}</td><td><span class="badge ${cssStateClass(c.current_state)}">${escapeHTML(c.current_state)}</span></td><td>${c.age_hours != null ? c.age_hours.toFixed(1) : '—'}</td><td>${escapeHTML(c.service_type)}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>Workflow</th><th>Status</th><th>Age (hrs)</th><th>Service</th></tr></thead>
+        <tbody>${cases.map(c => `<tr><td>${escapeHTML(c.workflow_key)}</td><td><span class="badge ${cssStateClass(c.current_state)}">${escapeHTML(c.current_state)}</span></td><td>${c.age_hours != null ? c.age_hours.toFixed(1) : '—'}</td><td>${escapeHTML(c.service_type)}</td></tr>`).join('')}</tbody>
       </table>
     `;
   },

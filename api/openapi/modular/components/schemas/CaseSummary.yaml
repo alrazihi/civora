@@ -1,0 +1,71 @@
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  organization_id:
+    type: string
+    format: uuid
+  case_id:
+    type: string
+    format: uuid
+  type:
+    type: string
+    enum:
+    - FULL_SUMMARY
+    - SITUATION
+    - RELEVANT_INFORMATION
+    - IMPORTANT_EVIDENCE
+    - MISSING_INFORMATION
+    - POTENTIAL_INCONSISTENCIES
+    - RULE_EVALUATION_RESULTS
+    - WORKFLOW_HISTORY
+    - PREVIOUS_ACTIONS
+    - AI_OBSERVATIONS
+  source:
+    type: string
+    enum:
+    - AI_MODEL
+    - HUMAN
+  status:
+    type: string
+    enum:
+    - PENDING_REVIEW
+    - ACCEPTED
+    - REJECTED
+  model:
+    $ref: '#/components/schemas/AIModelInfo'
+  content:
+    $ref: '#/components/schemas/CaseSummaryContent'
+  confidence:
+    type: number
+    format: float
+    minimum: 0
+    maximum: 1
+    nullable: true
+  input_hash:
+    type: string
+  output_hash:
+    type: string
+  schema_version:
+    type: string
+  token_estimate:
+    type: integer
+  created_at:
+    type: string
+    format: date-time
+  created_by:
+    type: string
+    format: uuid
+    nullable: true
+  reviewed_at:
+    type: string
+    format: date-time
+    nullable: true
+  reviewed_by:
+    type: string
+    format: uuid
+    nullable: true
+  review_notes:
+    type: string
+    nullable: true

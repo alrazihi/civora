@@ -69,7 +69,7 @@ test.describe('Workflow Analysis', () => {
     attachWorkflowAnalysisMocks(page);
     await openWorkflowAnalysis(page);
 
-    await expect(page.locator('#wa-threshold-exceedances')).toContainText('CAS-001');
+    await expect(page.locator('#wa-threshold-exceedances')).toContainText('emergency_assistance');
     await expect(page.locator('#wa-threshold-exceedances')).toContainText('60');
   });
 

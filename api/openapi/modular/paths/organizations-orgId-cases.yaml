@@ -1,0 +1,93 @@
+post:
+  operationId: createOrgcases
+  tags:
+  - Cases
+  summary: Create a case
+  description: Creates a new case (service request) within the organization. Requires
+    authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: Idempotency-Key
+    in: header
+    description: 'Idempotency key for safe retries. Guarantees at-most-once execution
+
+      for the same key within the same organization.
+
+      '
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/CreateCaseRequest'
+  responses:
+    '201':
+      description: 'Case created (status: CREATED)'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Case'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+get:
+  operationId: getOrgcases
+  tags:
+  - Cases
+  summary: List cases
+  description: Lists cases in the organization. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      default: 1
+  - name: per_page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 200
+      default: 20
+  - name: status
+    in: query
+    schema:
+      type: string
+      description: Filter cases by status
+  responses:
+    '200':
+      description: List of cases with pagination
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/Case'
+    '401':
+      $ref: '#/components/responses/Unauthorized'

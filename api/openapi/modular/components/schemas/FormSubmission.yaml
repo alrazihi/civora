@@ -1,0 +1,66 @@
+type: object
+required:
+- id
+- case_id
+- form_id
+- form_version_id
+- data
+- status
+- submitted_by
+- submitted_at
+- created_at
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  case_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  form_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  form_version_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  form_key:
+    type: string
+  data:
+    type: object
+    additionalProperties: true
+  status:
+    type: string
+    enum:
+    - DRAFT
+    - SUBMITTED
+    - APPROVED
+    - REJECTED
+  submitted_by:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  submitted_at:
+    type: string
+    format: date-time
+  reviewed_by:
+    type: string
+    format: uuid
+    nullable: true
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  reviewed_at:
+    type: string
+    format: date-time
+    nullable: true
+  review_notes:
+    type: string
+    nullable: true
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time
+    nullable: true

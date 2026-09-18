@@ -1,0 +1,25 @@
+type: object
+properties:
+  types:
+    type: array
+    items:
+      type: string
+      enum:
+      - FULL_SUMMARY
+      - SITUATION
+      - RELEVANT_INFORMATION
+      - IMPORTANT_EVIDENCE
+      - MISSING_INFORMATION
+      - POTENTIAL_INCONSISTENCIES
+      - RULE_EVALUATION_RESULTS
+      - WORKFLOW_HISTORY
+      - PREVIOUS_ACTIONS
+      - AI_OBSERVATIONS
+  max_tokens:
+    type: integer
+    minimum: 1
+    default: 4096
+  include_sections:
+    type: array
+    items:
+      type: string

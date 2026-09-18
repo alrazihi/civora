@@ -1,0 +1,72 @@
+type: object
+description: A versioned, tenant-scoped collection of rules.
+required:
+- id
+- organization_id
+- key
+- name
+- version
+- status
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  organization_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  case_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    nullable: true
+    description: If set, the rule set is scoped to a specific case.
+  key:
+    type: string
+    pattern: ^[a-z][a-z0-9_-]*$
+    description: Unique machine-readable identifier within the organization.
+  name:
+    type: string
+    description: Human-readable name.
+  description:
+    type: string
+    description: Human-readable description.
+  version:
+    type: integer
+    minimum: 1
+  status:
+    type: string
+    enum:
+    - DRAFT
+    - PUBLISHED
+    - ARCHIVED
+  default_outcome:
+    type: string
+    enum:
+    - ELIGIBLE
+    - INELIGIBLE
+    - REQUIRES_REVIEW
+    - INFORMATION_REQUIRED
+    - FLAG
+    - SCORE
+    - ERROR
+  rules:
+    type: array
+    items:
+      $ref: '#/components/schemas/Rule'
+  triggers:
+    type: array
+    items:
+      type: string
+    description: Trigger descriptions (e.g. "case.created", "case.closed").
+  created_by:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time

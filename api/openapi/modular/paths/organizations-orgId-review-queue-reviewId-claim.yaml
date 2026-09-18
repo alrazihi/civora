@@ -1,0 +1,46 @@
+post:
+  operationId: claimReview
+  tags:
+  - ReviewQueue
+  summary: Claim a review queue entry
+  description: Assigns the review queue entry to the authenticated user.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: reviewId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  responses:
+    '200':
+      description: Review queue entry claimed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                $ref: '#/components/schemas/ReviewQueueEntry'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'
+    '404':
+      $ref: '#/components/responses/NotFound'
+    '409':
+      description: Review is not pending
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

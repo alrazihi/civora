@@ -221,8 +221,8 @@ const WorkflowAnalysis = {
     }
     this.el.thresholdExceedances.innerHTML = `
       <table class="data-table" aria-label="Threshold exceedances">
-        <thead><tr><th>Case</th><th>Workflow</th><th>State</th><th>Threshold</th><th>Actual</th><th>Language</th></tr></thead>
-        <tbody>${items.map(i => `<tr><td>${escapeHTML(i.case_number)}</td><td>${escapeHTML(i.workflow_key)}</td><td>${escapeHTML(i.current_state)}</td><td>${escapeHTML(i.threshold_type)}</td><td>${i.actual_value != null ? i.actual_value.toFixed(1) : '—'}</td><td>${escapeHTML(i.language)}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>Workflow</th><th>State</th><th>Threshold</th><th>Actual</th><th>Language</th></tr></thead>
+        <tbody>${items.map(i => `<tr><td>${escapeHTML(i.workflow_key)}</td><td>${escapeHTML(i.current_state)}</td><td>${escapeHTML(i.threshold_type)}</td><td>${i.actual_value != null ? i.actual_value.toFixed(1) : '—'}</td><td>${escapeHTML(i.language)}</td></tr>`).join('')}</tbody>
       </table>
     `;
   },

@@ -25,9 +25,8 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.8** — AI Observations & Evidence (0.7 complete).
-(document upload, evidence chains, audit integrity verification, drag-and-drop
-upload UI).
+Current focus: **Milestone 0.9** — Operations & Impact Intelligence (0.8 complete).
+(operational metrics, workflow analysis, impact intelligence, AI operations intelligence).
 
 ## Quick Start
 

@@ -1,0 +1,74 @@
+type: object
+required:
+- total
+- open
+- closed
+- rejected
+- urgent
+- awaiting_review
+- awaiting_decision
+- in_progress
+- follow_up
+- by_status
+- by_service_type
+- by_priority
+- recent_cases
+properties:
+  total:
+    type: integer
+    format: int32
+    minimum: 0
+  open:
+    type: integer
+    format: int32
+    minimum: 0
+  closed:
+    type: integer
+    format: int32
+    minimum: 0
+  rejected:
+    type: integer
+    format: int32
+    minimum: 0
+  urgent:
+    type: integer
+    format: int32
+    minimum: 0
+  awaiting_review:
+    type: integer
+    format: int32
+    minimum: 0
+  awaiting_decision:
+    type: integer
+    format: int32
+    minimum: 0
+  in_progress:
+    type: integer
+    format: int32
+    minimum: 0
+  follow_up:
+    type: integer
+    format: int32
+    minimum: 0
+  by_status:
+    type: object
+    additionalProperties:
+      type: integer
+      format: int32
+      minimum: 0
+  by_service_type:
+    type: object
+    additionalProperties:
+      type: integer
+      format: int32
+      minimum: 0
+  by_priority:
+    type: object
+    additionalProperties:
+      type: integer
+      format: int32
+      minimum: 0
+  recent_cases:
+    type: array
+    items:
+      $ref: '#/components/schemas/Case'

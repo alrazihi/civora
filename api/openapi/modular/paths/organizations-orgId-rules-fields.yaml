@@ -1,0 +1,39 @@
+get:
+  operationId: listDiscoverableFields
+  tags:
+  - Rules
+  summary: List discoverable fields
+  description: Lists form fields across all published forms for fact-path suggestions
+    in the rules UI.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  responses:
+    '200':
+      description: List of discoverable form fields
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FormFieldView'
+              pagination:
+                type: object
+                nullable: true
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'

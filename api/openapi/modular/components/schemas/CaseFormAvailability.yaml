@@ -1,0 +1,37 @@
+type: object
+required:
+- form_id
+- form_key
+- form_name
+- form_version
+- status
+- assignment_id
+properties:
+  form_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  form_key:
+    type: string
+  form_name:
+    type: string
+  form_version:
+    type: integer
+    minimum: 1
+  status:
+    type: string
+    enum:
+    - AVAILABLE
+    - ASSIGNED
+    - SUBMITTED
+    - NOT_APPLICABLE
+  assignment_id:
+    type: string
+    format: uuid
+    nullable: true
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  submission_id:
+    type: string
+    format: uuid
+    nullable: true
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$

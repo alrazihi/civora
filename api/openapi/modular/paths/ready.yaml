@@ -1,0 +1,22 @@
+get:
+  operationId: listready
+  tags:
+  - System
+  summary: Readiness check
+  description: Returns OK if the server is ready to serve requests (database connected,
+    etc.).
+  responses:
+    '200':
+      description: Server is ready
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReadinessResponse'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '503':
+      description: Server is not ready
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

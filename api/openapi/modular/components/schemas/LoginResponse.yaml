@@ -1,0 +1,22 @@
+type: object
+properties:
+  token:
+    type: string
+    description: JWT bearer token
+    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  user:
+    type: object
+    properties:
+      id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      organization_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      email:
+        type: string
+        format: email
+      name:
+        type: string

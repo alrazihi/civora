@@ -1,0 +1,33 @@
+post:
+  operationId: createOrgassessments
+  tags:
+  - Assessments
+  summary: Create an assessment
+  description: Creates a needs assessment for a service request. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/CreateAssessmentRequest'
+  responses:
+    '201':
+      description: Assessment created
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Assessment'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
