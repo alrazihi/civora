@@ -53,7 +53,29 @@ type PIISanitizer interface {
 
 type AIProvider interface {
 	GenerateObservations(ctx context.Context, req ProviderRequest) ([]ObservationResult, error)
+	GenerateChatCompletion(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	ProviderInfo() domain.ModelInfo
+}
+
+type ChatRequest struct {
+	OrganizationID uuid.UUID
+	Messages       []ChatMessage
+	MaxTokens      int
+	Temperature    float64
+}
+
+type ChatMessage struct {
+	Role    string
+	Content string
+}
+
+type ChatResponse struct {
+	Content      string
+	Model        domain.ModelInfo
+	InputHash    string
+	OutputHash   string
+	PromptTokens int
+	CompletionTokens int
 }
 
 type ProviderRequest struct {

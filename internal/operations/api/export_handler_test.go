@@ -117,7 +117,7 @@ func TestExportHandler_AuthorizedExport_CSV(t *testing.T) {
 	svc.On("GenerateExport", mock.Anything, orgID, mock.Anything).Return(&domain.ExportResult{
 		ContentType: "text/csv",
 		Filename:    "civora-operations-daily.csv",
-		Body:        []byte("section,metric,value,unit,category\n"),
+		Body:        []byte(`{"operations_metrics":{"case_volume":{"total_cases":10,"by_status":{"open":5,"closed":5}}}}`),
 		Metadata: domain.ExportMetadata{
 			GeneratedAt:    bucket,
 			OrganizationID: orgID,
@@ -146,7 +146,7 @@ func TestExportHandler_SensitiveFieldExclusion(t *testing.T) {
 	svc.On("GenerateExport", mock.Anything, orgID, mock.Anything).Return(&domain.ExportResult{
 		ContentType: "text/plain",
 		Filename:    "civora-all-daily-report.txt",
-		Body:        []byte(`{"metadata":{},"data":{"operations_metrics":{"case_volume":{"total_cases":10,"password":"secret123"}}}}`),
+		Body:        []byte(`{"operations_metrics":{"case_volume":{"total_cases":10,"password":"secret123"}}}`),
 		Metadata: domain.ExportMetadata{
 			GeneratedAt:    bucket,
 			OrganizationID: orgID,
@@ -166,5 +166,5 @@ func TestExportHandler_SensitiveFieldExclusion(t *testing.T) {
 	body := w.Body.String()
 	assert.Contains(t, body, "[REDACTED]")
 	assert.NotContains(t, body, "secret123")
-	assert.Contains(t, body, `"total_cases":10`)
+	assert.Contains(t, body, "| total_cases | 10 |")
 }

@@ -363,6 +363,9 @@ func main() {
 	exportService := operationsapp.NewExportService(metricsService, analysisService, impactService)
 	exportHandler := operationsapi.NewExportHandler(exportService)
 
+	intelligenceService := operationsapp.NewOperationsIntelligenceService(aiProvider, metricsService, analysisService, impactService)
+	intelligenceHandler := operationsapi.NewOperationsIntelligenceHandler(intelligenceService)
+
 	workflowHandler := workflowapi.NewHandler(workflowService)
 	assignmentHandler := assignmentapi.NewHandler(assignmentService)
 
@@ -401,6 +404,7 @@ func main() {
 	analysisHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	impactHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	exportHandler.RegisterRoutes(srv.Router(), authMiddleware)
+	intelligenceHandler.RegisterRoutes(srv.Router(), authMiddleware)
 	srv.MountStaticFS(http.Dir("web"))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

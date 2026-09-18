@@ -20,6 +20,10 @@ func (p *NoopProvider) GenerateObservations(ctx context.Context, req application
 	return nil, ErrProviderDisabled
 }
 
+func (p *NoopProvider) GenerateChatCompletion(ctx context.Context, req application.ChatRequest) (*application.ChatResponse, error) {
+	return nil, ErrProviderDisabled
+}
+
 func (p *NoopProvider) ProviderInfo() domain.ModelInfo {
 	return domain.ModelInfo{
 		Name:     "noop",

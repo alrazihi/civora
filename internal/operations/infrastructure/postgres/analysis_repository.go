@@ -10,6 +10,9 @@ import (
 )
 
 func (r *PostgresMetricsRepository) GetStateAccumulations(ctx context.Context, orgID uuid.UUID, threshold int) ([]*domain.StateAccumulationObservation, error) {
+	if threshold < domain.MinimumAggregationGroupSize {
+		threshold = domain.MinimumAggregationGroupSize
+	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			c.workflow_key,
@@ -243,8 +246,6 @@ func (r *PostgresMetricsRepository) GetReviewBacklogObservations(ctx context.Con
 func (r *PostgresMetricsRepository) GetThresholdExceedances(ctx context.Context, orgID uuid.UUID, agingThresholdHours float64, cycleTimeThresholdHours float64) ([]*domain.ThresholdExceedanceObservation, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
-			id AS case_id,
-			case_number,
 			workflow_key,
 			workflow_state,
 			EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600 AS age_hours,
@@ -262,10 +263,9 @@ func (r *PostgresMetricsRepository) GetThresholdExceedances(ctx context.Context,
 
 	var results []*domain.ThresholdExceedanceObservation
 	for rows.Next() {
-		var caseID uuid.UUID
-		var caseNumber, workflowKey, currentState string
+		var workflowKey, currentState string
 		var ageHours, cycleTimeHours float64
-		if err := rows.Scan(&caseID, &caseNumber, &workflowKey, &currentState, &ageHours, &cycleTimeHours); err != nil {
+		if err := rows.Scan(&workflowKey, &currentState, &ageHours, &cycleTimeHours); err != nil {
 			return nil, fmt.Errorf("failed to scan threshold exceedance row: %w", err)
 		}
 		var thresholdType, observation string
@@ -285,8 +285,6 @@ func (r *PostgresMetricsRepository) GetThresholdExceedances(ctx context.Context,
 		if thresholdType != "" {
 			results = append(results, &domain.ThresholdExceedanceObservation{
 				OrganizationID: orgID,
-				CaseID:         caseID,
-				CaseNumber:     caseNumber,
 				WorkflowKey:    workflowKey,
 				CurrentState:   currentState,
 				ThresholdType:  thresholdType,

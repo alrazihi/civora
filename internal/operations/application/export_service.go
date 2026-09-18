@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -28,6 +29,12 @@ func NewExportService(
 }
 
 func (s *ExportService) GenerateExport(ctx context.Context, orgID uuid.UUID, req domain.ExportRequest) (*domain.ExportResult, error) {
+	switch req.Scope {
+	case domain.ExportScopeOperations, domain.ExportScopeAnalysis, domain.ExportScopeImpact, domain.ExportScopeAll:
+	default:
+		return nil, fmt.Errorf("invalid export scope: %s", req.Scope)
+	}
+
 	bucketStart := domain.BucketStart(req.Bucket, req.Period)
 	dataSources := []string{}
 
@@ -63,8 +70,14 @@ func (s *ExportService) GenerateExport(ctx context.Context, orgID uuid.UUID, req
 
 	metadata := domain.BuildExportMetadata(orgID, req.Scope, req.Period, bucketStart, req.WorkflowKey, req.Status, dataSources)
 
+	rawBody, err := json.Marshal(exportData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal export data: %w", err)
+	}
+
 	result := &domain.ExportResult{
 		Metadata: metadata,
+		Body:     rawBody,
 	}
 
 	switch req.Format {
@@ -190,7 +203,6 @@ func sanitizeAgingCasesForExport(cases []*domain.AgingCaseMetric) []map[string]i
 	result := make([]map[string]interface{}, len(cases))
 	for i, c := range cases {
 		result[i] = map[string]interface{}{
-			"case_number":            c.CaseNumber,
 			"workflow_key":           c.WorkflowKey,
 			"current_state":          c.CurrentState,
 			"service_type":           c.ServiceType,

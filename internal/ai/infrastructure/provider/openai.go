@@ -228,6 +228,87 @@ func (p *OpenAIProvider) GenerateObservations(ctx context.Context, req applicati
 	return result, nil
 }
 
+func (p *OpenAIProvider) GenerateChatCompletion(ctx context.Context, req application.ChatRequest) (*application.ChatResponse, error) {
+	if !p.skipAuth && p.apiKey == "" {
+		return nil, ErrProviderDisabled
+	}
+
+	var messages []openAIMessage
+	for _, m := range req.Messages {
+		messages = append(messages, openAIMessage{
+			Role:    m.Role,
+			Content: json.RawMessage(marshalOrEmpty(m.Content)),
+		})
+	}
+
+	openAIReq := openAIRequest{
+		Model:       p.model,
+		Messages:    messages,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+	}
+
+	reqBytes, err := json.Marshal(openAIReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal chat request: %w", err)
+	}
+
+	inputHash := computeSHA256(string(reqBytes))
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat/completions", bytes.NewReader(reqBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if !p.skipAuth {
+		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var apiResp openAIResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if apiResp.Error != nil {
+		return nil, fmt.Errorf("OpenAI API error: %s", apiResp.Error.Message)
+	}
+
+	if len(apiResp.Choices) == 0 {
+		return nil, fmt.Errorf("no choices in response")
+	}
+
+	outputHash := computeSHA256(string(body))
+
+	validatedContent, err := p.guard.ValidateResponse(apiResp.Choices[0].Message.Content)
+	if err != nil {
+		return nil, fmt.Errorf("LLM response validation failed: %w", err)
+	}
+
+	return &application.ChatResponse{
+		Content:           string(validatedContent),
+		Model:             p.ProviderInfo(),
+		InputHash:         inputHash,
+		OutputHash:        outputHash,
+		PromptTokens:      apiResp.Usage.PromptTokens,
+		CompletionTokens:  apiResp.Usage.CompletionTokens,
+	}, nil
+}
+
 func (p *OpenAIProvider) computeInputHash(docs []domain.DocumentContent, types []domain.ObservationType, maxTokens int) (string, error) {
 	h := sha256.New()
 	for _, doc := range docs {

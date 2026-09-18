@@ -98,6 +98,9 @@ func (r *PostgresMetricsRepository) GetCaseVolume(ctx context.Context, orgID uui
 		if err := rows.Scan(&status, &serviceType, &workflowKey, &workflowState, &count); err != nil {
 			return nil, fmt.Errorf("failed to scan case volume row: %w", err)
 		}
+		if count < domain.MinimumAggregationGroupSize {
+			continue
+		}
 		metric.ByStatus[status] += count
 		metric.ByServiceType[serviceType] += count
 		if workflowKey != "" {
@@ -134,7 +137,8 @@ func (r *PostgresMetricsRepository) GetCaseVolumeByWorkflow(ctx context.Context,
 		FROM cases
 		WHERE organization_id = $1
 		GROUP BY COALESCE(workflow_key, 'unknown')
-	`, orgID, bucketStart, bucketEnd)
+		HAVING COUNT(*) >= $4
+	`, orgID, bucketStart, bucketEnd, domain.MinimumAggregationGroupSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query case volume by workflow: %w", err)
 	}
@@ -181,7 +185,8 @@ func (r *PostgresMetricsRepository) GetCaseVolumeByState(ctx context.Context, or
 		FROM cases
 		WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 		GROUP BY workflow_state
-	`, orgID, bucketStart, bucketEnd)
+		HAVING COUNT(*) >= $4
+	`, orgID, bucketStart, bucketEnd, domain.MinimumAggregationGroupSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query case volume by state: %w", err)
 	}
@@ -224,7 +229,8 @@ func (r *PostgresMetricsRepository) GetCaseVolumeByServiceType(ctx context.Conte
 		FROM cases
 		WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 		GROUP BY service_type
-	`, orgID, bucketStart, bucketEnd)
+		HAVING COUNT(*) >= $4
+	`, orgID, bucketStart, bucketEnd, domain.MinimumAggregationGroupSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query case volume by service type: %w", err)
 	}
@@ -443,14 +449,10 @@ func (r *PostgresMetricsRepository) GetAgingCases(ctx context.Context, orgID uui
 	rows, err := r.db.QueryContext(ctx, `
 		WITH workflow_state AS (
 			SELECT
-				c.id AS case_id,
-				c.case_number,
 				COALESCE(wd.key, 'unknown') AS workflow_key,
 				COALESCE(wi.current_state, c.status) AS current_state,
 				c.service_type,
 				c.priority,
-				c.created_at,
-				c.updated_at,
 				EXTRACT(EPOCH FROM (now() - c.created_at)) / 3600.0 AS age_hours,
 				EXTRACT(EPOCH FROM (now() - COALESCE(
 					(SELECT wth.occurred_at
@@ -466,8 +468,8 @@ func (r *PostgresMetricsRepository) GetAgingCases(ctx context.Context, orgID uui
 			WHERE c.organization_id = $1
 			  AND c.status NOT IN ('CLOSED', 'REJECTED')
 		)
-		SELECT case_id, case_number, workflow_key, current_state, service_type, priority,
-			   created_at, updated_at, age_hours, in_current_state_hours
+		SELECT workflow_key, current_state, service_type, priority,
+			   age_hours, in_current_state_hours
 		FROM workflow_state
 		WHERE age_hours >= $2
 		ORDER BY age_hours DESC
@@ -482,8 +484,8 @@ func (r *PostgresMetricsRepository) GetAgingCases(ctx context.Context, orgID uui
 	for rows.Next() {
 		var m domain.AgingCaseMetric
 		if err := rows.Scan(
-			&m.CaseID, &m.CaseNumber, &m.WorkflowKey, &m.CurrentState,
-			&m.ServiceType, &m.Priority, &m.CreatedAt, &m.UpdatedAt,
+			&m.WorkflowKey, &m.CurrentState,
+			&m.ServiceType, &m.Priority,
 			&m.AgeHours, &m.InCurrentStateHours,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan aging case row: %w", err)

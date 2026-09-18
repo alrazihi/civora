@@ -43,6 +43,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/operations", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
+		r.Use(middleware.RequireAnyRole("admin", "staff"))
 
 		r.Get("/metrics/cases", h.GetCaseVolume)
 		r.Get("/metrics/cases/by-workflow", h.GetCaseVolumeByWorkflow)
@@ -62,6 +63,22 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	})
 }
 
+const (
+	MaxBucketLookback = 2 * 365 * 24 * time.Hour
+	MaxBucketForward  = 24 * time.Hour
+)
+
+func validateBucket(bucket time.Time) (time.Time, bool) {
+	now := time.Now().UTC()
+	if bucket.After(now.Add(MaxBucketForward)) {
+		return time.Time{}, false
+	}
+	if bucket.Before(now.Add(-MaxBucketLookback)) {
+		return time.Time{}, false
+	}
+	return bucket, true
+}
+
 func parsePeriod(r *http.Request) domain.MetricPeriod {
 	period := r.URL.Query().Get("period")
 	switch period {
@@ -77,10 +94,13 @@ func parsePeriod(r *http.Request) domain.MetricPeriod {
 func parseBucket(r *http.Request) (time.Time, bool) {
 	bucketStr := r.URL.Query().Get("bucket")
 	if bucketStr == "" {
-		return time.Now().UTC(), false
+		return time.Now().UTC(), true
 	}
 	bucket, err := time.Parse(time.RFC3339, bucketStr)
 	if err != nil {
+		return time.Time{}, false
+	}
+	if _, ok := validateBucket(bucket); !ok {
 		return time.Time{}, false
 	}
 	return bucket, true
@@ -93,7 +113,11 @@ func (h *Handler) GetCaseVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metric, err := h.svc.GetCaseVolume(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate case volume")
@@ -109,7 +133,11 @@ func (h *Handler) GetCaseVolumeByWorkflow(w http.ResponseWriter, r *http.Request
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetCaseVolumeByWorkflow(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate case volume by workflow")
@@ -125,7 +153,11 @@ func (h *Handler) GetCaseVolumeByState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetCaseVolumeByState(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate case volume by state")
@@ -141,7 +173,11 @@ func (h *Handler) GetCaseVolumeByServiceType(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetCaseVolumeByServiceType(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate case volume by service type")
@@ -157,7 +193,11 @@ func (h *Handler) GetWorkflowThroughput(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetWorkflowThroughput(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate workflow throughput")
@@ -173,7 +213,11 @@ func (h *Handler) GetStateDuration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetStateDuration(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate state duration")
@@ -189,7 +233,11 @@ func (h *Handler) GetCaseCycleTime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetCaseCycleTime(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate case cycle time")
@@ -242,7 +290,11 @@ func (h *Handler) GetDecisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metric, err := h.svc.GetDecisions(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate decisions")
@@ -258,7 +310,11 @@ func (h *Handler) GetAssistanceOutcomes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metric, err := h.svc.GetAssistanceOutcomes(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate assistance outcomes")
@@ -274,7 +330,11 @@ func (h *Handler) GetEvidenceVerification(w http.ResponseWriter, r *http.Request
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metric, err := h.svc.GetEvidenceVerification(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate evidence verification")
@@ -290,7 +350,11 @@ func (h *Handler) GetInformationRequired(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metric, err := h.svc.GetInformationRequired(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate information required")
@@ -306,7 +370,11 @@ func (h *Handler) GetAllMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	metrics, err := h.svc.GetAllMetrics(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to calculate metrics")
@@ -322,7 +390,11 @@ func (h *Handler) GetDashboardMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := parsePeriod(r)
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	workflowKey := r.URL.Query().Get("workflow_key")
 	status := r.URL.Query().Get("status")
 	metrics, err := h.svc.GetDashboardMetrics(r.Context(), orgID, period, bucket, workflowKey, status)

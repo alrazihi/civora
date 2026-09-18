@@ -144,9 +144,13 @@ func BuildExportMetadata(orgID uuid.UUID, scope ExportScope, period MetricPeriod
 }
 
 func (r *ExportResult) ToJSON() ([]byte, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(r.Body, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse export data for JSON: %w", err)
+	}
 	envelope := map[string]interface{}{
 		"metadata": r.Metadata,
-		"data":     SanitizeExportData(r.Body),
+		"data":     SanitizeExportData(raw),
 	}
 	return json.MarshalIndent(envelope, "", "  ")
 }
@@ -160,11 +164,7 @@ func (r *ExportResult) ToCSV() ([]byte, error) {
 	if sanitizedMap == nil {
 		return nil, fmt.Errorf("invalid export data structure for CSV")
 	}
-	data, ok := sanitizedMap["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid export data structure for CSV")
-	}
-	return FlattenToCSV(data), nil
+	return FlattenToCSV(sanitizedMap), nil
 }
 
 func FlattenToCSV(data map[string]interface{}) []byte {

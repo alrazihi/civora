@@ -22,6 +22,7 @@ func (h *ImpactHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.Ha
 	r.Route("/api/v1/organizations/{orgId}/operations/impact", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
+		r.Use(middleware.RequireAnyRole("admin", "staff"))
 
 		r.Get("/report", h.GetImpactReport)
 	})
@@ -44,7 +45,11 @@ func (h *ImpactHandler) GetImpactReport(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	bucket, _ := parseBucket(r)
+	bucket, ok := parseBucket(r)
+	if !ok {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid bucket")
+		return
+	}
 	report, err := h.svc.GetImpactIntelligenceReport(r.Context(), orgID, period, bucket)
 	if err != nil {
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "failed to generate impact report")

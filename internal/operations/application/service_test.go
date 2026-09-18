@@ -163,7 +163,7 @@ func TestOperationsService_GetAllMetrics(t *testing.T) {
 	repo.On("GetWorkflowThroughput", mock.Anything, orgID, period, bucket).Return([]*domain.WorkflowThroughputMetric{{WorkflowKey: "emergency", TotalTransitions: 5, CalculatedAt: time.Now().UTC()}}, nil)
 	repo.On("GetStateDuration", mock.Anything, orgID, period, bucket).Return([]*domain.StateDurationMetric{{StateKey: "NEW", EntryCount: 10, CalculatedAt: time.Now().UTC()}}, nil)
 	repo.On("GetCaseCycleTime", mock.Anything, orgID, period, bucket).Return([]*domain.CaseCycleTimeMetric{{CompletedCases: 5, CalculatedAt: time.Now().UTC()}}, nil)
-	repo.On("GetAgingCases", mock.Anything, orgID, float64(720)).Return([]*domain.AgingCaseMetric{{CaseID: uuid.New(), AgeHours: 48, CalculatedAt: time.Now().UTC()}}, nil)
+	repo.On("GetAgingCases", mock.Anything, orgID, float64(720)).Return([]*domain.AgingCaseMetric{{AgeHours: 48, CalculatedAt: time.Now().UTC()}}, nil)
 	repo.On("GetPendingReviews", mock.Anything, orgID).Return(&domain.PendingReviewMetric{PendingReviews: 3, CalculatedAt: time.Now().UTC()}, nil)
 	repo.On("GetDecisions", mock.Anything, orgID, period, bucket).Return(&domain.DecisionMetric{TotalDecisions: 10, CalculatedAt: time.Now().UTC()}, nil)
 	repo.On("GetAssistanceOutcomes", mock.Anything, orgID, period, bucket).Return(&domain.AssistanceOutcomeMetric{TotalAssistance: 5, CalculatedAt: time.Now().UTC()}, nil)

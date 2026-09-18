@@ -89,7 +89,6 @@ func TestEvidenceVerificationMetric_RawValues(t *testing.T) {
 func TestAgingCaseMetric_Age(t *testing.T) {
 	now := time.Now().UTC()
 	metric := &AgingCaseMetric{
-		CaseID:       uuid.New(),
 		AgeHours:     48.5,
 		CalculatedAt: now,
 	}

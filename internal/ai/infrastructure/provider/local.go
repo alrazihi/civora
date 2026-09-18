@@ -55,6 +55,18 @@ func (p *LocalProvider) GenerateObservations(ctx context.Context, req applicatio
 	return results, nil
 }
 
+func (p *LocalProvider) GenerateChatCompletion(ctx context.Context, req application.ChatRequest) (*application.ChatResponse, error) {
+	if err := p.validateConfig(); err != nil {
+		return nil, err
+	}
+	resp, err := p.client.GenerateChatCompletion(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Model.Provider = "local"
+	return resp, nil
+}
+
 func (p *LocalProvider) validateConfig() error {
 	if p.baseURL == "" {
 		return fmt.Errorf("%w: local LLM server URL is not configured", ErrProviderDisabled)

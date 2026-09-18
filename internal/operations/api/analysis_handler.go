@@ -23,6 +23,7 @@ func (h *AnalysisHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.
 	r.Route("/api/v1/organizations/{orgId}/operations/analysis", func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Use(middleware.RequireSameTenant)
+		r.Use(middleware.RequireAnyRole("admin", "staff"))
 
 		r.Get("/workflow", h.GetWorkflowAnalysis)
 		r.Get("/thresholds", h.GetDefaultThresholds)

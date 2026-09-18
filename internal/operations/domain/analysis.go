@@ -87,8 +87,6 @@ type ReviewBacklogObservation struct {
 
 type ThresholdExceedanceObservation struct {
 	OrganizationID uuid.UUID `json:"organization_id"`
-	CaseID         uuid.UUID `json:"case_id"`
-	CaseNumber     string    `json:"case_number"`
 	WorkflowKey    string    `json:"workflow_key"`
 	CurrentState   string    `json:"current_state"`
 	ThresholdType  string    `json:"threshold_type"`

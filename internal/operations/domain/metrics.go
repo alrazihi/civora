@@ -15,6 +15,8 @@ const (
 	MetricPeriodMonthly MetricPeriod = "monthly"
 )
 
+const MinimumAggregationGroupSize = 5
+
 func BucketStart(t time.Time, period MetricPeriod) time.Time {
 	switch period {
 	case MetricPeriodWeekly:
@@ -85,14 +87,10 @@ type CaseCycleTimeMetric struct {
 
 type AgingCaseMetric struct {
 	OrganizationID      uuid.UUID `json:"organization_id"`
-	CaseID              uuid.UUID `json:"case_id"`
-	CaseNumber          string    `json:"case_number"`
 	WorkflowKey         string    `json:"workflow_key"`
 	CurrentState        string    `json:"current_state"`
 	ServiceType         string    `json:"service_type"`
 	Priority            string    `json:"priority"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
 	AgeHours            float64   `json:"age_hours"`
 	InCurrentStateHours float64   `json:"in_current_state_hours"`
 	CalculatedAt        time.Time `json:"calculated_at"`
