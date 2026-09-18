@@ -1,8 +1,1 @@
-type: object
-required:
-- completed_date
-properties:
-  completed_date:
-    type: string
-    format: date
-    description: ISO 8601 date (YYYY-MM-DD)
+$ref: ./modular/components/schemas/CompleteFollowUpRequest.yaml

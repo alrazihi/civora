@@ -1,6 +1,1 @@
-type: object
-required:
-- reason
-properties:
-  reason:
-    type: string
+$ref: ./modular/components/schemas/EscalateReviewRequest.yaml

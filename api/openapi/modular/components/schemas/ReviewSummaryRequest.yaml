@@ -1,5 +1,1 @@
-type: object
-properties:
-  notes:
-    type: string
-    maxLength: 5000
+$ref: ./modular/components/schemas/ReviewSummaryRequest.yaml

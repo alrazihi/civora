@@ -1,11 +1,1 @@
-type: object
-required:
-- email
-- password
-properties:
-  email:
-    type: string
-    format: email
-  password:
-    type: string
-    format: password
+$ref: ./modular/components/schemas/LoginRequest.yaml

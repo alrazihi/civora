@@ -1,9 +1,1 @@
-type: object
-required:
-- status
-properties:
-  status:
-    type: string
-    enum:
-    - ACTIVE
-    - INACTIVE
+$ref: ./modular/components/schemas/UpdatePersonStatusRequest.yaml

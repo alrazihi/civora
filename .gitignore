@@ -35,3 +35,5 @@ Thumbs.db
 .terraform/
 .kilo/kilo.jsonc
 web/e2e/node_modules/*
+api/openapi/node_modules/*
+

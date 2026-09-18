@@ -1,17 +1,1 @@
-type: object
-required:
-- facts
-properties:
-  case_id:
-    type: string
-    format: uuid
-    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
-  facts:
-    type: object
-    description: The fact document to evaluate against.
-    additionalProperties: true
-  trigger:
-    type: string
-    enum:
-    - MANUAL
-    - AUTOMATIC
+$ref: ./modular/components/schemas/EvaluateRuleSetRequest.yaml

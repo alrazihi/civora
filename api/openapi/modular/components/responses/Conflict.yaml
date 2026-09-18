@@ -1,5 +1,1 @@
-description: Resource conflict (e.g., duplicate key)
-content:
-  application/json:
-    schema:
-      $ref: '#/components/schemas/Error'
+$ref: ./modular/components/responses/Conflict.yaml

@@ -1,10 +1,1 @@
-type: object
-properties:
-  reason:
-    type: string
-    nullable: true
-    description: Reason for the verification status change.
-  method:
-    type: string
-    nullable: true
-    description: Method used for verification (e.g. manual, automated).
+$ref: ./modular/components/schemas/EvidenceVerificationRequest.yaml

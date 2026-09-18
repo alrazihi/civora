@@ -1,15 +1,1 @@
-type: object
-required:
-- name
-- slug
-properties:
-  name:
-    type: string
-    maxLength: 200
-  description:
-    type: string
-    maxLength: 2000
-  slug:
-    type: string
-    pattern: ^[a-z0-9-]+$
-    maxLength: 64
+$ref: ./modular/components/schemas/CreateOrganizationRequest.yaml

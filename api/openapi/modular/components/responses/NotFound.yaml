@@ -1,5 +1,1 @@
-description: Resource not found
-content:
-  application/json:
-    schema:
-      $ref: '#/components/schemas/Error'
+$ref: ./modular/components/responses/NotFound.yaml

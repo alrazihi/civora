@@ -1,10 +1,1 @@
-type: object
-required:
-- form_key
-- data
-properties:
-  form_key:
-    type: string
-  data:
-    type: object
-    additionalProperties: true
+$ref: ./modular/components/schemas/SubmitFormRequest.yaml

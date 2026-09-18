@@ -1,5 +1,1 @@
-description: Access forbidden
-content:
-  application/json:
-    schema:
-      $ref: '#/components/schemas/Error'
+$ref: ./modular/components/responses/Forbidden.yaml

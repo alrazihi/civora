@@ -1,14 +1,1 @@
-type: object
-properties:
-  success:
-    type: boolean
-    example: false
-  error:
-    type: object
-    properties:
-      code:
-        type: string
-        example: INVALID_INPUT
-      message:
-        type: string
-        example: title is required
+$ref: ./modular/components/schemas/Error.yaml

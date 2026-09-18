@@ -1,5 +1,1 @@
-type: object
-properties:
-  status:
-    type: string
-    example: ok
+$ref: ./modular/components/schemas/HealthResponse.yaml

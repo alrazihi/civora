@@ -1,6 +1,1 @@
-type: object
-properties:
-  value:
-    type: string
-  label:
-    type: string
+$ref: ./modular/components/schemas/FormOptionView.yaml

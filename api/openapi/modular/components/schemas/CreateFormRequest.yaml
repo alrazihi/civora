@@ -1,16 +1,1 @@
-type: object
-required:
-- key
-- name
-properties:
-  key:
-    type: string
-    pattern: ^[a-z0-9-]+$
-    maxLength: 64
-  name:
-    type: string
-    maxLength: 200
-  description:
-    type: string
-    maxLength: 2000
-    nullable: true
+$ref: ./modular/components/schemas/CreateFormRequest.yaml

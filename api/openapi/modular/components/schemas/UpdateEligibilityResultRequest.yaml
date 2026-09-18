@@ -1,10 +1,1 @@
-type: object
-required:
-- result
-properties:
-  result:
-    type: string
-    enum:
-    - ELIGIBLE
-    - NOT_ELIGIBLE
-    - REQUIRES_MORE_INFORMATION
+$ref: ./modular/components/schemas/UpdateEligibilityResultRequest.yaml

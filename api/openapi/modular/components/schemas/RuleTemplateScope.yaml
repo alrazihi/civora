@@ -1,5 +1,1 @@
-type: string
-enum:
-- ORG
-- GLOBAL
-description: Scope of the rule template (ORG = tenant-scoped, GLOBAL = platform-wide).
+$ref: ./modular/components/schemas/RuleTemplateScope.yaml

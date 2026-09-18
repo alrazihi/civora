@@ -1,9 +1,1 @@
-type: object
-required:
-- decision
-properties:
-  decision:
-    type: string
-  reason:
-    type: string
-    nullable: true
+$ref: ./modular/components/schemas/CompleteReviewRequest.yaml

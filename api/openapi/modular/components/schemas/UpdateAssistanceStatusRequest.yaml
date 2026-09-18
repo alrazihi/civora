@@ -1,10 +1,1 @@
-type: object
-required:
-- action
-properties:
-  action:
-    type: string
-    enum:
-    - start
-    - complete
-    - cancel
+$ref: ./modular/components/schemas/UpdateAssistanceStatusRequest.yaml
