@@ -33,6 +33,10 @@ func (m *mockAIProvider) ProviderInfo() domain.ModelInfo {
 	return m.info
 }
 
+func (m *mockAIProvider) GenerateChatCompletion(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	return nil, errors.New("not implemented in mock")
+}
+
 type mockEvidenceRepo struct {
 	evidence          *evidencedomain.Evidence
 	documents         []*evidencedomain.Document

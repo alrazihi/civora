@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,10 @@ func (m *mockAIProvider) GenerateObservations(ctx context.Context, req aiapp.Pro
 
 func (m *mockAIProvider) ProviderInfo() ai_domain.ModelInfo {
 	return ai_domain.ModelInfo{Name: "mock-ai", Version: "1.0.0", Provider: "test"}
+}
+
+func (m *mockAIProvider) GenerateChatCompletion(ctx context.Context, req aiapp.ChatRequest) (*aiapp.ChatResponse, error) {
+	return nil, errors.New("not implemented in mock")
 }
 
 // newAIService creates a real AI service wired with a mock provider and real postgres repos.
