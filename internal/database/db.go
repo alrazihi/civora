@@ -31,7 +31,7 @@ func NewDatabase(dsn string, driver string) (*Database, error) {
 }
 
 func waitForDatabase(db *sql.DB) error {
-	maxRetries := 30
+	maxRetries := 10
 	delay := 1 * time.Second
 
 	for i := 0; i < maxRetries; i++ {

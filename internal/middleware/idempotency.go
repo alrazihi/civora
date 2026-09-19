@@ -17,7 +17,10 @@ type IdempotencyStore struct {
 	ttl      time.Duration
 	stopCh   chan struct{}
 	stopOnce sync.Once
+	maxEntries int
 }
+
+const DefaultMaxIdempotencyEntries = 100000
 
 type IdempotencyRecord struct {
 	StatusCode int
@@ -28,12 +31,21 @@ type IdempotencyRecord struct {
 
 func NewIdempotencyStore(ttl time.Duration) *IdempotencyStore {
 	s := &IdempotencyStore{
-		data:   make(map[string]*IdempotencyRecord),
-		ttl:    ttl,
-		stopCh: make(chan struct{}),
+		data:     make(map[string]*IdempotencyRecord),
+		ttl:      ttl,
+		stopCh:   make(chan struct{}),
+		maxEntries: DefaultMaxIdempotencyEntries,
 	}
 	go s.runCleanup()
 	return s
+}
+
+func (s *IdempotencyStore) SetMaxEntries(max int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if max > 0 {
+		s.maxEntries = max
+	}
 }
 
 func (s *IdempotencyStore) Stop() {
@@ -66,6 +78,22 @@ func (s *IdempotencyStore) cleanup() {
 	for key, rec := range s.data {
 		if now.Sub(rec.CreatedAt) > s.ttl {
 			delete(s.data, key)
+		}
+	}
+	if len(s.data) > s.maxEntries {
+		evictCount := len(s.data) - s.maxEntries
+		for range make([]struct{}, evictCount) {
+			var oldestKey string
+			var oldestTime time.Time = time.Now()
+			for k, rec := range s.data {
+				if rec.CreatedAt.Before(oldestTime) || oldestKey == "" {
+					oldestKey = k
+					oldestTime = rec.CreatedAt
+				}
+			}
+			if oldestKey != "" {
+				delete(s.data, oldestKey)
+			}
 		}
 	}
 }

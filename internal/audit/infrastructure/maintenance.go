@@ -21,9 +21,10 @@ import (
 // Retention purging deletes events older than the configured retention
 // period.
 type AuditMaintenanceService struct {
-	repo   domain.AuditRepository
-	cfg    config.AuditConfig
-	logger *log.Logger
+	repo            domain.AuditRepository
+	cfg             config.AuditConfig
+	logger          *log.Logger
+	consecutiveErrs int
 }
 
 func NewAuditMaintenanceService(repo domain.AuditRepository, cfg config.AuditConfig) *AuditMaintenanceService {
@@ -151,7 +152,13 @@ func (s *AuditMaintenanceService) StartBackground(ctx context.Context, interval 
 			case <-ticker.C:
 				verified, failed, _, _, err := s.RunOnce(ctx)
 				if err != nil {
-					s.logger.Printf("audit maintenance error: %v", err)
+					s.consecutiveErrs++
+					s.logger.Printf("audit maintenance error (attempt %d): %v", s.consecutiveErrs, err)
+					if s.consecutiveErrs >= 3 {
+						s.logger.Printf("ALERT: audit maintenance has failed %d consecutive times - CHECK MAINTENANCE LOGS", s.consecutiveErrs)
+					}
+				} else {
+					s.consecutiveErrs = 0
 				}
 				if failed > 0 {
 					s.logger.Printf("AUDIT INTEGRITY FAILURE: %d of %d events failed verification", failed, verified+failed)

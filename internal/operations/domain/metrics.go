@@ -17,6 +17,20 @@ const (
 
 const MinimumAggregationGroupSize = 5
 
+func ShouldHideMetric(count int) bool {
+	return count < MinimumAggregationGroupSize
+}
+
+func ApplySmallGroupProtection(m map[string]int) map[string]int {
+	result := make(map[string]int)
+	for k, v := range m {
+		if !ShouldHideMetric(v) {
+			result[k] = v
+		}
+	}
+	return result
+}
+
 func BucketStart(t time.Time, period MetricPeriod) time.Time {
 	switch period {
 	case MetricPeriodWeekly:

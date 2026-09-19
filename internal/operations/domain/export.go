@@ -75,6 +75,21 @@ var SensitiveFieldPatterns = []string{
 	"database_url",
 	"dsn",
 	"credential",
+	"ssn",
+	"social_security",
+	"phone",
+	"email",
+	"address",
+	"name",
+	"first_name",
+	"last_name",
+	"patient",
+	"medical",
+	"health",
+	"insurance",
+	"sensitive",
+	"confidential",
+	"hidden",
 	"hash",
 	"salt",
 	"session_id",
@@ -116,6 +131,38 @@ func isSensitiveField(name string) bool {
 	for _, pattern := range SensitiveFieldPatterns {
 		if strings.Contains(lower, pattern) {
 			return true
+		}
+	}
+	return false
+}
+
+func ContainsPII(data interface{}) bool {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		for k, val := range v {
+			if isSensitiveField(k) {
+				return true
+			}
+			if ContainsPII(val) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if ContainsPII(item) {
+				return true
+			}
+		}
+	default:
+		if s, ok := v.(string); ok {
+			lower := strings.ToLower(s)
+			for _, pattern := range SensitiveFieldPatterns {
+				if strings.Contains(lower, pattern) {
+					if len(s) > 3 && lower != pattern {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false

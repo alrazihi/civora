@@ -23,15 +23,19 @@ type RateLimiter struct {
 	trustedProxies []string
 	stopCh         chan struct{}
 	stopOnce       sync.Once
+	maxEntries     int
 }
+
+const DefaultMaxRateLimiterEntries = 10000
 
 func NewRateLimiter(requestsPerSecond, burst int) *RateLimiter {
 	rl := &RateLimiter{
-		visitors: make(map[string]*visitor),
-		limit:    requestsPerSecond,
-		burst:    burst,
-		ttl:      5 * time.Minute,
-		stopCh:   make(chan struct{}),
+		visitors:       make(map[string]*visitor),
+		limit:          requestsPerSecond,
+		burst:          burst,
+		ttl:            5 * time.Minute,
+		stopCh:         make(chan struct{}),
+		maxEntries:     DefaultMaxRateLimiterEntries,
 	}
 	go rl.runCleanup()
 	return rl
@@ -41,6 +45,14 @@ func (rl *RateLimiter) SetTrustedProxies(trustedProxies []string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	rl.trustedProxies = append([]string(nil), trustedProxies...)
+}
+
+func (rl *RateLimiter) SetMaxEntries(max int) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if max > 0 {
+		rl.maxEntries = max
+	}
 }
 
 func (rl *RateLimiter) Stop() {
@@ -95,6 +107,22 @@ func (rl *RateLimiter) cleanup() {
 	for ip, v := range rl.visitors {
 		if now.Sub(v.lastReq) > rl.ttl {
 			delete(rl.visitors, ip)
+		}
+	}
+	if len(rl.visitors) > rl.maxEntries {
+		type entry struct {
+			ip   string
+			last time.Time
+		}
+		var entries []entry
+		for ip, v := range rl.visitors {
+			entries = append(entries, entry{ip: ip, last: v.lastReq})
+		}
+		for _, e := range entries {
+			if len(rl.visitors) <= rl.maxEntries {
+				break
+			}
+			delete(rl.visitors, e.ip)
 		}
 	}
 }
