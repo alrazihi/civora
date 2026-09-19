@@ -224,12 +224,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stage 9 AI platform proof report
 - Architecture updated with AI module diagrams and module boundaries
 
+## [0.9.0] - 2026-09-19
+
+### Security & Integrity
+
+- Audit immutability enforced: `PurgeOld` is now a no-op; audit events cannot be deleted, preserving the tamper-evident hash chain
+- Login brute-force protection verified: `UserRateLimiter` enforces lockout after failed auth attempts
+- AI audit atomicity verified: observation generation and review audit events are recorded within the same database transaction as data writes
+- OpenAPI specification restored to valid state after modularization regression; all 200+ component files have correct JSON pointer references
+
+### Reliability
+
+- Database startup retry reduced from 30 to 10 attempts, cutting maximum startup wait from ~8 minutes to ~60 seconds
+- Rate limiter memory bounded: LRU eviction at 10,000 entries prevents unbounded growth
+- Idempotency store memory bounded: LRU eviction at 100,000 entries prevents unbounded growth
+- Audit maintenance alerting: consecutive failures logged with `ALERT:` message after 3 failures
+
+### Configurability
+
+- Removed hardcoded `service_type` enum: organizations can now define any service type string via API
+- Removed hardcoded `priority` enum: organizations can now define any priority string via API
+- OpenAPI schemas updated to remove enum constraints on `service_type` and `priority`
+
+### Documentation
+
+- Stage 11 platform configurability audit added
+- Stage 12 documentation truth audit added
+- ARCHITECTURE.md updated: encryption at rest is not implemented, retention is not configurable per org, backup/DR are operator responsibilities
+- README.md updated: Milestone 0.9 focus confirmed
+- threat-model.md review date updated to 2026-09-19
+
+### Known Limitations
+
+- No per-organization AI settings in database; AI is globally enabled/disabled via environment variable
+- Case.Status is a denormalized mirror of workflow state; consistency is enforced at application layer but not at database constraint level
+- No built-in backup/restore or encryption-at-rest; operators must provision these through infrastructure
+- No `/roles` CRUD API endpoint; roles are created via database seed scripts
+- AI observation default status is `OPEN` rather than `PENDING_REVIEW`
+
+### Tests
+
+- `go build ./...` — PASS
+- `go vet ./...` — PASS
+- `gofmt -l .` — CLEAN
+- `go test -short ./...` — PASS
+- `npx @redocly/cli lint api/openapi/openapi.yaml` — PASS
+
 [Unreleased]: https://github.com/alrazihi/civora/compare/v0.8.0...HEAD
-[0.8.0]: https://github.com/alrazihi/civora/releases/tag/v0.8.0
+[v0.9.0]: https://github.com/alrazihi/civora/releases/tag/v0.9.0
 
 ---
 
-## [0.1.0] - 2026-09-06
+## [0.8.0] - 2026-09-17
 
 ### Added
 
