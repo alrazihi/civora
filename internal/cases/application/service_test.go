@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"context"
@@ -143,7 +143,7 @@ func (m *mockCaseRepository) Statistics(ctx context.Context, orgID uuid.UUID) (*
 		if c.Status == domain.CaseStatusRejected {
 			stats.Rejected++
 		}
-		if c.Priority == domain.PriorityUrgent {
+		if c.Priority == "URGENT" {
 			stats.Urgent++
 		}
 		stats.ByStatus[string(c.Status)]++
@@ -514,8 +514,8 @@ func TestCreateCase(t *testing.T) {
 		OrganizationID: orgID,
 		Title:          "Emergency Food Request",
 		Description:    "Family needs emergency food assistance",
-		ServiceType:    domain.ServiceTypeEmergency,
-		Priority:       domain.PriorityHigh,
+		ServiceType:    "EMERGENCY",
+		Priority:       "HIGH",
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -527,8 +527,8 @@ func TestCreateCase(t *testing.T) {
 	assert.Equal(t, domain.CaseStatusNew, c.Status)
 	assert.NotEmpty(t, c.CaseNumber)
 	assert.Equal(t, userID, c.CreatedByID)
-	assert.Equal(t, domain.ServiceTypeEmergency, c.ServiceType)
-	assert.Equal(t, domain.PriorityHigh, c.Priority)
+	assert.Equal(t, domain.ServiceType("EMERGENCY"), c.ServiceType)
+	assert.Equal(t, domain.Priority("HIGH"), c.Priority)
 }
 
 func TestCaseLifecycle(t *testing.T) {
@@ -554,8 +554,8 @@ func TestCaseLifecycle(t *testing.T) {
 		OrganizationID: orgID,
 		Title:          "Emergency Assistance",
 		Description:    "Need help",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityHigh,
+		ServiceType:    "GENERAL",
+		Priority:       "HIGH",
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -582,7 +582,7 @@ func TestCaseLifecycle(t *testing.T) {
 			Status:         tc.to,
 			ActorID:        userID,
 		})
-		require.NoError(t, err, "transition %s→%s should succeed", tc.from, tc.to)
+		require.NoError(t, err, "transition %sâ†’%s should succeed", tc.from, tc.to)
 
 		updated, err := svc.GetCase(context.Background(), orgID, c.ID)
 		require.NoError(t, err)
@@ -605,8 +605,8 @@ func TestInvalidStateTransition(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -639,8 +639,8 @@ func TestReopenFromReview(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -684,8 +684,8 @@ func TestCasePersonTenantIsolation(t *testing.T) {
 		OrganizationID: org2,
 		Title:          "Case with cross-tenant person",
 		Description:    "Desc",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		PersonID:       &person.ID,
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
@@ -705,8 +705,8 @@ func TestCaseTenantIsolation(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: org1,
 		Title:          "Case in Org 1",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    user,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -731,8 +731,8 @@ func TestAssignCase(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    creator,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -764,8 +764,8 @@ func TestAssignCase_CrossTenantRejected(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: org1,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    creator,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -792,8 +792,8 @@ func TestListCases(t *testing.T) {
 		_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 			OrganizationID: orgID,
 			Title:          "Case " + string(rune('A'+i)),
-			ServiceType:    domain.ServiceTypeGeneral,
-			Priority:       domain.PriorityNormal,
+			ServiceType:    "GENERAL",
+			Priority:       "NORMAL",
 			CreatedByID:    userID,
 			WorkflowID:     &testDefaultWorkflowID,
 		})
@@ -836,8 +836,8 @@ func TestCaseNumberCollision_RetryOnConflict(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Case with Collision",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -857,8 +857,8 @@ func TestCaseNumberCollision_ExhaustsRetries(t *testing.T) {
 	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Case That Keeps Colliding",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    userID,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -878,8 +878,8 @@ func TestOnTransition_SyncsCaseStatus(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Observer Test",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    creator,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -921,8 +921,8 @@ func TestOnTransition_CustomStateIsAccepted(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Custom State Test",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    creator,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -960,8 +960,8 @@ func TestOnTransition_TenantIsolation(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Observer Tenant Test",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    creator,
 		WorkflowID:     &testDefaultWorkflowID,
 	})
@@ -992,10 +992,10 @@ func TestGetStatistics_IsTenantScoped(t *testing.T) {
 
 	org1 := uuid.New()
 	org2 := uuid.New()
-	c1, _ := domain.NewCase(org1, uuid.New(), "One", "Desc", domain.ServiceTypeEmergency, domain.PriorityUrgent, nil)
+	c1, _ := domain.NewCase(org1, uuid.New(), "One", "Desc", "EMERGENCY", "URGENT", nil)
 	c1.Status = domain.CaseStatusClosed
 	repo.cases[c1.ID] = c1
-	c2, _ := domain.NewCase(org2, uuid.New(), "Two", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c2, _ := domain.NewCase(org2, uuid.New(), "Two", "Desc", "GENERAL", "NORMAL", nil)
 	c2.Status = domain.CaseStatusRejected
 	repo.cases[c2.ID] = c2
 
@@ -1007,7 +1007,7 @@ func TestGetStatistics_IsTenantScoped(t *testing.T) {
 	assert.Equal(t, 0, stats.Rejected)
 	assert.Equal(t, 1, stats.Urgent)
 	assert.Equal(t, 1, stats.ByStatus[string(domain.CaseStatusClosed)])
-	assert.Equal(t, 1, stats.ByServiceType[string(domain.ServiceTypeEmergency)])
+	assert.Equal(t, 1, stats.ByServiceType["EMERGENCY"])
 }
 
 func TestCreateCase_WithWorkflowID(t *testing.T) {
@@ -1026,8 +1026,8 @@ func TestCreateCase_WithWorkflowID(t *testing.T) {
 		OrganizationID: orgID,
 		Title:          "Emergency Assistance",
 		Description:    "Need help",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityHigh,
+		ServiceType:    "GENERAL",
+		Priority:       "HIGH",
 		WorkflowID:     &wfID,
 		CreatedByID:    userID,
 	})
@@ -1049,8 +1049,8 @@ func TestCreateCase_WithNilWorkflowID(t *testing.T) {
 	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeEmergency,
-		Priority:       domain.PriorityHigh,
+		ServiceType:    "EMERGENCY",
+		Priority:       "HIGH",
 		WorkflowID:     nil,
 		CreatedByID:    userID,
 	})
@@ -1069,8 +1069,8 @@ func TestCreateCase_WithZeroWorkflowIDRejected(t *testing.T) {
 	_, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		WorkflowID:     &wfID,
 		CreatedByID:    userID,
 	})
@@ -1099,8 +1099,8 @@ func TestChangeStatus_BlockedByIncompleteRequiredForms(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		WorkflowID:     &workflowDefID,
 		CreatedByID:    userID,
 	})
@@ -1149,8 +1149,8 @@ func TestChangeStatus_AllowsTransitionWhenFormsComplete(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Test Case",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		WorkflowID:     &workflowDefID,
 		CreatedByID:    userID,
 	})
@@ -1217,13 +1217,14 @@ func TestOnTransition_TriggersRuleEvaluation(t *testing.T) {
 
 	orgID := uuid.New()
 	creator := uuid.New()
+	workflowDefID := uuid.New()
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
-		Title:          "Transition Integration Test",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		Title:          "Test Case",
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
+		WorkflowID:     &workflowDefID,
 		CreatedByID:    creator,
-		WorkflowID:     &testDefaultWorkflowID,
 	})
 	require.NoError(t, err)
 
@@ -1262,8 +1263,8 @@ func TestOnTransition_NoRuleIntegration(t *testing.T) {
 	c, err := svc.CreateCase(context.Background(), CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "No Integration Test",
-		ServiceType:    domain.ServiceTypeGeneral,
-		Priority:       domain.PriorityNormal,
+		ServiceType:    "GENERAL",
+		Priority:       "NORMAL",
 		CreatedByID:    creator,
 		WorkflowID:     &testDefaultWorkflowID,
 	})

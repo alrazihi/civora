@@ -1,4 +1,4 @@
-package integration
+﻿package integration
 
 import (
 	"context"
@@ -96,8 +96,8 @@ func TestConcurrentCaseTransitions(t *testing.T) {
 		OrganizationID: org.ID,
 		Title:          "Concurrency Test Case",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &concurrentDefID,
 	})
@@ -225,8 +225,8 @@ func TestConcurrentDuplicateDecision(t *testing.T) {
 		OrganizationID: org.ID,
 		Title:          "Concurrency Decision Case",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &concurrentDefID,
 	})

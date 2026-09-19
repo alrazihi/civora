@@ -1,4 +1,4 @@
-package integration
+﻿package integration
 
 import (
 	"context"
@@ -221,8 +221,8 @@ func TestCaseLifecycle(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Emergency Food Request",
 		Description:    "Family needs food assistance",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityHigh,
+		ServiceType:    "Emergency",
+		Priority:       "High",
 		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
@@ -317,8 +317,8 @@ func TestCaseInvalidTransition(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Test Case",
 		Description:    "Description",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
@@ -354,8 +354,8 @@ func TestCaseTenantIsolation(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Case in workflow org",
 		Description:    "Description",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
@@ -381,8 +381,8 @@ func TestCaseGeneratesAuditEvents(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Test Case for Audit",
 		Description:    "Description",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		WorkflowID:     &workflowDefID,
 		CreatedByID:    actorID,
 	})
@@ -453,8 +453,8 @@ func TestAuditAtomicity_CaseCreationRollsBackOnAuditFailure(t *testing.T) {
 		OrganizationID: orgID,
 		Title:          "Test Case for Atomicity",
 		Description:    "Should not persist if audit fails",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		WorkflowID:     uuidPtr(uuid.New()),
 		CreatedByID:    actorID,
 	})

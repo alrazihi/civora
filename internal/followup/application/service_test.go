@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"context"
@@ -101,7 +101,7 @@ func TestCreateFollowUp_CrossTenantCase(t *testing.T) {
 	org2 := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateFollowUp(context.Background(), CreateFollowUpParams{
@@ -124,7 +124,7 @@ func TestCreateFollowUp_CrossTenantUser(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	c.Status = domain.CaseStatusApproved
 	caseFinder.addCase(c)
 
@@ -148,7 +148,7 @@ func TestCreateFollowUp_InvalidCaseStatus(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	c.Status = domain.CaseStatusNew
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)

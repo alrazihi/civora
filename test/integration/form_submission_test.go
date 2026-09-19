@@ -1,4 +1,4 @@
-package integration
+﻿package integration
 
 import (
 	"context"
@@ -167,8 +167,8 @@ func TestFormSubmission_GetCaseFormsBatchQueries(t *testing.T) {
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Batch Query Case",
-		ServiceType:    casedomain.ServiceTypeGeneral,
-		Priority:       casedomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDef.ID,
 	})
@@ -232,8 +232,8 @@ func TestFormSubmission_GetWorkflowRequirementsWithSubmission(t *testing.T) {
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Requirements With Submission",
-		ServiceType:    casedomain.ServiceTypeGeneral,
-		Priority:       casedomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDef.ID,
 	})
@@ -295,8 +295,8 @@ func TestFormSubmission_MultipleFormsBatchQueries(t *testing.T) {
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Multi Form Case",
-		ServiceType:    casedomain.ServiceTypeGeneral,
-		Priority:       casedomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDef.ID,
 	})
@@ -349,7 +349,7 @@ func TestFormSubmission_MultipleFormsBatchQueries(t *testing.T) {
 // the enforcement bypass: the generic workflow transition path
 // (workflowSvc.ExecuteTransition, invoked by
 // POST /cases/{id}/workflow/transitions/{key}) previously advanced state
-// WITHOUT checking required forms — only the case-status endpoint did. The
+// WITHOUT checking required forms â€” only the case-status endpoint did. The
 // CaseService.OnTransition observer now enforces the requirement inside the
 // transition transaction for every path, so advancement cannot bypass forms
 // and does not depend on the frontend disabling buttons.
@@ -372,8 +372,8 @@ func TestWorkflowTransition_GenericPath_EnforcesRequiredForms(t *testing.T) {
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Generic Transition Enforcement",
-		ServiceType:    casedomain.ServiceTypeGeneral,
-		Priority:       casedomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDef.ID,
 	})
@@ -433,7 +433,7 @@ func TestWorkflowTransition_GenericPath_EnforcesRequiredForms(t *testing.T) {
 // stores them verbatim, but submission-time validation previously read only
 // camelCase as float64. A field validly configured with min_value therefore had
 // its minimum silently unenforced. household_size=0 (below min_value 1) must be
-// rejected — the exact Phase 5 product requirement.
+// rejected â€” the exact Phase 5 product requirement.
 func TestFormSubmission_EnforcesSnakeCaseNumericValidation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -487,8 +487,8 @@ func TestFormSubmission_EnforcesSnakeCaseNumericValidation(t *testing.T) {
 	c, err := caseSvc.CreateCase(ctx, caseapp.CreateCaseParams{
 		OrganizationID: orgID,
 		Title:          "Snake Case Numeric Validation",
-		ServiceType:    casedomain.ServiceTypeGeneral,
-		Priority:       casedomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDef.ID,
 	})

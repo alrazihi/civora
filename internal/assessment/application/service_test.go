@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"context"
@@ -95,7 +95,7 @@ func TestCreateAssessment_CrossTenantCase(t *testing.T) {
 	org2 := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateAssessment(context.Background(), CreateAssessmentParams{
@@ -118,7 +118,7 @@ func TestCreateAssessment_CrossTenantUser(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateAssessment(context.Background(), CreateAssessmentParams{

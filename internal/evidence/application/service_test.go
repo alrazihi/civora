@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"bytes"
@@ -339,7 +339,7 @@ func TestAddEvidence_CrossTenantCase(t *testing.T) {
 	actorID := uuid.New()
 	userChecker.addUser(org1, actorID)
 
-	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.AddEvidence(context.Background(), AddEvidenceParams{
@@ -360,7 +360,7 @@ func TestAddEvidence_CrossTenantUser(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.AddEvidence(context.Background(), AddEvidenceParams{
@@ -382,7 +382,7 @@ func TestAddEvidence_SuccessWithMetadata(t *testing.T) {
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	e, err := svc.AddEvidence(context.Background(), AddEvidenceParams{
@@ -423,7 +423,7 @@ func TestVerifyEvidence_Success(t *testing.T) {
 	userChecker.addUser(orgID, uploadedBy)
 	userChecker.addUser(orgID, verifierID)
 
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	e := createTestEvidence(t, repo, orgID, srID, uploadedBy)
@@ -472,7 +472,7 @@ func TestVerifyEvidence_VerifierNotInOrg(t *testing.T) {
 	verifierID := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -494,7 +494,7 @@ func TestVerifyEvidence_NilVerifierID(t *testing.T) {
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -517,7 +517,7 @@ func TestRejectEvidence_Success(t *testing.T) {
 	reviewerID := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 	userChecker.addUser(orgID, reviewerID)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -544,7 +544,7 @@ func TestMarkEvidenceForReview_Success(t *testing.T) {
 	reviewerID := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 	userChecker.addUser(orgID, reviewerID)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -571,7 +571,7 @@ func TestVerificationHistoryRecorded(t *testing.T) {
 	verifierID := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 	userChecker.addUser(orgID, verifierID)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -614,7 +614,7 @@ func TestUpdateEvidenceMetadata_Success(t *testing.T) {
 	actorID := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 	userChecker.addUser(orgID, actorID)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -652,7 +652,7 @@ func TestUpdateEvidenceMetadata_NilActor(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -674,7 +674,7 @@ func TestUpdateEvidenceMetadata_InvalidMetadataKey(t *testing.T) {
 	actorID := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
 	userChecker.addUser(orgID, actorID)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -694,7 +694,7 @@ func TestUploadDocument_Success(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -747,7 +747,7 @@ func TestUploadDocument_UnsupportedContentType(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -771,7 +771,7 @@ func TestUploadDocument_NilUploader(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -795,7 +795,7 @@ func TestUploadDocument_DangerousFilename(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -821,7 +821,7 @@ func TestGetDocumentStream_DocumentNotFound(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -835,7 +835,7 @@ func TestListDocuments_Success(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -885,7 +885,7 @@ func TestListDocuments_NilDownloader(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -907,7 +907,7 @@ func TestListDocuments_UserNotInOrg(t *testing.T) {
 	otherOrg := uuid.New()
 	otherUser := uuid.New()
 	userChecker.addUser(otherOrg, otherUser)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -926,7 +926,7 @@ func TestListDocuments_EmptyResults(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -946,7 +946,7 @@ func TestGetDocumentStream_DownloadAudit(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -985,7 +985,7 @@ func TestDeleteDocument_Success(t *testing.T) {
 	orgID := uuid.New()
 	uploadedBy := uuid.New()
 	userChecker.addUser(orgID, uploadedBy)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 
@@ -1064,7 +1064,7 @@ func TestDeleteDocument_UserNotInOrg(t *testing.T) {
 	otherOrg := uuid.New()
 	otherUser := uuid.New()
 	userChecker.addUser(otherOrg, otherUser)
-	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
 

@@ -43,25 +43,7 @@ type CaseStatistics struct {
 
 type ServiceType string
 
-const (
-	ServiceTypeGeneral   ServiceType = "GENERAL"
-	ServiceTypeEmergency ServiceType = "EMERGENCY"
-	ServiceTypeFinancial ServiceType = "FINANCIAL"
-	ServiceTypeFood      ServiceType = "FOOD"
-	ServiceTypeShelter   ServiceType = "SHELTER"
-	ServiceTypeMedical   ServiceType = "MEDICAL"
-	ServiceTypeEducation ServiceType = "EDUCATION"
-	ServiceTypeTransport ServiceType = "TRANSPORT"
-)
-
 type Priority string
-
-const (
-	PriorityLow    Priority = "LOW"
-	PriorityNormal Priority = "NORMAL"
-	PriorityHigh   Priority = "HIGH"
-	PriorityUrgent Priority = "URGENT"
-)
 
 var (
 	ErrInvalidStateTransition  = errors.New("invalid state transition")
@@ -72,30 +54,24 @@ var (
 	ErrCaseStatusContradiction = errors.New("case status contradicts workflow state")
 )
 
-var validServiceTypes = map[ServiceType]struct{}{
-	ServiceTypeGeneral:   {},
-	ServiceTypeEmergency: {},
-	ServiceTypeFinancial: {},
-	ServiceTypeFood:      {},
-	ServiceTypeShelter:   {},
-	ServiceTypeMedical:   {},
-	ServiceTypeEducation: {},
-	ServiceTypeTransport: {},
-}
-
-// IsValid reports whether the ServiceType value is recognized by the domain.
 func (s ServiceType) IsValid() bool {
-	_, ok := validServiceTypes[s]
-	return ok
+	return s != ""
 }
 
-// ValidateServiceType returns an error if the service type is not a known value.
+func (p Priority) IsValid() bool {
+	return p != ""
+}
+
 func ValidateServiceType(s ServiceType) error {
 	if s == "" {
 		return fmt.Errorf("%w: service_type is required", ErrCaseInvalidInput)
 	}
-	if !s.IsValid() {
-		return fmt.Errorf("%w: invalid service_type %q", ErrCaseInvalidInput, s)
+	return nil
+}
+
+func ValidatePriority(p Priority) error {
+	if p == "" {
+		return fmt.Errorf("%w: priority is required", ErrCaseInvalidInput)
 	}
 	return nil
 }

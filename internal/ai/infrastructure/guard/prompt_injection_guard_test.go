@@ -1,4 +1,4 @@
-package guard
+﻿package guard
 
 import (
 	"encoding/json"

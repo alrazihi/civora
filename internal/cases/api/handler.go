@@ -117,7 +117,7 @@ func (h *Handler) CreateCase(w http.ResponseWriter, r *http.Request) {
 	if req.Priority == "" {
 		req.Priority = "NORMAL"
 	}
-	if !domain.ServiceType(req.ServiceType).IsValid() {
+	if err := domain.ValidateServiceType(domain.ServiceType(req.ServiceType)); err != nil {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid service_type")
 		return
 	}

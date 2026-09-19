@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"context"
@@ -93,7 +93,7 @@ func TestCreateAssistance_CrossTenantCase(t *testing.T) {
 	org2 := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateAssistance(context.Background(), CreateAssistanceParams{
@@ -116,7 +116,7 @@ func TestCreateAssistance_CrossTenantUser(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateAssistance(context.Background(), CreateAssistanceParams{
@@ -138,7 +138,7 @@ func TestUpdateAssistanceStatus_InvalidAction(t *testing.T) {
 
 	orgID := uuid.New()
 	actorID := uuid.New()
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	a, _ := assistancedomain.NewAssistance(orgID, c.ID, actorID, assistancedomain.AssistanceTypeFood, "Test")

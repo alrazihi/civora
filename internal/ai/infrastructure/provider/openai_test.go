@@ -1,4 +1,4 @@
-package provider
+﻿package provider
 
 import (
 	"context"
@@ -383,7 +383,7 @@ func TestOpenAIProvider_GenerateObservations_PromptInjectionInDocument(t *testin
 
 	// Verify system prompt is present and contains safety instructions
 	if !strings.Contains(receivedSystemPrompt, "Do not make judgments") {
-		t.Error("system prompt missing or incomplete — prompt injection defense may be weakened")
+		t.Error("system prompt missing or incomplete â€” prompt injection defense may be weakened")
 	}
 	if !strings.Contains(receivedSystemPrompt, "human verification") {
 		t.Error("system prompt does not mention human verification requirement")
@@ -395,7 +395,7 @@ func TestOpenAIProvider_GenerateObservations_PromptInjectionInDocument(t *testin
 	}
 	statement, _ := results[0].Content["statement"].(string)
 	if strings.Contains(statement, "attacker@evil.com") {
-		t.Error("observation appears to follow injected instructions — prompt injection vulnerability")
+		t.Error("observation appears to follow injected instructions â€” prompt injection vulnerability")
 	}
 }
 
@@ -451,6 +451,6 @@ func TestOpenAIProvider_GenerateObservations_SystemPromptExtractionBlocked(t *te
 
 	statement, _ := results[0].Content["statement"].(string)
 	if strings.Contains(statement, "You are CIVORA") {
-		t.Error("system prompt was extracted by adversarial input — critical security vulnerability")
+		t.Error("system prompt was extracted by adversarial input â€” critical security vulnerability")
 	}
 }

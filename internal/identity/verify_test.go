@@ -1,4 +1,4 @@
-package identity
+﻿package identity
 
 import (
 	"crypto/ed25519"

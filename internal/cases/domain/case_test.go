@@ -1,4 +1,4 @@
-package domain
+﻿package domain
 
 import (
 	"strings"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestCase_AssignTo(t *testing.T) {
-	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", "GENERAL", "NORMAL", nil)
 	require.NoError(t, err)
 	user := uuid.New()
 	c.AssignTo(user)
@@ -20,7 +20,7 @@ func TestCase_AssignTo(t *testing.T) {
 }
 
 func TestGenerateCaseNumber(t *testing.T) {
-	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", "GENERAL", "NORMAL", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, c.CaseNumber)
 	assert.Contains(t, c.CaseNumber, "CAS-")
@@ -37,7 +37,7 @@ func TestCaseNumberCollision_Uniqueness(t *testing.T) {
 }
 
 func TestCase_RegenerateCaseNumber(t *testing.T) {
-	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", ServiceTypeGeneral, PriorityNormal, nil)
+	c, err := NewCase(uuid.New(), uuid.New(), "Test Case", "Description", "GENERAL", "NORMAL", nil)
 	require.NoError(t, err)
 	original := c.CaseNumber
 	c.RegenerateCaseNumber()
@@ -64,57 +64,32 @@ func TestIsClosed(t *testing.T) {
 func TestNewCase_InputValidation(t *testing.T) {
 	t.Run("title too long", func(t *testing.T) {
 		longTitle := strings.Repeat("x", maxTitleLength+1)
-		_, err := NewCase(uuid.New(), uuid.New(), longTitle, "description", ServiceTypeGeneral, PriorityNormal, nil)
+		_, err := NewCase(uuid.New(), uuid.New(), longTitle, "description", "GENERAL", "NORMAL", nil)
 		assert.ErrorIs(t, err, ErrCaseInvalidInput)
 	})
 
 	t.Run("description too long", func(t *testing.T) {
 		longDesc := strings.Repeat("x", maxDescriptionLength+1)
-		_, err := NewCase(uuid.New(), uuid.New(), "title", longDesc, ServiceTypeGeneral, PriorityNormal, nil)
+		_, err := NewCase(uuid.New(), uuid.New(), "title", longDesc, "GENERAL", "NORMAL", nil)
 		assert.ErrorIs(t, err, ErrCaseInvalidInput)
 	})
 
 	t.Run("valid input", func(t *testing.T) {
-		c, err := NewCase(uuid.New(), uuid.New(), "Valid Title", "Valid description", ServiceTypeEmergency, PriorityHigh, nil)
+		c, err := NewCase(uuid.New(), uuid.New(), "Valid Title", "Valid description", "EMERGENCY", "HIGH", nil)
 		require.NoError(t, err)
 		assert.NotEmpty(t, c.CaseNumber)
-		assert.Equal(t, ServiceTypeEmergency, c.ServiceType)
-		assert.Equal(t, PriorityHigh, c.Priority)
+		assert.Equal(t, ServiceType("EMERGENCY"), c.ServiceType)
+		assert.Equal(t, Priority("HIGH"), c.Priority)
 		assert.Equal(t, CaseStatusNew, c.Status)
 		assert.Equal(t, 1, c.Version)
 	})
 
 	t.Run("with person", func(t *testing.T) {
 		personID := uuid.New()
-		c, err := NewCase(uuid.New(), uuid.New(), "Title", "Desc", ServiceTypeGeneral, PriorityNormal, &personID)
+		c, err := NewCase(uuid.New(), uuid.New(), "Title", "Desc", "GENERAL", "NORMAL", &personID)
 		require.NoError(t, err)
 		assert.NotNil(t, c.PersonID)
 		assert.Equal(t, personID, *c.PersonID)
-	})
-}
-
-func TestServiceTypeValidation(t *testing.T) {
-	t.Run("known types are valid", func(t *testing.T) {
-		for st := range validServiceTypes {
-			assert.True(t, st.IsValid(), "service type %q should be valid", st)
-			require.NoError(t, ValidateServiceType(st))
-		}
-	})
-
-	t.Run("empty is invalid", func(t *testing.T) {
-		assert.False(t, ServiceType("").IsValid())
-		assert.ErrorIs(t, ValidateServiceType(""), ErrCaseInvalidInput)
-	})
-
-	t.Run("unknown type is invalid", func(t *testing.T) {
-		assert.False(t, ServiceType("CUSTOM").IsValid())
-		err := ValidateServiceType("CUSTOM")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrCaseInvalidInput)
-	})
-
-	t.Run("case sensitivity", func(t *testing.T) {
-		assert.False(t, ServiceType("general").IsValid())
 	})
 }
 

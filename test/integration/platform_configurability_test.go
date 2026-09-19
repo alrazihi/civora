@@ -1,4 +1,4 @@
-package integration
+﻿package integration
 
 import (
 	"context"
@@ -212,8 +212,8 @@ func TestPlatformConfigurability_TwoDistinctProcesses(t *testing.T) {
 			CreatedByID:    adminA,
 			Title:          "Emergency Case A",
 			Description:    "Family needs assistance",
-			ServiceType:    casedomain.ServiceTypeEmergency,
-			Priority:       casedomain.PriorityHigh,
+			ServiceType:    "Emergency",
+			Priority:       "High",
 			WorkflowID:     &wfA.ID,
 		})
 		require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestPlatformConfigurability_TwoDistinctProcesses(t *testing.T) {
 
 		// Enter human review
 		instA, _ = workflowSvc.GetInstanceByCaseID(ctx, orgA, caseA.ID)
-		reviewEntryA := revdomain.NewReviewQueueEntry(orgA, caseA.ID, instA.ID, "REVIEW", casedomain.PriorityNormal, []uuid.UUID{evalA.ID}, nil, nil)
+		reviewEntryA := revdomain.NewReviewQueueEntry(orgA, caseA.ID, instA.ID, "REVIEW", "Normal", []uuid.UUID{evalA.ID}, nil, nil)
 		err = reviewRepo.Save(ctx, reviewEntryA)
 		require.NoError(t, err)
 
@@ -404,8 +404,8 @@ func TestPlatformConfigurability_TwoDistinctProcesses(t *testing.T) {
 			CreatedByID:    adminB,
 			Title:          "Education Case B",
 			Description:    "Scholarship application",
-			ServiceType:    casedomain.ServiceTypeEducation,
-			Priority:       casedomain.PriorityNormal,
+			ServiceType:    "Education",
+			Priority:       "Normal",
 			WorkflowID:     &wfB.ID,
 		})
 		require.NoError(t, err)
@@ -443,7 +443,7 @@ func TestPlatformConfigurability_TwoDistinctProcesses(t *testing.T) {
 
 		// Enter human review
 		instB, _ = workflowSvc.GetInstanceByCaseID(ctx, orgB, caseB.ID)
-		reviewEntryB := revdomain.NewReviewQueueEntry(orgB, caseB.ID, instB.ID, "INTERVIEW", casedomain.PriorityNormal, []uuid.UUID{evalB.ID}, nil, nil)
+		reviewEntryB := revdomain.NewReviewQueueEntry(orgB, caseB.ID, instB.ID, "INTERVIEW", "Normal", []uuid.UUID{evalB.ID}, nil, nil)
 		err = reviewRepo.Save(ctx, reviewEntryB)
 		require.NoError(t, err)
 

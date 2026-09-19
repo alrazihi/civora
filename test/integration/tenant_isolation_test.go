@@ -1,4 +1,4 @@
-package integration
+﻿package integration
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	auditapp "github.com/alrazihi/civora/internal/audit/application"
 	auditpostgres "github.com/alrazihi/civora/internal/audit/infrastructure/postgres"
 	caseapp "github.com/alrazihi/civora/internal/cases/application"
-	caseDomain "github.com/alrazihi/civora/internal/cases/domain"
 	casepostgres "github.com/alrazihi/civora/internal/cases/infrastructure/postgres"
 	"github.com/alrazihi/civora/internal/config"
 	decisionsapp "github.com/alrazihi/civora/internal/decisions/application"
@@ -129,8 +128,8 @@ func TestAssistance_TenantIsolation(t *testing.T) {
 		OrganizationID: org1.ID,
 		Title:          "Org1 Assistance Case",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeGeneral,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "General",
+		Priority:       "Normal",
 		CreatedByID:    actor1,
 		WorkflowID:     &concurrentDefID,
 	})

@@ -1,4 +1,4 @@
-package domain
+﻿package domain
 
 import (
 	"testing"
@@ -17,13 +17,13 @@ func TestNewReviewQueueEntry(t *testing.T) {
 		wfInstanceID := uuid.New()
 		evalID := uuid.New()
 
-		entry := NewReviewQueueEntry(orgID, caseID, wfInstanceID, "DECISION_PENDING", domain.PriorityHigh, []uuid.UUID{evalID}, nil, nil)
+		entry := NewReviewQueueEntry(orgID, caseID, wfInstanceID, "DECISION_PENDING", domain.Priority("High"), []uuid.UUID{evalID}, nil, nil)
 
 		assert.Equal(t, orgID, entry.OrganizationID)
 		assert.Equal(t, caseID, entry.CaseID)
 		assert.Equal(t, wfInstanceID, entry.WorkflowInstanceID)
 		assert.Equal(t, ReviewStatusPending, entry.Status)
-		assert.Equal(t, domain.PriorityHigh, entry.Priority)
+		assert.Equal(t, domain.Priority("High"), entry.Priority)
 		assert.Equal(t, "DECISION_PENDING", entry.WorkflowState)
 		assert.Equal(t, []uuid.UUID{evalID}, entry.RuleEvaluationIDs)
 		assert.Empty(t, entry.EvidenceIDs)

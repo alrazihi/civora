@@ -1,4 +1,4 @@
-package integration
+﻿package integration
 
 import (
 	"context"
@@ -39,8 +39,8 @@ func TestRegression_NewEmergencyAssistanceCaseStartsInInitialState(t *testing.T)
 		OrganizationID: workflowOrgID,
 		Title:          "Regression Test Case",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -67,8 +67,8 @@ func TestRegression_NewCaseIsNotClosed(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Not Closed Test",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -90,8 +90,8 @@ func TestRegression_ValidTransitionExposed(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Transition Test",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -129,8 +129,8 @@ func TestRegression_ExecutingTransitionUpdatesWorkflowState(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Execute Transition Test",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -172,8 +172,8 @@ func TestRegression_CaseStatusAndWorkflowStateCannotContradict(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Consistency Test",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -222,8 +222,8 @@ func TestRegression_CompletedDemoCaseShowsClosed(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Completed Demo",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -444,8 +444,8 @@ func TestRegression_MedicalAssistanceUsesGenericWorkflow(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Medical Assistance Request",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeMedical,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Medical",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -464,7 +464,7 @@ func TestRegression_MedicalAssistanceUsesGenericWorkflow(t *testing.T) {
 	updated, err := caseSvc.GetCase(ctx, workflowOrgID, c.ID)
 	require.NoError(t, err)
 	assert.Equal(t, caseDomain.CaseStatusOpen, updated.Status)
-	assert.Equal(t, caseDomain.ServiceTypeMedical, updated.ServiceType)
+	assert.Equal(t, "Medical", updated.ServiceType)
 }
 
 func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
@@ -481,8 +481,8 @@ func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Contradiction Test",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})
@@ -533,8 +533,8 @@ func TestRegression_AuthoritativeWorkflowStateIsExposed(t *testing.T) {
 		OrganizationID: workflowOrgID,
 		Title:          "Authoritative State Test",
 		Description:    "Test",
-		ServiceType:    caseDomain.ServiceTypeEmergency,
-		Priority:       caseDomain.PriorityNormal,
+		ServiceType:    "Emergency",
+		Priority:       "Normal",
 		CreatedByID:    actorID,
 		WorkflowID:     &workflowDefID,
 	})

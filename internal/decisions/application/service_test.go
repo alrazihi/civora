@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"context"
@@ -168,7 +168,7 @@ func TestMakeDecision_CrossTenantCase(t *testing.T) {
 	org2 := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.MakeDecision(context.Background(), MakeDecisionParams{
@@ -191,7 +191,7 @@ func TestMakeDecision_CrossTenantUser(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.MakeDecision(context.Background(), MakeDecisionParams{
@@ -214,7 +214,7 @@ func TestMakeDecision_NoValidTransition(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -239,7 +239,7 @@ func TestMakeDecision_TransitionsToApproved(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -264,7 +264,7 @@ func TestMakeDecision_TransitionsToRejected(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -290,7 +290,7 @@ func TestMakeDecision_DuplicateDecision(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -322,7 +322,7 @@ func TestMakeDecision_TransitionsToEscalate(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -349,7 +349,7 @@ func TestSupersedeDecision_CreatesNewVersion(t *testing.T) {
 	actorID := uuid.New()
 	prevDecisionID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -391,7 +391,7 @@ func TestSupersedeDecision_NoExistingDecision(t *testing.T) {
 
 	orgID := uuid.New()
 	actorID := uuid.New()
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)
 
@@ -415,7 +415,7 @@ func TestGetDecisionHistory(t *testing.T) {
 
 	orgID := uuid.New()
 	actorID := uuid.New()
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	first := &decisionsdomain.Decision{ID: uuid.New(), OrganizationID: orgID, ServiceRequestID: c.ID, Decision: decisionsdomain.DecisionTypeApproved, DecisionMaker: actorID, Version: 1}

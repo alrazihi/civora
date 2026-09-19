@@ -1,4 +1,4 @@
-package application
+﻿package application
 
 import (
 	"context"
@@ -102,7 +102,7 @@ func TestCreateEligibility_CrossTenantCase(t *testing.T) {
 	org2 := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(org1, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateEligibility(context.Background(), CreateEligibilityParams{
@@ -124,7 +124,7 @@ func TestCreateEligibility_CrossTenantUser(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	caseFinder.addCase(c)
 
 	_, err := svc.CreateEligibility(context.Background(), CreateEligibilityParams{
@@ -146,7 +146,7 @@ func TestCreateEligibility_ClosedCase(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()
 
-	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", domain.ServiceTypeGeneral, domain.PriorityNormal, nil)
+	c, _ := domain.NewCase(orgID, actorID, "Test", "Desc", "General", "Normal", nil)
 	c.Status = domain.CaseStatusClosed
 	caseFinder.addCase(c)
 	userChecker.addMember(orgID, actorID)

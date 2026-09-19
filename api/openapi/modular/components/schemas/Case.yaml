@@ -35,24 +35,14 @@ properties:
   status:
     type: string
     description: Case status synchronized from the configured workflow
-  service_type:
+service_type:
     type: string
-    enum:
-    - GENERAL
-    - EMERGENCY
-    - FINANCIAL
-    - FOOD
-    - SHELTER
-    - MEDICAL
-    - EDUCATION
-    - TRANSPORT
-  priority:
+    description: Domain-specific service type (configurable per organization)
+    example: "EMERGENCY"
+priority:
     type: string
-    enum:
-    - LOW
-    - NORMAL
-    - HIGH
-    - URGENT
+    description: Priority level (configurable per organization)
+    example: "URGENT"
   created_by:
     type: string
     format: uuid
