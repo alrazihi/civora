@@ -437,6 +437,36 @@ CIVORA is built as a **modular monolith** with clear module boundaries:
 The API exposes endpoints for all functionality. See `api/openapi/openapi.yaml`
 for the full specification.
 
+## Operational Considerations
+
+### Backup and Disaster Recovery
+
+CIVORA does not include built-in backup or disaster recovery functionality.
+Operators are responsible for:
+
+- Configuring PostgreSQL backups (e.g., `pg_dump`, continuous archiving, or
+  managed database snapshots)
+- Testing restore procedures
+- Defining recovery time objectives (RTO) and recovery point objectives
+  (RPO)
+- Storing backups in a secure, offsite location
+
+CIVORA's data is stored in a PostgreSQL database. All case data, audit events,
+and configuration are in the database. Regular database backups are essential
+for production deployments.
+
+### Encryption
+
+- **TLS in transit**: CIVORA does not terminate TLS. Operators should place
+  CIVORA behind a reverse proxy or ingress controller that provides TLS 1.2+
+  termination.
+- **Encryption at rest**: Not currently implemented. Data in PostgreSQL is
+  stored unencrypted by default. Operators should rely on PostgreSQL-level
+  encryption (e.g., tablespace encryption) or filesystem/disk-level encryption
+  if required.
+- **Key management**: No KMS integration is provided. Key management is the
+  operator's responsibility.
+
 ## FAQ
 
 ### What is CIVORA?
