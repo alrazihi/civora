@@ -464,7 +464,7 @@ func TestRegression_MedicalAssistanceUsesGenericWorkflow(t *testing.T) {
 	updated, err := caseSvc.GetCase(ctx, workflowOrgID, c.ID)
 	require.NoError(t, err)
 	assert.Equal(t, caseDomain.CaseStatusOpen, updated.Status)
-	assert.Equal(t, "Medical", updated.ServiceType)
+	assert.Equal(t, caseDomain.ServiceType("Medical"), updated.ServiceType)
 }
 
 func TestRegression_OpenCaseCannotDisplayClosedWorkflowState(t *testing.T) {
