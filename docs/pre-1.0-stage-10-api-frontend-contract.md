@@ -11,7 +11,7 @@ This audit compares the OpenAPI 3.0 specification against the actual Go backend 
 
 **Key Finding**: Frontend code is not present in this repository. The E2E tests use mock request interception.
 
-**Critical Issue Fixed**: The modular OpenAPI structure was broken - all modular files had circular self-referencing `$ref` statements causing 201 validation errors. Restored single-file openapi.yaml from git history.
+**Issue Fixed**: The modular OpenAPI structure from commit 4aaeaab had broken circular self-referencing `$ref` statements. Restored working modular structure from earlier commit (9118b82) which properly separates schemas and paths into modular files with correct JSON pointer references.
 
 ---
 
@@ -112,7 +112,7 @@ From `test/e2e/evidence_security_test.go`:
 
 1. **Consider adding OpenAPI schema validation middleware**: Add runtime validation against OpenAPI schemas for early error detection
 2. **Document role requirements per operation**: API should expose required roles for operations (securitySchemes section can add this)
-3. **Consider modularizing OpenAPI**: If using the build-openapi.js script in the future, ensure the modular files are properly generated with actual content, not circular references
+3. **Consider modularizing OpenAPI properly**: When using the build-openapi.js script, verify the modular files contain actual content, not circular references
 
 ---
 
