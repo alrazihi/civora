@@ -101,12 +101,12 @@ func TestAuditRetentionJobRuns(t *testing.T) {
 	err = repo.RecordEvent(ctx, orgID, ev)
 	require.NoError(t, err)
 
-	// The retention job (PurgeOld) must delete the old event.
+	// Audit events are immutable; PurgeOld is a no-op.
 	purged, err := repo.PurgeOld(ctx, ev.Timestamp.AddDate(0, 0, -1))
 	require.NoError(t, err)
-	assert.Equal(t, 1, purged, "the retention job must delete events older than the cutoff")
+	assert.Equal(t, 0, purged, "purge is a no-op because audit events are immutable")
 
 	events, err := repo.FindByOrganization(ctx, orgID, 100, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 1, "only the recent event should remain after the purge")
+	assert.Len(t, events, 2, "all events should remain because audit is immutable")
 }

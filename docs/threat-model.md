@@ -260,8 +260,8 @@ This threat model is reviewed:
 - When a new integration or external dependency is added.
 - After any security incident.
 
-Last reviewed: 2026-09-12.
-Next review due: Before milestone 0.4.
+Last reviewed: 2026-09-19.
+Next review due: Before milestone 1.0.
 
 ## 6. v0.3 additions
 

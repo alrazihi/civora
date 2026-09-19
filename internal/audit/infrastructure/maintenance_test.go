@@ -73,7 +73,7 @@ func TestAuditMaintenanceService_VerifyOrganization_TamperDetection(t *testing.T
 	assert.Equal(t, 1, failed, "tampered event should be detected")
 }
 
-func TestAuditMaintenanceService_PurgeOld(t *testing.T) {
+func TestAuditMaintenanceService_PurgeOld_Noop(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -104,11 +104,11 @@ func TestAuditMaintenanceService_PurgeOld(t *testing.T) {
 
 	purged, err := svc.PurgeOld(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, 1, purged, "only the old event should be purged")
+	assert.Equal(t, 0, purged, "purge is a no-op because audit events are immutable")
 
 	events, err := repo.FindByOrganization(context.Background(), orgID, 100, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 1, "only the recent event should remain")
+	assert.Len(t, events, 2, "all events should remain because audit is immutable")
 }
 
 func TestAuditMaintenanceService_PurgeOld_Disabled(t *testing.T) {

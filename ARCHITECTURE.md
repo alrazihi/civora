@@ -384,14 +384,23 @@ deletion workflows.)
 
 ### Retention
 
-- Data retention is configurable per organization and data type.
-- Default retention: 7 years for audit records (changeable by operator).
+- Audit events are immutable and cannot be deleted. The audit log is
+  append-only with a tamper-evident hash chain.
+- No automatic data retention or purge is implemented. Operators are
+  responsible for database-level archival strategies (e.g., PostgreSQL
+  table partitioning with export to WORM storage) if retention limits
+  are required.
+- Application-level retention policies are not currently configurable.
 
 ### Encryption
 
-- TLS 1.2+ in transit (required in production).
-
-(Future: encryption at rest and key management via KMS.)
+- TLS 1.2+ in transit is expected to be provided by the deploying
+  operator's reverse proxy or ingress controller. CIVORA itself does not
+  terminate TLS.
+- Encryption at rest is not currently implemented. This is planned for
+  a future milestone and would rely on PostgreSQL-level encryption or
+  operator-managed disk encryption.
+- Key management via KMS is not implemented.
 
 ---
 

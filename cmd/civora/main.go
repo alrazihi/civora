@@ -184,11 +184,16 @@ func main() {
 		auditService,
 	)
 
-	if cfg.Audit.RetentionDays > 0 {
-		if _, err := auditService.PurgeOld(context.Background()); err != nil {
-			log.Printf("warning: failed to purge old audit events: %v", err)
-		}
-	}
+	// Audit events are immutable; PurgeOld is intentionally a no-op.
+	// If retention/archival is needed in the future, implement it as
+	// database-level archival (e.g., partition by time and export old
+	// partitions to WORM storage) rather than deleting audit records.
+	//
+	// if cfg.Audit.RetentionDays > 0 {
+	// 	if _, err := auditService.PurgeOld(context.Background()); err != nil {
+	// 		log.Printf("warning: failed to purge old audit events: %v", err)
+	// 	}
+	// }
 
 	// Audit maintenance service: periodic integrity verification and
 	// retention purging. Runs in the background and exits when the

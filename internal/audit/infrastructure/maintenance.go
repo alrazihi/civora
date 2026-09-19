@@ -100,14 +100,13 @@ func (s *AuditMaintenanceService) VerifyOrganization(ctx context.Context, orgID 
 	return verified, failed, nil
 }
 
-// PurgeOld deletes audit events older than the configured retention period.
-// Returns the number of events deleted.
+// PurgeOld is a no-op because audit events are immutable.
+// Deleting audit events would break the tamper-evident hash chain.
+// For data retention, use database-level archival (e.g., partition
+// by time and export old partitions to WORM storage) rather than
+// deleting from the audit table.
 func (s *AuditMaintenanceService) PurgeOld(ctx context.Context) (int, error) {
-	if s.cfg.RetentionDays <= 0 {
-		return 0, nil
-	}
-	cutoff := time.Now().AddDate(0, 0, -s.cfg.RetentionDays)
-	return s.repo.PurgeOld(ctx, cutoff)
+	return 0, nil
 }
 
 // RunOnce performs a single verification pass over all organizations with

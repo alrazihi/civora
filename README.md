@@ -25,7 +25,7 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.9** — Operations & Impact Intelligence (0.8 complete).
+Current focus: **Milestone 0.9** — Operations & Impact Intelligence (complete).
 (operational metrics, workflow analysis, impact intelligence, AI operations intelligence).
 
 ## Quick Start
