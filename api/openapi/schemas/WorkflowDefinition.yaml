@@ -1,0 +1,90 @@
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  organization_id:
+    type: string
+    format: uuid
+  key:
+    type: string
+  name:
+    type: string
+  description:
+    type: string
+    nullable: true
+  version:
+    type: integer
+  status:
+    type: string
+    enum:
+      - DRAFT
+      - ACTIVE
+      - ARCHIVED
+  initial_state:
+    type: string
+  states:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        terminal:
+          type: boolean
+        display_order:
+          type: integer
+        responsible_role:
+          type: string
+          nullable: true
+  transitions:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        from_state:
+          type: string
+        to_state:
+          type: string
+        conditions:
+          type: array
+          items:
+            type: object
+          nullable: true
+        allowed_roles:
+          type: array
+          items:
+            type: string
+          nullable: true
+        active:
+          type: boolean
+  metadata:
+    type: object
+    nullable: true
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time

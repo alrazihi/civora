@@ -1,0 +1,11 @@
+type: object
+required:
+  - missing_fields
+  - reason
+properties:
+  missing_fields:
+    type: array
+    items:
+      type: string
+  reason:
+    type: string

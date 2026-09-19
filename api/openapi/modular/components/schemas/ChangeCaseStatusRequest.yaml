@@ -1,7 +1,0 @@
-type: object
-required:
-- status
-properties:
-  status:
-    type: string
-    description: Workflow state key to transition to

@@ -1,0 +1,45 @@
+type: object
+required:
+  - id
+  - evidence_id
+  - file_name
+  - content_type
+  - size_bytes
+  - checksum
+  - uploaded_by
+  - uploaded_at
+  - created_at
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  evidence_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  file_name:
+    type: string
+    description: The sanitized filename of the uploaded document.
+  content_type:
+    type: string
+    description: The MIME type of the document (e.g., application/pdf, image/png).
+  size_bytes:
+    type: integer
+    format: int64
+    description: Size of the document in bytes.
+  checksum:
+    type: string
+    description: SHA-256 checksum of the document content for integrity verification.
+  uploaded_by:
+    type: string
+    format: uuid
+    description: User ID of the uploader.
+  uploaded_at:
+    type: string
+    format: date-time
+    description: Timestamp when the document was uploaded.
+  created_at:
+    type: string
+    format: date-time
+    description: Timestamp when the document record was created.

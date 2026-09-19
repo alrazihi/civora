@@ -21,42 +21,81 @@ function sanitizeName(name) {
 function pathFileNameToPath(fileName) {
     const base = fileName.replace(/\.yaml$/, '');
     const replacements = [
-        ['rule-sets-key-key', 'rule-sets/key/{key}'],
-        ['templates-key-key', 'templates/key/{key}'],
-        ['orgId', '{orgId}'],
-        ['caseId', '{caseId}'],
-        ['evidenceId', '{evidenceId}'],
-        ['documentId', '{documentId}'],
-        ['observationId', '{observationId}'],
-        ['summaryId', '{summaryId}'],
-        ['ruleSetId', '{ruleSetId}'],
-        ['workflowId', '{workflowId}'],
-        ['assignmentId', '{assignmentId}'],
-        ['stateKey', '{stateKey}'],
-        ['submissionId', '{submissionId}'],
-        ['formKey', '{formKey}'],
-        ['reviewId', '{reviewId}'],
-        ['assistanceId', '{assistanceId}'],
-        ['followUpId', '{followUpId}'],
-        ['formId', '{formId}'],
-        ['fieldId', '{fieldId}'],
-        ['personId', '{personId}'],
-        ['externalRef', '{externalRef}'],
-        ['templateId', '{templateId}'],
-        ['userId', '{userId}'],
-        ['assessmentId', '{assessmentId}'],
-        ['serviceRequestId', '{serviceRequestId}'],
-        ['eligibilityId', '{eligibilityId}'],
-        ['decisionId', '{decisionId}'],
-        ['transitionKey', '{transitionKey}'],
-        ['versionId', '{versionId}'],
+        ['org-id', '{orgId}'],
+        ['case-id', '{caseId}'],
+        ['evidence-id', '{evidenceId}'],
+        ['document-id', '{documentId}'],
+        ['observation-id', '{observationId}'],
+        ['summary-id', '{summaryId}'],
+        ['rule-set-id', '{ruleSetId}'],
+        ['rule-set-key-key', 'rule-sets/key/{key}'],
+        ['workflow-id', '{workflowId}'],
+        ['assignment-id', '{assignmentId}'],
+        ['state-state-key', 'form-assignments/state/{stateKey}'],
+        ['submission-id', '{submissionId}'],
+        ['form-key-submission', 'form/{formKey}/submission'],
+        ['review-id', '{reviewId}'],
+        ['assistance-id', '{assistanceId}'],
+        ['follow-up-id', '{followUpId}'],
+        ['form-id', '{formId}'],
+        ['field-id', '{fieldId}'],
+        ['person-id', '{personId}'],
+        ['external-ref', 'external/{externalRef}'],
+        ['template-id', '{templateId}'],
+        ['user-id', '{userId}'],
+        ['assessment-id', '{assessmentId}'],
+        ['service-request-id', 'by-service-request/{serviceRequestId}'],
+        ['eligibility-id', '{eligibilityId}'],
+        ['decision-id', '{decisionId}'],
+        ['transition-key', '{transitionKey}'],
+        ['version-id', '{versionId}'],
+        ['active-version', 'active-version'],
+        ['instantiate', 'instantiate'],
+        ['publish', 'publish'],
+        ['archive', 'archive'],
+        ['activate', 'activate'],
+        ['assign', 'assign'],
+        ['claim', 'claim'],
+        ['complete', 'complete'],
+        ['start', 'start'],
+        ['escalate', 'escalate'],
+        ['request-information', 'request-information'],
+        ['review', 'review'],
+        ['verify', 'verify'],
+        ['upload', 'upload'],
+        ['reject', 'reject'],
+        ['download', 'download'],
+        ['history', 'history'],
+        ['selectable', 'selectable'],
+        ['forms', 'forms'],
+        ['fields', 'fields'],
+        ['versions', 'versions'],
+        ['evaluations', 'evaluations'],
+        ['templates', 'templates'],
+        ['assistances', 'assistances'],
+        ['follow-ups', 'follow-ups'],
+        ['review-queue', 'review-queue'],
+        ['decisions', 'decisions'],
+        ['eligibilities', 'eligibilities'],
+        ['documents', 'documents'],
+        ['assessments', 'assessments'],
+        ['people', 'people'],
+        ['users', 'users'],
+        ['workflows', 'workflows'],
+        ['rules', 'rules'],
+        ['cases', 'cases'],
+        ['auth', 'auth'],
+        ['audit', 'audit'],
+        ['ready', 'ready'],
+        ['health', 'health'],
+        ['organizations', 'organizations'],
     ];
 
     let result = base;
     for (const [from, to] of replacements) {
         result = result.replace(new RegExp(from, 'g'), to);
     }
-    return '/' + result.replace(/-/g, '/').replace(/\/+/g, '/');
+    return '/' + result.replace(/_/g, '-').replace(/--+/g, '-');
 }
 
 function readYamlFiles(dir) {
@@ -72,45 +111,6 @@ function readYamlFiles(dir) {
         result[name] = doc;
     }
     return result;
-}
-
-function splitOpenAPI() {
-    console.log('Splitting', OPENAPI_FILE, '...');
-    const content = fs.readFileSync(OPENAPI_FILE, 'utf8');
-    const doc = yaml.load(content);
-
-    ensureDir(SCHEMAS_DIR);
-    ensureDir(PATHS_DIR);
-    ensureDir(RESPONSES_DIR);
-
-    let count = 0;
-
-    if (doc.components) {
-        if (doc.components.schemas) {
-            for (const [name, schema] of Object.entries(doc.components.schemas)) {
-                const fileName = sanitizeName(name) + '.yaml';
-                fs.writeFileSync(path.join(SCHEMAS_DIR, fileName), yaml.dump(schema, { indent: 2, lineWidth: 120 }));
-                count++;
-            }
-        }
-        if (doc.components.responses) {
-            for (const [name, response] of Object.entries(doc.components.responses)) {
-                const fileName = sanitizeName(name) + '.yaml';
-                fs.writeFileSync(path.join(RESPONSES_DIR, fileName), yaml.dump(response, { indent: 2, lineWidth: 120 }));
-                count++;
-            }
-        }
-    }
-
-    if (doc.paths) {
-        for (const [pathStr, pathItem] of Object.entries(doc.paths)) {
-            const fileName = pathFileNameToPath(pathStr).replace(/^\//, '').replace(/\//g, '-') + '.yaml';
-            fs.writeFileSync(path.join(PATHS_DIR, fileName), yaml.dump(pathItem, { indent: 2, lineWidth: 120 }));
-            count++;
-        }
-    }
-
-    console.log(`Split complete: ${count} files created.`);
 }
 
 function buildOpenAPI() {

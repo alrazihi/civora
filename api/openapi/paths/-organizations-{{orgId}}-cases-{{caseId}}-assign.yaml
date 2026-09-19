@@ -1,0 +1,42 @@
+post:
+  operationId: createOrgcasesCaseassign
+  tags:
+    - Cases
+  summary: Assign case to a user
+  description: Assigns a case to a user. Requires authentication.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: caseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/AssignCaseRequest'
+  responses:
+    '200':
+      description: Case with assignment updated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Case'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

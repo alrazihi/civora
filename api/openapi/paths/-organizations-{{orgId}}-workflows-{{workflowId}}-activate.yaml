@@ -1,0 +1,36 @@
+post:
+  operationId: activateOrgWorkflow
+  tags:
+    - Workflows
+  summary: Activate workflow definition
+  description: Activates a draft workflow definition so it can be instantiated. Requires authentication.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: workflowId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    '200':
+      description: Workflow definition activated
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: activated
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

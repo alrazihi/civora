@@ -1,0 +1,88 @@
+get:
+  operationId: listFormAssignments
+  tags:
+    - Workflows
+  summary: List form assignments for a workflow
+  description: >-
+    Retrieves all form assignments for a workflow definition. Admin and staff roles can read; admin role required for
+    writes.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: workflowId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  responses:
+    '200':
+      description: List of form assignments
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WorkflowStateFormAssignment'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'
+post:
+  operationId: createFormAssignment
+  tags:
+    - Workflows
+  summary: Assign a form to a workflow state
+  description: Creates a new form assignment binding a form version to a workflow state. Requires admin role.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: workflowId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/CreateFormAssignmentRequest'
+  responses:
+    '201':
+      description: Form assignment created
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/WorkflowStateFormAssignment'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'
+    '404':
+      $ref: '#/components/responses/NotFound'
+    '409':
+      description: Assignment already exists for this state and form version
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

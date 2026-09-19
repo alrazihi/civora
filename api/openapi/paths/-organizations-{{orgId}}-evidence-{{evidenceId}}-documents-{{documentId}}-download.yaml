@@ -1,0 +1,56 @@
+get:
+  operationId: downloadEvidenceDocument
+  tags:
+    - Evidence
+  summary: Download evidence document
+  description: >-
+    Downloads a specific document file attached to an evidence item. The response includes Content-Disposition and
+    Content-Type headers. Requires authentication.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: evidenceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  responses:
+    '200':
+      description: The document file binary content
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+      headers:
+        Content-Disposition:
+          schema:
+            type: string
+            example: attachment; filename="document.pdf"
+        Content-Type:
+          schema:
+            type: string
+        Content-Length:
+          schema:
+            type: integer
+        X-Checksum-Sha256:
+          schema:
+            type: string
+    '404':
+      $ref: '#/components/responses/NotFound'

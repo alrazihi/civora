@@ -1,0 +1,40 @@
+type: object
+required:
+  - case_id
+  - workflow_instance_id
+  - workflow_state
+properties:
+  case_id:
+    type: string
+    format: uuid
+  workflow_instance_id:
+    type: string
+    format: uuid
+  priority:
+    type: string
+    enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+    default: NORMAL
+  workflow_state:
+    type: string
+  rule_evaluation_ids:
+    type: array
+    items:
+      type: string
+      format: uuid
+  evidence_ids:
+    type: array
+    items:
+      type: string
+      format: uuid
+  form_submission_id:
+    type: string
+    format: uuid
+    nullable: true
+  missing_information:
+    type: array
+    items:
+      type: string

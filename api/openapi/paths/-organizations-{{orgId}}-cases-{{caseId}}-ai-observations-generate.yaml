@@ -1,0 +1,65 @@
+post:
+  operationId: generateCaseObservations
+  tags:
+    - AI
+  summary: Generate AI observations for a case
+  description: >-
+    Generates AI observations for a case by analyzing all evidence and form submissions. Detects missing information,
+    inconsistencies, relevant evidence, and incomplete documentation. Observations are created in OPEN status and
+    require explicit human review. Requires authentication.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: caseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/GenerateObservationsRequest'
+  responses:
+    '200':
+      description: Observations generated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: object
+                properties:
+                  observations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIObservation'
+              meta:
+                type: object
+                nullable: true
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'
+    '503':
+      description: AI provider unavailable or disabled
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,34 @@
+type: object
+required:
+  - key
+  - name
+  - version
+  - initial_state
+  - states
+  - transitions
+properties:
+  key:
+    type: string
+  name:
+    type: string
+  description:
+    type: string
+    nullable: true
+  version:
+    type: integer
+    minimum: 1
+  initial_state:
+    type: string
+  states:
+    type: array
+    items:
+      type: object
+    minItems: 1
+  transitions:
+    type: array
+    items:
+      type: object
+    minItems: 0
+  metadata:
+    type: object
+    nullable: true

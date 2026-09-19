@@ -1,0 +1,40 @@
+type: object
+required:
+  - id
+  - organization_id
+  - service_request_id
+  - findings
+  - recommendation
+  - assessor
+  - assessed_at
+  - created_at
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  organization_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  service_request_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  findings:
+    type: string
+  needs_identified:
+    type: string
+    nullable: true
+  recommendation:
+    type: string
+  assessor:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  assessed_at:
+    type: string
+    format: date-time
+  created_at:
+    type: string
+    format: date-time

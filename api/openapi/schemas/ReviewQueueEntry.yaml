@@ -1,0 +1,67 @@
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  organization_id:
+    type: string
+    format: uuid
+  case_id:
+    type: string
+    format: uuid
+  workflow_instance_id:
+    type: string
+    format: uuid
+  status:
+    type: string
+    enum:
+      - PENDING
+      - ASSIGNED
+      - IN_REVIEW
+      - COMPLETED
+      - ESCALATED
+      - WAITING_INFORMATION
+  priority:
+    type: string
+    enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+  workflow_state:
+    type: string
+  rule_evaluation_ids:
+    type: array
+    items:
+      type: string
+      format: uuid
+  evidence_ids:
+    type: array
+    items:
+      type: string
+      format: uuid
+  form_submission_id:
+    type: string
+    format: uuid
+    nullable: true
+  missing_information:
+    type: array
+    items:
+      type: string
+  assigned_to:
+    type: string
+    format: uuid
+    nullable: true
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time
+  completed_at:
+    type: string
+    format: date-time
+    nullable: true
+  metadata:
+    type: object
+    nullable: true

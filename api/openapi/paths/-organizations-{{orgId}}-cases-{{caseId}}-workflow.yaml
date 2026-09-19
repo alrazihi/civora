@@ -1,0 +1,37 @@
+get:
+  operationId: getCaseWorkflow
+  tags:
+    - Workflows
+  summary: Get case workflow instance
+  description: Retrieves the workflow instance and definition for a case. Requires authentication.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    - name: caseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    '200':
+      description: Workflow instance and definition
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              instance:
+                $ref: '#/components/schemas/WorkflowInstance'
+              definition:
+                $ref: '#/components/schemas/WorkflowDefinition'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

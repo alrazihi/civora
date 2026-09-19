@@ -1,0 +1,66 @@
+post:
+  operationId: uploadEvidenceDocument
+  tags:
+    - Evidence
+  summary: Upload a document for evidence
+  description: >-
+    Uploads a document file for an evidence item. The file is stored with server-generated keys. Requires
+    authentication.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    - name: evidenceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          required:
+            - file
+          properties:
+            file:
+              type: string
+              format: binary
+              description: 'The document file to upload. Allowed types: PDF, images, text/CSV, JSON, ZIP, XLSX.'
+            metadata:
+              type: string
+              description: Optional metadata JSON string.
+  responses:
+    '201':
+      description: Document uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                $ref: '#/components/schemas/EvidenceDocument'
+              meta:
+                type: object
+                nullable: true
+                description: Pagination metadata (null for single-resource responses).
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'
+    '404':
+      $ref: '#/components/responses/NotFound'

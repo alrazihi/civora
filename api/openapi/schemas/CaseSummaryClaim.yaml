@@ -1,0 +1,26 @@
+type: object
+required:
+  - text
+  - provenance
+properties:
+  text:
+    type: string
+  provenance:
+    type: string
+    enum:
+      - FACT
+      - SOURCE
+      - AI_OBSERVATION
+      - RULE_RESULT
+      - HUMAN_DECISION
+      - WORKFLOW_HISTORY
+  references:
+    type: array
+    items:
+      $ref: '#/components/schemas/SourceReference'
+  confidence:
+    type: number
+    format: float
+    minimum: 0
+    maximum: 1
+    nullable: true

@@ -1,0 +1,43 @@
+type: object
+description: A condition node. Either a leaf comparison (field/operator/value) or a group (all/any/not).
+properties:
+  field:
+    type: string
+    description: The fact path being compared (e.g. "form.income_verification.amount").
+  operator:
+    type: string
+    enum:
+      - eq
+      - neq
+      - gt
+      - gte
+      - lt
+      - lte
+      - in
+      - not_in
+      - is
+      - is_not
+      - exists
+      - not_exists
+      - contains
+      - matches
+      - before
+      - after
+      - on_or_before
+      - on_or_after
+    description: The comparison operator. Temporal operators compare RFC3339 date or date-time values in UTC.
+  value:
+    description: The expected value. Type depends on operator.
+  all:
+    type: array
+    items:
+      $ref: '#/components/schemas/Condition'
+    description: Group where ALL child conditions must be true.
+  any:
+    type: array
+    items:
+      $ref: '#/components/schemas/Condition'
+    description: Group where ANY child condition must be true.
+  not:
+    $ref: '#/components/schemas/Condition'
+additionalProperties: false

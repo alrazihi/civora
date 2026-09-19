@@ -1,0 +1,27 @@
+get:
+  operationId: getCaseDashboardStatistics
+  tags:
+    - Cases
+  summary: Get tenant-scoped case statistics
+  description: Returns aggregate case counts for the authenticated organization. Requires an admin or staff role.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: orgId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  responses:
+    '200':
+      description: Aggregate case statistics
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CaseStatistics'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'

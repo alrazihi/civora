@@ -1,0 +1,36 @@
+type: object
+required:
+  - id
+  - form_id
+  - version_number
+  - status
+  - fields
+  - created_at
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  form_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  version_number:
+    type: integer
+    minimum: 1
+  status:
+    type: string
+    enum:
+      - DRAFT
+      - PUBLISHED
+  fields:
+    type: array
+    items:
+      $ref: '#/components/schemas/FormField'
+  created_at:
+    type: string
+    format: date-time
+  published_at:
+    type: string
+    format: date-time
+    nullable: true

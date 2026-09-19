@@ -1,0 +1,43 @@
+type: object
+required:
+  - case_id
+  - current_state
+  - required_forms
+  - required_assessments
+  - required_decisions
+  - required_assistance
+  - can_transition
+properties:
+  case_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  current_state:
+    type: string
+  required_forms:
+    type: array
+    items:
+      $ref: '#/components/schemas/CaseFormAvailability'
+  required_evidence:
+    type: array
+    items:
+      type: string
+    description: Reserved for future evidence requirements; currently always empty.
+  required_assessments:
+    type: array
+    items:
+      type: string
+  required_decisions:
+    type: array
+    items:
+      type: string
+  required_assistance:
+    type: array
+    items:
+      type: string
+  can_transition:
+    type: boolean
+  available_transitions:
+    type: array
+    items:
+      type: string

@@ -1,0 +1,27 @@
+post:
+  operationId: createOrganizations
+  tags:
+    - Organizations
+  summary: Create a new organization
+  description: Creates a new organization (tenant). No authentication required.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/CreateOrganizationRequest'
+  responses:
+    '201':
+      description: Organization created
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Organization'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '409':
+      description: Organization slug already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,22 @@
+type: object
+required:
+  - type
+  - id
+properties:
+  type:
+    type: string
+    enum:
+      - evidence
+      - document
+      - form_submission
+      - rule_evaluation
+      - decision
+      - workflow_transition
+      - ai_observation
+      - case_metadata
+      - person
+  id:
+    type: string
+    format: uuid
+  label:
+    type: string

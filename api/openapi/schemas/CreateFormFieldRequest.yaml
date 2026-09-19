@@ -1,0 +1,45 @@
+type: object
+required:
+  - key
+  - label
+  - type
+  - required
+  - order
+properties:
+  key:
+    type: string
+    pattern: ^[a-z0-9_]+$
+    maxLength: 64
+  label:
+    type: string
+    maxLength: 200
+  type:
+    type: string
+    enum:
+      - text
+      - textarea
+      - number
+      - select
+      - multiselect
+      - date
+      - boolean
+      - file
+  required:
+    type: boolean
+  order:
+    type: integer
+    minimum: 0
+  options:
+    type: array
+    items:
+      type: string
+    nullable: true
+  validation:
+    type: object
+    nullable: true
+  placeholder:
+    type: string
+    nullable: true
+  help_text:
+    type: string
+    nullable: true

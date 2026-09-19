@@ -1,0 +1,46 @@
+type: object
+required:
+  - id
+  - organization_id
+  - service_request_id
+  - criteria
+  - result
+  - explanation
+  - assessed_by
+  - assessed_at
+  - created_at
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  organization_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  service_request_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  criteria:
+    type: object
+    additionalProperties: true
+    description: JSONB object containing eligibility criteria
+  result:
+    type: string
+    enum:
+      - ELIGIBLE
+      - NOT_ELIGIBLE
+      - REQUIRES_MORE_INFORMATION
+  explanation:
+    type: string
+  assessed_by:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  assessed_at:
+    type: string
+    format: date-time
+  created_at:
+    type: string
+    format: date-time

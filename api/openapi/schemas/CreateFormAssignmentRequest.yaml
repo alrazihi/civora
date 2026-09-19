@@ -1,0 +1,25 @@
+type: object
+required:
+  - form_id
+  - form_version_id
+  - workflow_state_key
+properties:
+  form_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  form_version_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  workflow_state_key:
+    type: string
+  required:
+    type: boolean
+    default: true
+  display_order:
+    type: integer
+    default: 0
+  active:
+    type: boolean
+    default: true
