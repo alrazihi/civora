@@ -1,0 +1,50 @@
+type: object
+required:
+- service_request_id
+- type
+- description
+- storage_reference
+properties:
+  service_request_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  type:
+    type: string
+    enum:
+    - IDENTITY_DOCUMENT
+    - PROOF_OF_RESIDENCE
+    - REFERRAL
+    - SUPPORTING_DOCUMENT
+    - PHOTOGRAPH
+    - STAFF_NOTE
+    - OTHER
+  custom_type:
+    type: string
+    description: Custom evidence type name, required when type is OTHER.
+    nullable: true
+  description:
+    type: string
+  storage_reference:
+    type: string
+    description: Validated object storage URI; accepted schemes are s3, gs, azureblob,
+      and civora.
+  person_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    nullable: true
+    description: Person associated with this evidence.
+  source:
+    type: string
+    enum:
+    - UPLOAD
+    - EXTERNAL_REFERENCE
+    - EXTERNAL_API
+    - MANUAL
+    description: How the evidence entered the system. Defaults to UPLOAD.
+  metadata:
+    type: object
+    description: Arbitrary structured metadata (file size, content type, checksum,
+      etc.).
+    additionalProperties: true

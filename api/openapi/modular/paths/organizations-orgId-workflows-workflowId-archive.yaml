@@ -1,0 +1,36 @@
+post:
+  operationId: archiveOrgWorkflow
+  tags:
+  - Workflows
+  summary: Archive workflow definition
+  description: Archives an active workflow definition. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: workflowId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  responses:
+    '200':
+      description: Workflow definition archived
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: archived
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

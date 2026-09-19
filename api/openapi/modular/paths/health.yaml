@@ -1,0 +1,27 @@
+get:
+  operationId: getHealth
+  tags:
+  - System
+  summary: Health check
+  description: Returns OK if the server is running.
+  responses:
+    '200':
+      description: Server is healthy
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealthResponse'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '500':
+      description: Server is unhealthy
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '503':
+      description: Server is starting up or shutting down
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

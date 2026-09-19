@@ -1,0 +1,119 @@
+parameters:
+- name: orgId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+- name: evidenceId
+  in: path
+  required: true
+  schema:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+post:
+  operationId: generateObservations
+  tags:
+  - AI
+  summary: Generate AI observations for evidence
+  description: Generates AI observations (summary, entity extraction, classification,
+    inconsistency) from the documents attached to an evidence item. AI is opt-in (enabled
+    via `CIVORA_AI_ENABLED`) and off by default; when no provider is configured a
+    Noop provider rejects the call. Observations are created in PENDING_REVIEW and
+    require explicit human accept/reject. Document content is retrieved with PII redaction
+    before being sent to a hosted provider. All writes (audit events + observations)
+    are atomic. Requires authentication.
+  security:
+  - BearerAuth: []
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/GenerateObservationsRequest'
+  responses:
+    '200':
+      description: Observations generated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: object
+                properties:
+                  observations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIObservation'
+              meta:
+                type: object
+                nullable: true
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'
+    '503':
+      description: AI provider unavailable or disabled
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+get:
+  operationId: listObservations
+  tags:
+  - AI
+  summary: List AI observations for evidence
+  description: Lists AI observations for an evidence item with pagination. Requires
+    authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      default: 1
+  - name: per_page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 200
+      default: 20
+  responses:
+    '200':
+      description: Paginated list of observations
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AIObservation'
+              meta:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

@@ -1,0 +1,63 @@
+post:
+  operationId: executeCaseWorkflowTransition
+  tags:
+  - Workflows
+  summary: Execute workflow transition
+  description: Executes a workflow transition by key. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: caseId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: transitionKey
+    in: path
+    required: true
+    schema:
+      type: string
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            reason:
+              type: string
+              nullable: true
+  responses:
+    '200':
+      description: Transition executed successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              case_id:
+                type: string
+                format: uuid
+              transition:
+                type: string
+              status:
+                type: string
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'
+    '409':
+      description: Invalid state transition or terminal state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

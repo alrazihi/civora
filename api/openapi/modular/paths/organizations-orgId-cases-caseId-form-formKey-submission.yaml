@@ -1,0 +1,39 @@
+get:
+  operationId: getFormSubmissionByKey
+  tags:
+  - Cases
+  summary: Get form submission by key
+  description: Retrieves a specific form submission by form key. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: caseId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: formKey
+    in: path
+    required: true
+    schema:
+      type: string
+  responses:
+    '200':
+      description: Form submission details
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/FormSubmission'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

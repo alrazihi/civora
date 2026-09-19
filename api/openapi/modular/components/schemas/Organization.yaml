@@ -1,0 +1,25 @@
+type: object
+required:
+- id
+- name
+- slug
+- created_at
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  name:
+    type: string
+  description:
+    type: string
+    nullable: true
+  slug:
+    type: string
+  created_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time
+    nullable: true

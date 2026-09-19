@@ -1,0 +1,31 @@
+post:
+  operationId: createOrgauthlogin
+  tags:
+  - Authentication
+  summary: Authenticate user and get token
+  description: Authenticates a user and returns a JWT bearer token.
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/LoginRequest'
+  responses:
+    '200':
+      description: Authentication successful
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/LoginResponse'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'

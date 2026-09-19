@@ -1,0 +1,43 @@
+get:
+  operationId: getRuleSetByKey
+  tags:
+  - Rules
+  summary: Get a rule set by key
+  description: Gets the latest version of a rule set by its key.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: key
+    in: path
+    required: true
+    schema:
+      type: string
+  responses:
+    '200':
+      description: Rule set details
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+              data:
+                $ref: '#/components/schemas/RuleSet'
+              pagination:
+                type: object
+                nullable: true
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      $ref: '#/components/responses/Forbidden'
+    '404':
+      $ref: '#/components/responses/NotFound'

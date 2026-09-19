@@ -1,0 +1,43 @@
+post:
+  operationId: rejectEvidence
+  tags:
+  - Evidence
+  summary: Reject evidence
+  description: Marks evidence as rejected, recording an immutable verification history
+    entry.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: evidenceId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/EvidenceVerificationRequest'
+  responses:
+    '200':
+      description: Evidence rejected
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Evidence'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

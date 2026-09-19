@@ -1,0 +1,34 @@
+get:
+  operationId: getOrgpeopleexternalExternalRef
+  tags:
+  - People
+  summary: Find person by external reference
+  description: Finds a person by their external reference ID. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: externalRef
+    in: path
+    required: true
+    schema:
+      type: string
+  responses:
+    '200':
+      description: Person details
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Person'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '404':
+      $ref: '#/components/responses/NotFound'

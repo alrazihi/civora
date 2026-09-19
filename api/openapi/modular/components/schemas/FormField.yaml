@@ -1,0 +1,56 @@
+type: object
+required:
+- id
+- key
+- label
+- type
+- required
+- order
+properties:
+  id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  key:
+    type: string
+    pattern: ^[a-z0-9_]+$
+    maxLength: 64
+  label:
+    type: string
+    maxLength: 200
+  type:
+    type: string
+    description: The field type. Immutable after creation; cannot be changed via update.
+    enum:
+    - TEXT
+    - TEXTAREA
+    - NUMBER
+    - DECIMAL
+    - DATE
+    - DATETIME
+    - BOOLEAN
+    - SELECT
+    - MULTISELECT
+    - RADIO
+    - CHECKBOX
+    - EMAIL
+    - PHONE
+  required:
+    type: boolean
+  order:
+    type: integer
+    minimum: 0
+  options:
+    type: array
+    items:
+      type: string
+    nullable: true
+  validation:
+    type: object
+    nullable: true
+  placeholder:
+    type: string
+    nullable: true
+  help_text:
+    type: string
+    nullable: true

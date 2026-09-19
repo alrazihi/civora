@@ -1,144 +1,317 @@
 const fs = require('fs');
 const path = require('path');
-const yaml = require('js-yaml');
 
 const OPENAPI_FILE = path.join(__dirname, 'openapi.yaml');
 const MODULAR_DIR = path.join(__dirname, 'modular');
+const BUILD_OUTPUT = path.join(__dirname, 'openapi.yaml');
 
-function sanitizePathName(pathName) {
-  let result = pathName;
-  result = result.replace(/^\//, '');
-  result = result.split('/').join('-');
-  result = result.replace(/_/g, '-');
-  result = result.replace(/--/g, '-');
-  return result || 'root';
+function parseYaml(content) {
+    const lines = content.split('\n');
+    const result = {
+        headers: {},
+        components: { securitySchemes: {}, headers: {}, schemas: {}, responses: {} },
+        paths: {}
+    };
+    
+    let currentSection = null;
+    let currentPath = null;
+    let indentLevel = 0;
+    let pathIndentLevel = 0;
+    let schemaName = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        if (trimmed.startsWith('components:') || trimmed.startsWith('schemas:') || 
+            trimmed.startsWith('responses:') || trimmed.startsWith('paths:') ||
+            trimmed.startsWith('securitySchemes:') || trimmed.startsWith('headers:')) {
+            currentSection = trimmed.replace(':', '');
+            continue;
+        }
+        
+        if (trimmed.startsWith('/')) {
+            pathIndentLevel = getIndent(line);
+            currentPath = trimmed;
+            result.paths[currentPath] = [];
+            continue;
+        }
+        
+        if (currentSection === 'schemas' || currentSection === 'responses' || currentSection === 'securitySchemes') {
+            const match = trimmed.match(/^(\w+):/);
+            if (match && !trimmed.includes('$ref') && !trimmed.includes('type:') && !trimmed.includes('properties:')) {
+                schemaName = match[1];
+                if (currentSection === 'schemas') {
+                    result.components.schemas[schemaName] = { startLine: i, name: schemaName };
+                } else if (currentSection === 'responses') {
+                    result.components.responses[schemaName] = { startLine: i, name: schemaName };
+                } else if (currentSection === 'securitySchemes') {
+                    result.components.securitySchemes[schemaName] = { startLine: i, name: schemaName };
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
+function getIndent(line) {
+    let indent = 0;
+    for (const char of line) {
+        if (char === ' ') indent++;
+        else break;
+    }
+    return indent;
+}
+
+function extractSchema(lines, startIdx, nextIdx) {
+    const schemaLines = [];
+    let baseIndent = 100;
+    
+    for (let i = startIdx; i < nextIdx; i++) {
+        const line = lines[i];
+        const indent = getIndent(line);
+        if (indent < baseIndent && trimmedLine(line).trim() !== '') {
+            baseIndent = indent;
+        }
+    }
+    
+    for (let i = startIdx; i < nextIdx; i++) {
+        const line = lines[i];
+        const indent = getIndent(line);
+        if (trimmedLine(line).trim() === '' || indent >= baseIndent) {
+            schemaLines.push(line);
+        }
+    }
+    
+    return schemaLines.join('\n');
+}
+
+function trimmedLine(line) {
+    return line.trim();
 }
 
 function modularizeOpenAPI() {
-  console.log('Reading source OpenAPI file...');
-  const content = fs.readFileSync(OPENAPI_FILE, 'utf8');
-  const doc = yaml.load(content);
-  
-  if (fs.existsSync(MODULAR_DIR)) {
-    fs.rmSync(MODULAR_DIR, { recursive: true });
-  }
-  
-  const componentsDir = path.join(MODULAR_DIR, 'components');
-  
-  fs.mkdirSync(path.join(componentsDir, 'schemas'), { recursive: true });
-  fs.mkdirSync(path.join(componentsDir, 'responses'), { recursive: true });
-  fs.mkdirSync(path.join(componentsDir, 'securitySchemes'), { recursive: true });
-  fs.mkdirSync(path.join(componentsDir, 'headers'), { recursive: true });
-  fs.mkdirSync(path.join(MODULAR_DIR, 'paths'), { recursive: true });
-  
-  const schemas = doc.components?.schemas || {};
-  const responses = doc.components?.responses || {};
-  const securitySchemes = doc.components?.securitySchemes || {};
-  const headers = doc.components?.headers || {};
-  const paths = doc.paths || {};
-  
-  console.log(`Found ${Object.keys(schemas).length} schemas, ${Object.keys(paths).length} paths, ${Object.keys(responses).length} responses`);
-  
-  for (const [name, schemaDef] of Object.entries(schemas)) {
-    const filePath = path.join(componentsDir, 'schemas', name + '.yaml');
-    fs.writeFileSync(filePath, yaml.dump(schemaDef, { lineWidth: -1, indent: 2 }));
-  }
-  
-  for (const [name, respDef] of Object.entries(responses)) {
-    const filePath = path.join(componentsDir, 'responses', name + '.yaml');
-    fs.writeFileSync(filePath, yaml.dump(respDef, { lineWidth: -1, indent: 2 }));
-  }
-  
-  for (const [name, schemeDef] of Object.entries(securitySchemes)) {
-    const filePath = path.join(componentsDir, 'securitySchemes', name + '.yaml');
-    fs.writeFileSync(filePath, yaml.dump(schemeDef, { lineWidth: -1, indent: 2 }));
-  }
-  
-  for (const [name, hdrDef] of Object.entries(headers)) {
-    const filePath = path.join(componentsDir, 'headers', name + '.yaml');
-    fs.writeFileSync(filePath, yaml.dump(hdrDef, { lineWidth: -1, indent: 2 }));
-  }
-  
-  console.log('Extracting paths...');
-  for (const [pathName, methods] of Object.entries(paths)) {
-    const sanitizedPath = sanitizePathName(pathName);
-    const filePath = path.join(MODULAR_DIR, 'paths', sanitizedPath + '.yaml');
-    fs.writeFileSync(filePath, yaml.dump(methods, { lineWidth: -1, indent: 2 }));
-  }
-  
-  console.log('Creating main openapi.yaml...');
-  
-  const openapiLines = [];
-  openapiLines.push('openapi: 3.0.3');
-  openapiLines.push('info:');
-  openapiLines.push('  title: ' + (doc.info.title || 'CIVORA API'));
-  openapiLines.push('  description: >-');
-  for (const line of doc.info.description.split('\n')) {
-    openapiLines.push('    ' + line.trimStart());
-  }
-  openapiLines.push('  version: ' + (doc.info.version || '0.8.0'));
-  if (doc.info.contact) {
-    openapiLines.push('  contact:');
-    openapiLines.push('    name: ' + (doc.info.contact.name || 'CIVORA'));
-    if (doc.info.contact.url) {
-      openapiLines.push('    url: ' + doc.info.contact.url);
+    const content = fs.readFileSync(OPENAPI_FILE, 'utf8');
+    const lines = content.split('\n');
+    
+    if (!fs.existsSync(MODULAR_DIR)) {
+        fs.mkdirSync(MODULAR_DIR, { recursive: true });
     }
-  }
-  if (doc.info.license) {
-    openapiLines.push('  license:');
-    openapiLines.push('    name: ' + (doc.info.license.name || 'Apache-2.0'));
-    if (doc.info.license.url) {
-      openapiLines.push('    url: ' + doc.info.license.url);
+    
+    const schemasDir = path.join(MODULAR_DIR, 'schemas');
+    const pathsDir = path.join(MODULAR_DIR, 'paths');
+    const componentsDir = path.join(MODULAR_DIR, 'components');
+    
+    fs.mkdirSync(schemasDir, { recursive: true });
+    fs.mkdirSync(pathsDir, { recursive: true });
+    fs.mkdirSync(componentsDir, { recursive: true });
+    
+    let currentPath = null;
+    let pathStartLine = -1;
+    const paths = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        if (trimmed === 'paths:') continue;
+        if (trimmed === 'components:') continue;
+        if (trimmed === 'securitySchemes:') continue;
+        if (trimmed === 'headers:') continue;
+        if (trimmed === 'schemas:') continue;
+        if (trimmed === 'responses:') continue;
+        
+        if (trimmed.startsWith('openapi:')) {
+            writeMainFile(lines, schemasDir, pathsDir, content);
+            break;
+        }
+        
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('{orgId}')) {
+            if (trimmed.includes(':') && !line.includes('  -')) {
+                currentPath = trimmed;
+                pathStartLine = i;
+                paths.push(currentPath);
+                extractPath(lines, i, currentPath);
+            }
+        }
     }
-  }
-  openapiLines.push('');
-  openapiLines.push('servers:');
-  for (const server of (doc.servers || [])) {
-    openapiLines.push('  - url: ' + server.url);
-    if (server.description) {
-      openapiLines.push('    description: ' + server.description);
+    
+    console.log('Modularization complete!');
+    console.log(`Created ${paths.length} path files`);
+}
+
+function writeMainFile(lines, schemasDir, pathsDir, content) {
+    const mainContent = `# OpenAPI 3.0.3 Specification - CIVORA API
+# This file uses \$ref to external files for maintainability
+
+openapi: 3.0.3
+info:
+  title: CIVORA API
+  description: >-
+      CIVORA API - open-source infrastructure for configurable, auditable
+      public-service workflows, case management, forms, rules, and human
+      decisions. Version 0.7.0.
+  version: 0.8.0
+  contact:
+    name: CIVORA
+    url: https://github.com/alrazihi/civora
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+- url: http://localhost:8080
+  description: Local development server. Override with CIVORA_API_URL in production.
+
+security: []
+
+tags:
+- name: Organizations
+  description: Organization (tenant) management
+- name: Authentication
+  description: User registration and authentication
+- name: Users
+  description: User management within an organization
+- name: People
+  description: Person (client/individual) records
+- name: Cases
+  description: Case lifecycle management with state transitions
+- name: Eligibilities
+  description: Eligibility assessment for service requests
+- name: Evidence
+  description: Evidence items submitted for service requests
+- name: Assessments
+  description: Needs assessment and recommendations
+- name: Decisions
+  description: Human decisions on service requests
+- name: Assistance
+  description: Assistance actions and services provided
+- name: FollowUps
+  description: Follow-up scheduling and completion
+- name: Audit
+  description: Immutable audit event log
+- name: Workflows
+  description: Configurable workflow definitions, instances, and transitions
+- name: Forms
+  description: Configurable forms for data collection
+- name: Rules
+  description: Deterministic eligibility rules engine configuration and evaluation
+- name: ReviewQueue
+  description: Human reviewer work queue and decision tracking
+- name: AI
+  description: AI observation generation, review, and provenance
+- name: Operations
+  description: Operational metrics and impact intelligence
+- name: DocumentIntelligence
+  description: AI document analysis capabilities
+- name: CaseContext
+  description: Case context building and fact management
+- name: System
+  description: Health and readiness checks
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'JWT bearer token with organization_id claim'
+  
+  headers:
+    X-Request-ID:
+      schema:
+        type: string
+        format: uuid
+  
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: './components/responses/Error.yaml'
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: './components/responses/Error.yaml'
+    Forbidden:
+      description: Access forbidden
+      content:
+        application/json:
+          schema:
+            $ref: './components/responses/Error.yaml'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: './components/responses/Error.yaml'
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: './components/responses/Error.yaml'
+    RequestTooLarge:
+      description: Request body too large (exceeds 1MB limit)
+      content:
+        application/json:
+          schema:
+            $ref: './components/responses/Error.yaml'
+
+  schemas:
+    Error:
+      $ref: './components/schemas/Error.yaml'
+
+paths:
+  /health:
+    $ref: './paths/health.yaml'
+`;
+    
+    fs.writeFileSync(BUILD_OUTPUT, mainContent);
+    console.log('Main openapi.yaml created');
+}
+
+function extractPath(lines, startIdx, path) {
+    const pathDir = path.join(__dirname, 'modular', 'paths');
+    const fileName = sanitizePathName(path);
+    
+    const pathContent = [];
+    let foundPath = false;
+    let indentLevel = 0;
+    
+    for (let i = startIdx; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        if (!foundPath && (trimmed.startsWith(path) || trimmed.startsWith('/'))) {
+            foundPath = true;
+            indentLevel = getIndent(line);
+        }
+        
+        if (foundPath) {
+            if (trimmed === '' || getIndent(line) >= indentLevel || trimmed.startsWith('/')) {
+                pathContent.push(line);
+            } else {
+                break;
+            }
+        }
     }
-  }
-  openapiLines.push('security: []');
-  openapiLines.push('tags:');
-  for (const tag of (doc.tags || [])) {
-    openapiLines.push('  - name: ' + tag.name);
-    if (tag.description) {
-      openapiLines.push('    description: ' + tag.description);
-    }
-  }
-  openapiLines.push('');
-  openapiLines.push('components:');
-  openapiLines.push('  securitySchemes:');
-  openapiLines.push('    BearerAuth:');
-  openapiLines.push('      $ref: ./modular/components/securitySchemes/BearerAuth.yaml');
-  openapiLines.push('  headers:');
-  openapiLines.push('    X-Request-ID:');
-  openapiLines.push('      $ref: ./modular/components/headers/X-Request-ID.yaml');
-  openapiLines.push('  responses:');
-  for (const name of ['BadRequest', 'Unauthorized', 'Forbidden', 'NotFound', 'Conflict', 'RequestTooLarge']) {
-    openapiLines.push('    ' + name + ':');
-    openapiLines.push('      $ref: ./modular/components/responses/' + name + '.yaml');
-  }
-  openapiLines.push('  schemas:');
-  for (const name of Object.keys(schemas)) {
-    openapiLines.push('    ' + name + ':');
-    openapiLines.push('      $ref: ./modular/components/schemas/' + name + '.yaml');
-  }
-  openapiLines.push('');
-  openapiLines.push('paths:');
-  for (const [pathName, methods] of Object.entries(paths)) {
-    openapiLines.push('  ' + pathName + ':');
-    openapiLines.push('    $ref: ./modular/paths/' + sanitizePathName(pathName) + '.yaml');
-  }
-  
-  fs.writeFileSync(OPENAPI_FILE, openapiLines.join('\n'));
-  console.log('Main openapi.yaml created');
-  
-  const pathCount = Object.keys(paths).length;
-  const schemaCount = Object.keys(schemas).length;
-  
-  console.log(`\nModularization complete!\nCreated ${pathCount} path files and ${schemaCount} schema files\n`);
+    
+    const content = pathContent.join('\n');
+    fs.writeFileSync(path.join(pathDir, fileName + '.yaml'), content);
+}
+
+function sanitizePathName(pathStr) {
+    return pathStr
+        .replace(/[{}/]/g, '')
+        .replace(/-/g, '_')
+        .replace(/{orgId}/g, 'org-id')
+        .replace(/{/g, '')
+        .replace(/}/g, '');
 }
 
 modularizeOpenAPI();

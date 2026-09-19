@@ -1,0 +1,24 @@
+type: object
+properties:
+  name:
+    type: string
+  description:
+    type: string
+  default_outcome:
+    type: string
+    enum:
+    - ELIGIBLE
+    - INELIGIBLE
+    - REQUIRES_REVIEW
+    - INFORMATION_REQUIRED
+    - FLAG
+    - SCORE
+    - ERROR
+  rules:
+    type: array
+    items:
+      $ref: '#/components/schemas/Rule'
+  triggers:
+    type: array
+    items:
+      type: string

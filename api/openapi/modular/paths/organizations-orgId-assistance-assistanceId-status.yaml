@@ -1,0 +1,49 @@
+patch:
+  operationId: updateAssistanceStatus
+  tags:
+  - Assistance
+  summary: Update assistance status
+  description: Updates the status of an assistance action (start, complete, cancel).
+    Requires admin or staff role.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: assistanceId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/UpdateAssistanceStatusRequest'
+  responses:
+    '200':
+      description: Updated assistance
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Assistance'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+    '403':
+      description: Forbidden - admin or staff role required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    '404':
+      $ref: '#/components/responses/NotFound'

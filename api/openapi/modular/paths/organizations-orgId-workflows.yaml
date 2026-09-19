@@ -1,0 +1,76 @@
+get:
+  operationId: listOrgWorkflows
+  tags:
+  - Workflows
+  summary: List workflow definitions
+  description: Lists workflow definitions for the organization. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      default: 1
+  - name: per_page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 200
+      default: 20
+  responses:
+    '200':
+      description: Paginated list of workflow definitions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowDefinition'
+              meta:
+                type: object
+    '401':
+      $ref: '#/components/responses/Unauthorized'
+post:
+  operationId: createOrgWorkflow
+  tags:
+  - Workflows
+  summary: Create workflow definition
+  description: Creates a new draft workflow definition. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/CreateWorkflowDefinitionRequest'
+  responses:
+    '201':
+      description: Workflow definition created
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/WorkflowDefinition'
+    '400':
+      $ref: '#/components/responses/BadRequest'
+    '401':
+      $ref: '#/components/responses/Unauthorized'

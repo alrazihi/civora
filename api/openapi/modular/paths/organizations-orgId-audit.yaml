@@ -1,0 +1,40 @@
+get:
+  operationId: getOrgaudit
+  tags:
+  - Audit
+  summary: List audit events
+  description: Lists audit events for the organization. Requires authentication.
+  security:
+  - BearerAuth: []
+  parameters:
+  - name: orgId
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  - name: page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      default: 1
+  - name: per_page
+    in: query
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 200
+      default: 20
+  responses:
+    '200':
+      description: List of audit events
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/AuditEvent'
+    '401':
+      $ref: '#/components/responses/Unauthorized'

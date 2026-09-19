@@ -1,0 +1,38 @@
+type: object
+required:
+- first_name
+- last_name
+- preferred_language
+properties:
+  external_reference:
+    type: string
+    nullable: true
+  first_name:
+    type: string
+    maxLength: 100
+  last_name:
+    type: string
+    maxLength: 100
+  date_of_birth:
+    type: string
+    format: date
+    description: ISO 8601 date (YYYY-MM-DD), nullable
+    nullable: true
+  email:
+    type: string
+    format: email
+    nullable: true
+  phone:
+    type: string
+    nullable: true
+  address:
+    type: string
+    maxLength: 500
+    nullable: true
+  city:
+    type: string
+    maxLength: 100
+    nullable: true
+  preferred_language:
+    type: string
+    maxLength: 10
