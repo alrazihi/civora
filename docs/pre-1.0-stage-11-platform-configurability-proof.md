@@ -1,6 +1,6 @@
 # Stage 11: Configuration Audit & No-Code Platform Proof
 
-**Status**: IN REVIEW
+**Status**: COMPLETED
 **Audit Type**: Platform Configurability Assessment
 
 ---
@@ -82,8 +82,11 @@ From a fresh installation (no demo seed data), an organization would:
 
 ### Critical: Hardcoded Service Types
 
+**Status**: FIXED
+
 **Location**: `internal/cases/domain/case.go:46-55`
 
+**Original Code**:
 ```go
 const (
     ServiceTypeGeneral   ServiceType = "GENERAL"
@@ -116,16 +119,22 @@ service_type:
 
 **Impact**: Organizations using domains outside CIVORA's demo use cases cannot configure their service types.
 
-**Recommendation**: 
-- Make `service_type` a free-text string in both domain and OpenAPI spec
-- Add optional validation via workflow context or plugin system
+**Fix Applied**:
+- Removed hardcoded `ServiceType` constants
+- `ServiceType.IsValid()` now accepts any non-empty string
+- `ValidateServiceType()` only checks for non-empty value
+- OpenAPI spec updated to remove enum constraints
+- `service_type` is now free-text in domain and API
 
 ---
 
 ### Critical: Hardcoded Priority Levels
 
+**Status**: FIXED
+
 **Location**: `internal/cases/domain/case.go:57-64`
 
+**Original Code**:
 ```go
 const (
     PriorityLow    Priority = "LOW"
@@ -138,6 +147,7 @@ const (
 **OpenAPI Spec** (`api/openapi/modular/components/schemas/Case.yaml:51-55`):
 ```yaml
 priority:
+  type: string
   enum:
   - LOW
   - NORMAL
@@ -147,7 +157,12 @@ priority:
 
 **Problem**: Cannot add domain-specific priorities (e.g., "CRITICAL", "ROUTINE", "DELAYED").
 
-**Recommendation**: Make priority user-configurable via organization settings or free-text.
+**Fix Applied**:
+- Removed hardcoded `Priority` constants
+- `Priority.IsValid()` now accepts any non-empty string
+- `ValidatePriority()` only checks for non-empty value
+- OpenAPI spec updated to remove enum constraints
+- `priority` is now free-text in domain and API
 
 ---
 
@@ -248,8 +263,8 @@ Despite the hardcoded values, the following CAN be configured via API only:
 | Workflow Transitions | ✓ | Conditions supported |
 | Forms & Fields | ✓ | Field types limited to available enums |
 | Rules | ✓ | Condition operators limited |
-| Service Types | ✗ | Hardcoded in Domain |
-| Priorities | ✗ | Hardcoded in Domain |
+| Service Types | ✓ | Free-text string; no enum restrictions |
+| Priorities | ✓ | Free-text string; no enum restrictions |
 | Case Statuses | ✗ | Hardcoded terminal state logic |
 | Roles | ✗ | No CRUD API |
 
@@ -257,24 +272,21 @@ Despite the hardcoded values, the following CAN be configured via API only:
 
 ## Recommendations
 
-1. **Make service_type configurable** - Convert to free-text or organization-specific enum
-2. **Make priority configurable** - Convert to free-text or admin-defined enum
-3. **Add `/roles` API endpoint** - Enable full no-code role management
-4. **Make terminal states configurable** - Allow organization to define what "closed" means
+1. **Add `/roles` API endpoint** - Enable full no-code role management
+2. **Make terminal states configurable** - Allow organization to define what "closed" means
 
 ---
 
 ## Conclusion
 
-While CIVORA's core workflow, forms, and rules systems are fully configurable via API, the hardcoded `service_type` and `priority` enums in the domain layer create a barrier for organizations with domain needs outside the demo use cases (emergency response, education grants).
+CIVORA's core workflow, forms, and rules systems are fully configurable via API. The previously hardcoded `service_type` and `priority` enums have been removed, allowing organizations to define their own domain-specific values without code changes.
 
-**Verdict**: CIVORA is approximately 70% no-code configurable. Full no-code configuration requires additional API endpoints and domain changes.
+**Verdict**: CIVORA is approximately 90% no-code configurable. Remaining barriers are the missing `/roles` API endpoint and hardcoded terminal state logic.
 
-**Genuine Architectural Violations**:
-1. `service_type` enum in domain code (`internal/cases/domain/case.go:46-55`)
-2. `priority` enum in domain code (`internal/cases/domain/case.go:57-64`)
+**Resolved Architectural Violations**:
+1. ~~`service_type` enum in domain code~~ - **Fixed**: Converted to free-text string
+2. ~~`priority` enum in domain code~~ - **Fixed**: Converted to free-text string
 
-**Fixes Required**:
-- Changes to domain types from enums to free-text strings
-- Update validation logic accordingly
-- Update OpenAPI spec to reflect new format
+**Remaining Gaps**:
+- `CaseStatus` terminal state logic (`IsClosed()`) is still hardcoded
+- No `/roles` CRUD API endpoint
