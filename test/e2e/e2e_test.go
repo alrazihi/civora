@@ -101,9 +101,10 @@ func SetupTestServer(t *testing.T) *TestServer {
 			SSLMode:  "disable",
 		},
 		Auth: config.AuthConfig{
-			JWTSecret:  "test-secret-key-for-e2e-tests-only-32+chars",
-			JWTExpiry:  time.Hour,
-			BCryptCost: 4,
+			JWTSecret:          "test-secret-key-for-e2e-tests-only-32+chars",
+			AccessTokenExpiry:  time.Hour,
+			RefreshTokenExpiry: 7 * 24 * time.Hour,
+			BCryptCost:         4,
 		},
 		Audit: config.AuditConfig{
 			Enabled:          true,
@@ -309,11 +310,11 @@ func (ts *TestServer) login(t *testing.T, orgID uuid.UUID, email, password strin
 
 	var result struct {
 		Data struct {
-			Token string `json:"token"`
+			AccessToken string `json:"access_token"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
-	return result.Data.Token
+	return result.Data.AccessToken
 }
 
 func getEnv(key, fallback string) string {

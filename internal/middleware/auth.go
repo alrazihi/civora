@@ -79,18 +79,18 @@ func (k *KeySet) VerifyKey(kid string) ([]byte, bool) {
 }
 
 type JWTService struct {
-	keySet         *KeySet
-	accessExpiry   time.Duration
-	refreshExpiry  time.Duration
-	issuer         string
+	keySet        *KeySet
+	accessExpiry  time.Duration
+	refreshExpiry time.Duration
+	issuer        string
 }
 
 func NewJWTService(secret string, accessExpiry, refreshExpiry time.Duration, issuer string) *JWTService {
 	return &JWTService{
-		keySet:         NewKeySet([]byte(secret)),
-		accessExpiry:   accessExpiry,
-		refreshExpiry:  refreshExpiry,
-		issuer:         issuer,
+		keySet:        NewKeySet([]byte(secret)),
+		accessExpiry:  accessExpiry,
+		refreshExpiry: refreshExpiry,
+		issuer:        issuer,
 	}
 }
 
@@ -250,12 +250,17 @@ func AuthRequired(svc *JWTService, sessionRepo domain.SessionRepository) func(ht
 			}
 
 			if sessionRepo != nil && jti != "" {
-				session, err := sessionRepo.FindByID(r.Context(), jti)
+				orgIDUUID, err := uuid.Parse(orgID)
+				if err != nil {
+					writeUnauthorized(w)
+					return
+				}
+				session, err := sessionRepo.FindByIDForOrganization(r.Context(), jti, orgIDUUID)
 				if err != nil || session.IsRevoked() || session.IsExpired() || session.UserID.String() != userID || session.OrganizationID.String() != orgID {
 					writeUnauthorized(w)
 					return
 				}
-				_ = sessionRepo.MarkUsed(r.Context(), jti)
+				_ = sessionRepo.MarkUsedForOrganization(r.Context(), jti, orgIDUUID)
 				ctx := context.WithValue(r.Context(), SessionIDKey, jti)
 				r = r.WithContext(ctx)
 			}
@@ -269,7 +274,6 @@ func AuthRequired(svc *JWTService, sessionRepo domain.SessionRepository) func(ht
 		})
 	}
 }
-
 
 func RequireSameTenant(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

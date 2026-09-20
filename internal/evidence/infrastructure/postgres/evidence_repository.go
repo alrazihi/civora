@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/alrazihi/civora/internal/evidence/domain"
 	"github.com/google/uuid"
@@ -74,15 +75,67 @@ func (r *PostgresEvidenceRepository) saveEvidence(ctx context.Context, ex sqlExe
 }
 
 func (r *PostgresEvidenceRepository) UpdateVerification(ctx context.Context, e *domain.Evidence) error {
-	return r.updateVerification(ctx, r.db, e)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
+	return r.UpdateVerificationTx(ctx, tx, e)
 }
 
 func (r *PostgresEvidenceRepository) UpdateVerificationTx(ctx context.Context, tx *sql.Tx, e *domain.Evidence) error {
-	return r.updateVerification(ctx, tx, e)
-}
+	// Lock the row and fetch current evidence
+	var currentEvidence domain.Evidence
+	var customType sql.NullString
+	var metadataJSON []byte
+	var verificationReason sql.NullString
+	var verificationMethod sql.NullString
+	err := tx.QueryRowContext(ctx, `
+		SELECT id, organization_id, service_request_id, type, custom_type,
+		       description, storage_reference, uploaded_by, person_id,
+		       evidence_source, metadata, verification_status,
+		       verified_by, verified_at, verification_reason, verification_method,
+		       created_at
+		FROM evidence
+		WHERE organization_id = $1 AND id = $2
+		FOR UPDATE
+	`, e.OrganizationID, e.ID).Scan(
+		&currentEvidence.ID, &currentEvidence.OrganizationID, &currentEvidence.ServiceRequestID, &currentEvidence.Type, &customType,
+		&currentEvidence.Description, &currentEvidence.StorageReference, &currentEvidence.UploadedBy, &currentEvidence.PersonID,
+		&currentEvidence.Source, &metadataJSON, &currentEvidence.VerificationStatus,
+		&currentEvidence.VerifiedBy, &currentEvidence.VerifiedAt, &verificationReason, &verificationMethod,
+		&currentEvidence.CreatedAt,
+	)
 
-func (r *PostgresEvidenceRepository) updateVerification(ctx context.Context, ex sqlExecer, e *domain.Evidence) error {
-	query := `
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.ErrEvidenceNotFound
+		}
+		return fmt.Errorf("failed to lock and fetch evidence: %w", err)
+	}
+
+	// Convert null types
+	currentEvidence.CustomType = nullableStringPtr(customType)
+	currentEvidence.VerificationReason = nullString(verificationReason)
+	currentEvidence.VerificationMethod = nullString(verificationMethod)
+	if len(metadataJSON) > 0 {
+		_ = json.Unmarshal(metadataJSON, &currentEvidence.Metadata)
+	}
+
+	// Validate the transition
+	if !domain.IsValidVerificationTransition(currentEvidence.VerificationStatus, e.VerificationStatus) {
+		return fmt.Errorf("invalid verification transition from %s to %s: %w", currentEvidence.VerificationStatus, e.VerificationStatus, domain.ErrVerificationInvalid)
+	}
+
+	// Now, update the evidence with the new verification fields
+	updateQuery := `
 		UPDATE evidence SET
 			verification_status = $1,
 			verified_by = $2,
@@ -91,14 +144,15 @@ func (r *PostgresEvidenceRepository) updateVerification(ctx context.Context, ex 
 			verification_method = $5
 		WHERE organization_id = $6 AND id = $7
 	`
-	result, err := ex.ExecContext(ctx, query,
+	result, err := tx.ExecContext(ctx, updateQuery,
 		e.VerificationStatus, e.VerifiedBy, e.VerifiedAt,
 		e.VerificationReason, e.VerificationMethod,
 		e.OrganizationID, e.ID,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to update verification: %w", err)
+		return fmt.Errorf("failed to update evidence verification: %w", err)
 	}
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to check rows affected: %w", err)
@@ -106,6 +160,31 @@ func (r *PostgresEvidenceRepository) updateVerification(ctx context.Context, ex 
 	if rowsAffected == 0 {
 		return domain.ErrEvidenceNotFound
 	}
+
+	// Create verification history record
+	var verifiedAt time.Time
+	if e.VerifiedAt != nil {
+		verifiedAt = *e.VerifiedAt
+	}
+	rec := &domain.VerificationRecord{
+		ID:             uuid.New(),
+		EvidenceID:     e.ID,
+		OrganizationID: e.OrganizationID,
+		Status:         e.VerificationStatus,
+		VerifierID:     e.VerifiedBy,
+		VerifiedAt:     verifiedAt,
+		Reason:         e.VerificationReason,
+		Method:         e.VerificationMethod,
+		Notes:          "",
+		CreatedAt:      time.Now().UTC(),
+	}
+
+	// Save the verification history
+	err = r.saveVerificationHistory(ctx, tx, rec)
+	if err != nil {
+		return fmt.Errorf("failed to save verification history: %w", err)
+	}
+
 	return nil
 }
 

@@ -110,6 +110,17 @@ func (r *PostgresSessionRepository) FindByID(ctx context.Context, sessionID stri
 	return r.scanSession(r.db.QueryRowContext(ctx, query, sessionID))
 }
 
+func (r *PostgresSessionRepository) FindByIDForOrganization(ctx context.Context, sessionID string, organizationID uuid.UUID) (*domain.Session, error) {
+	query := `
+		SELECT id, user_id, organization_id, refresh_token_hash, token_family,
+			user_modified_at, issued_at, expires_at, revoked_at, last_used_at,
+			user_agent, ip_address, created_at, updated_at
+		FROM auth_sessions
+		WHERE id = $1 AND organization_id = $2
+	`
+	return r.scanSession(r.db.QueryRowContext(ctx, query, sessionID, organizationID))
+}
+
 func (r *PostgresSessionRepository) FindActiveByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Session, error) {
 	query := `
 		SELECT id, user_id, organization_id, refresh_token_hash, token_family,
@@ -120,6 +131,35 @@ func (r *PostgresSessionRepository) FindActiveByUserID(ctx context.Context, user
 		ORDER BY issued_at DESC
 	`
 	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query active sessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var sessions []*domain.Session
+	for rows.Next() {
+		s, err := r.scanSessionFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return sessions, nil
+}
+
+func (r *PostgresSessionRepository) FindActiveByUserIDForOrganization(ctx context.Context, userID uuid.UUID, organizationID uuid.UUID) ([]*domain.Session, error) {
+	query := `
+		SELECT id, user_id, organization_id, refresh_token_hash, token_family,
+			user_modified_at, issued_at, expires_at, revoked_at, last_used_at,
+			user_agent, ip_address, created_at, updated_at
+		FROM auth_sessions
+		WHERE user_id = $1 AND organization_id = $2 AND revoked_at IS NULL AND expires_at > now()
+		ORDER BY issued_at DESC
+	`
+	rows, err := r.db.QueryContext(ctx, query, userID, organizationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query active sessions: %w", err)
 	}
@@ -152,6 +192,19 @@ func (r *PostgresSessionRepository) Revoke(ctx context.Context, sessionID string
 	return nil
 }
 
+func (r *PostgresSessionRepository) RevokeForOrganization(ctx context.Context, sessionID string, organizationID uuid.UUID) error {
+	query := `
+		UPDATE auth_sessions
+		SET revoked_at = now(), updated_at = now()
+		WHERE id = $1 AND organization_id = $2 AND revoked_at IS NULL
+	`
+	_, err := r.db.ExecContext(ctx, query, sessionID, organizationID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke session: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresSessionRepository) RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error {
 	query := `
 		UPDATE auth_sessions
@@ -159,6 +212,19 @@ func (r *PostgresSessionRepository) RevokeAllByUserID(ctx context.Context, userI
 		WHERE user_id = $1 AND revoked_at IS NULL
 	`
 	_, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke all sessions: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresSessionRepository) RevokeAllByUserIDForOrganization(ctx context.Context, userID uuid.UUID, organizationID uuid.UUID) error {
+	query := `
+		UPDATE auth_sessions
+		SET revoked_at = now(), updated_at = now()
+		WHERE user_id = $1 AND organization_id = $2 AND revoked_at IS NULL
+	`
+	_, err := r.db.ExecContext(ctx, query, userID, organizationID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke all sessions: %w", err)
 	}
@@ -178,6 +244,19 @@ func (r *PostgresSessionRepository) RevokeAllByUserIDTx(ctx context.Context, tx 
 	return nil
 }
 
+func (r *PostgresSessionRepository) RevokeAllByUserIDTxForOrganization(ctx context.Context, tx *sql.Tx, userID uuid.UUID, organizationID uuid.UUID) error {
+	query := `
+		UPDATE auth_sessions
+		SET revoked_at = now(), updated_at = now()
+		WHERE user_id = $1 AND organization_id = $2 AND revoked_at IS NULL
+	`
+	_, err := tx.ExecContext(ctx, query, userID, organizationID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke all sessions in tx: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresSessionRepository) MarkUsed(ctx context.Context, sessionID string) error {
 	query := `
 		UPDATE auth_sessions
@@ -185,6 +264,19 @@ func (r *PostgresSessionRepository) MarkUsed(ctx context.Context, sessionID stri
 		WHERE id = $1
 	`
 	_, err := r.db.ExecContext(ctx, query, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to mark session used: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresSessionRepository) MarkUsedForOrganization(ctx context.Context, sessionID string, organizationID uuid.UUID) error {
+	query := `
+		UPDATE auth_sessions
+		SET last_used_at = now(), updated_at = now()
+		WHERE id = $1 AND organization_id = $2
+	`
+	_, err := r.db.ExecContext(ctx, query, sessionID, organizationID)
 	if err != nil {
 		return fmt.Errorf("failed to mark session used: %w", err)
 	}

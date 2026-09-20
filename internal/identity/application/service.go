@@ -393,11 +393,11 @@ func (s *IdentityService) Logout(ctx context.Context, params LogoutParams) error
 	return nil
 }
 
-func (s *IdentityService) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+func (s *IdentityService) RevokeAllUserSessions(ctx context.Context, userID, orgID uuid.UUID) error {
 	if s.sessionRepo == nil {
 		return nil
 	}
-	return s.sessionRepo.RevokeAllByUserID(ctx, userID)
+	return s.sessionRepo.RevokeAllByUserIDForOrganization(ctx, userID, orgID)
 }
 
 type ChangePasswordParams struct {
@@ -452,7 +452,7 @@ func (s *IdentityService) ChangePassword(ctx context.Context, params ChangePassw
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
-	if err := s.RevokeAllUserSessions(ctx, user.ID); err != nil {
+	if err := s.RevokeAllUserSessions(ctx, user.ID, user.OrganizationID); err != nil {
 		return fmt.Errorf("failed to revoke sessions: %w", err)
 	}
 

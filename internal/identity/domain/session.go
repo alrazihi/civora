@@ -46,9 +46,15 @@ type SessionRepository interface {
 	UpdateTx(ctx context.Context, tx *sql.Tx, session *Session) error
 	FindByRefreshTokenHash(ctx context.Context, hash string) (*Session, error)
 	FindByID(ctx context.Context, sessionID string) (*Session, error)
+	FindByIDForOrganization(ctx context.Context, sessionID string, organizationID uuid.UUID) (*Session, error)
 	FindActiveByUserID(ctx context.Context, userID uuid.UUID) ([]*Session, error)
+	FindActiveByUserIDForOrganization(ctx context.Context, userID uuid.UUID, organizationID uuid.UUID) ([]*Session, error)
 	Revoke(ctx context.Context, sessionID string) error
+	RevokeForOrganization(ctx context.Context, sessionID string, organizationID uuid.UUID) error
 	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
+	RevokeAllByUserIDForOrganization(ctx context.Context, userID uuid.UUID, organizationID uuid.UUID) error
 	RevokeAllByUserIDTx(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error
+	RevokeAllByUserIDTxForOrganization(ctx context.Context, tx *sql.Tx, userID uuid.UUID, organizationID uuid.UUID) error
 	MarkUsed(ctx context.Context, sessionID string) error
+	MarkUsedForOrganization(ctx context.Context, sessionID string, organizationID uuid.UUID) error
 }

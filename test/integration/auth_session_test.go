@@ -210,7 +210,226 @@ func TestRevokedSession_AccessDenied(t *testing.T) {
 
 	session, err := sessionRepo.FindByID(ctx, jti)
 	require.NoError(t, err)
+	require.True(t, session.IsRevoked(), "session should be revoked after logout")
+}
+
+func TestSessionRepository_FindByID_BaseLookup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	session, err := sessionRepo.FindByID(ctx, loginResult.SessionID)
+	require.NoError(t, err)
+	assert.Equal(t, loginResult.SessionID, session.ID.String())
+	assert.Equal(t, userID, session.UserID)
+	assert.Equal(t, orgID, session.OrganizationID)
+}
+
+func TestSessionRepository_FindByIDForOrganization_ValidOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	session, err := sessionRepo.FindByIDForOrganization(ctx, loginResult.SessionID, orgID)
+	require.NoError(t, err)
+	assert.Equal(t, loginResult.SessionID, session.ID.String())
+	assert.Equal(t, userID, session.UserID)
+	assert.Equal(t, orgID, session.OrganizationID)
+}
+
+func TestSessionRepository_FindByIDForOrganization_WrongOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	otherOrgID := helpers.SeedOrg(db)
+	helpers.SeedDefaultRoles(db, otherOrgID)
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	_, err = sessionRepo.FindByIDForOrganization(ctx, loginResult.SessionID, otherOrgID)
+	require.Error(t, err, "session should not be found for wrong organization")
+	assert.ErrorIs(t, err, domain.ErrSessionNotFound)
+}
+
+func TestSessionRepository_FindByRefreshTokenHash_Valid(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	hash := middleware.HashRefreshToken(loginResult.RefreshToken)
+	session, err := sessionRepo.FindByRefreshTokenHash(ctx, hash)
+	require.NoError(t, err)
+	assert.Equal(t, loginResult.SessionID, session.ID.String())
+	assert.Equal(t, userID, session.UserID)
+	assert.Equal(t, orgID, session.OrganizationID)
+}
+
+func TestSessionRepository_MarkUsedForOrganization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	_, err = sessionRepo.FindByID(ctx, loginResult.SessionID)
+	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
+
+	err = sessionRepo.MarkUsedForOrganization(ctx, loginResult.SessionID, orgID)
+	require.NoError(t, err)
+
+	updated, err := sessionRepo.FindByID(ctx, loginResult.SessionID)
+	require.NoError(t, err)
+	require.NotNil(t, updated.LastUsedAt, "last_used_at should be set after MarkUsed")
+}
+
+func TestSessionRepository_RevokeForOrganization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	err = sessionRepo.RevokeForOrganization(ctx, loginResult.SessionID, orgID)
+	require.NoError(t, err)
+
+	session, err := sessionRepo.FindByID(ctx, loginResult.SessionID)
+	require.NoError(t, err)
 	require.True(t, session.IsRevoked(), "session should be revoked")
+
+	err = sessionRepo.RevokeForOrganization(ctx, loginResult.SessionID, orgID)
+	require.NoError(t, err, "re-revoking should be idempotent")
+}
+
+func TestSessionRepository_RevokeAllByUserIDForOrganization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	_, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	err = sessionRepo.RevokeAllByUserIDForOrganization(ctx, userID, orgID)
+	require.NoError(t, err)
+
+	sessions, err := sessionRepo.FindActiveByUserID(ctx, userID)
+	require.NoError(t, err)
+	for _, s := range sessions {
+		assert.True(t, s.IsRevoked(), "all sessions for user should be revoked")
+	}
+}
+
+func TestSessionRepository_CrossTenantRevokeIsolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	svc, _, _, sessionRepo, _, _, db, orgID := setupAuthServices(t)
+	ctx := context.Background()
+
+	otherOrgID := helpers.SeedOrg(db)
+	helpers.SeedDefaultRoles(db, otherOrgID)
+
+	userID := seedAuthUser(t, db, orgID, "staff")
+	email := "user-" + userID.String()[:8] + "@example.com"
+
+	loginResult, err := svc.Authenticate(ctx, application.AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          email,
+		Password:       "securepassword123",
+	})
+	require.NoError(t, err)
+
+	err = sessionRepo.RevokeForOrganization(ctx, loginResult.SessionID, otherOrgID)
+	require.NoError(t, err, "wrong-org revoke should not return error (idempotent scoped no-op)")
+
+	session, err := sessionRepo.FindByID(ctx, loginResult.SessionID)
+	require.NoError(t, err)
+	assert.False(t, session.IsRevoked(), "session should not be revoked by wrong org")
 }
 
 func TestPasswordChange_RevokesSessions(t *testing.T) {
@@ -485,7 +704,7 @@ func TestRoleChange_TakesEffectOnNextLogin(t *testing.T) {
 	_, err = db.ExecContext(ctx, "UPDATE users SET role_id = $1, updated_at = NOW() WHERE id = $2", adminRole.ID, userID)
 	require.NoError(t, err)
 
-	err = svc.RevokeAllUserSessions(ctx, userID)
+	err = svc.RevokeAllUserSessions(ctx, userID, orgID)
 	require.NoError(t, err)
 
 	_, _, _, jti, _, err := jwtSvc.VerifyAccessToken(loginResult.AccessToken)
