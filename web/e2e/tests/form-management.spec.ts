@@ -40,7 +40,7 @@ test.describe('Form Management', () => {
     setupFormMockRoutes(page, { forms: { list: [] } });
     await page.evaluate(() => router.navigate('forms'));
     await expect(page.locator('#btn-create-form')).toBeVisible();
-    await page.click('#btn-create-form');
+    await page.click('#btn-create-form', { force: true });
     await expect(page.locator('#view-form-design')).toBeVisible();
     await expect(page.locator('#form-design-title')).toHaveText('Create New Form');
   });

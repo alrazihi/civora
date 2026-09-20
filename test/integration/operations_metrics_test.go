@@ -28,20 +28,29 @@ func seedOperationsMetricsTestData(t *testing.T, db *sql.DB) (uuid.UUID, uuid.UU
 	`, orgID, "Metrics Test Org", "metrics-test-"+orgID.String()[:8])
 	require.NoError(t, err)
 
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO users (id, organization_id, email, name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, now(), now())
+	`, userID, orgID, "metrics-user-"+userID.String()[:8]+"@example.com", "Metrics Test User")
+	require.NoError(t, err)
+
 	now := time.Now().UTC().Add(-48 * time.Hour)
 
 	for i := 0; i < 5; i++ {
 		caseID := uuid.New()
 		status := "NEW"
+		closedAt := sql.NullTime{Valid: false}
 		if i == 3 {
 			status = "CLOSED"
+			closedAt = sql.NullTime{Valid: true, Time: now.Add(time.Duration(i) * time.Hour)}
 		} else if i == 4 {
 			status = "REJECTED"
+			closedAt = sql.NullTime{Valid: true, Time: now.Add(time.Duration(i) * time.Hour)}
 		}
 		_, err := db.ExecContext(ctx, `
-			INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, created_by, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
-		`, caseID, orgID, fmt.Sprintf("METRICS-%d-%s", i, caseID.String()[:8]), "Test case", "Description", status, "EMERGENCY", "HIGH", userID, now.Add(time.Duration(i)*time.Hour))
+			INSERT INTO cases (id, organization_id, case_number, title, description, status, service_type, priority, created_by, closed_at, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+		`, caseID, orgID, fmt.Sprintf("METRICS-%d-%s", i, caseID.String()[:8]), "Test case", "Description", status, "EMERGENCY", "HIGH", userID, closedAt, now.Add(time.Duration(i)*time.Hour))
 		require.NoError(t, err)
 	}
 
