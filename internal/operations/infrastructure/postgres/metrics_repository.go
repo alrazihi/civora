@@ -82,7 +82,7 @@ func (r *PostgresMetricsRepository) GetCaseVolume(ctx context.Context, orgID uui
 	metric.TotalCases = metric.NewCases
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT status, service_type, workflow_key, workflow_state, COUNT(*)
+		SELECT status, service_type, COALESCE(workflow_key, ''), COALESCE(workflow_state, ''), COUNT(*)
 		FROM cases
 		WHERE organization_id = $1 AND created_at >= $2 AND created_at < $3
 		GROUP BY status, service_type, workflow_key, workflow_state
@@ -399,7 +399,7 @@ func (r *PostgresMetricsRepository) GetCaseCycleTime(ctx context.Context, orgID 
 		WITH closed_cases AS (
 			SELECT
 				COALESCE(wd.key, 'unknown') AS workflow_key,
-				EXTRACT(EPOCH FROM (closed_at - created_at)) / 3600.0 AS cycle_hours
+				EXTRACT(EPOCH FROM (cases.closed_at - cases.created_at)) / 3600.0 AS cycle_hours
 			FROM cases
 			LEFT JOIN workflow_instances wi ON wi.case_id = cases.id
 			LEFT JOIN workflow_definitions wd ON wd.id = wi.workflow_definition_id

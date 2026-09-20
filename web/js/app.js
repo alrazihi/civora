@@ -175,7 +175,7 @@ const app = {
     const password = document.getElementById('login-password').value;
     try {
       const res = await api('POST', `/organizations/${org}/auth/login`, { email, password });
-      setAuth(res.data.token, res.data.user.organization_id);
+      setAuth(res.data.access_token, res.data.user.organization_id);
       showToast('Signed in successfully', 'success');
       router.navigate('dashboard');
     } catch (err) {
