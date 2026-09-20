@@ -1,7 +1,7 @@
 # Contributing to CIVORA
 
 Thank you for your interest in contributing to CIVORA. This document
-describes how to get involved.
+describes how to get involved and the expectations for contributions.
 
 ---
 
@@ -42,18 +42,18 @@ All contributions are welcome, large or small. See
 1. Fork the repository on GitHub.
 2. Clone your fork locally:
 
-   ```bash
-   git clone https://github.com/<your-username>/civora.git
-   cd civora
-   ```
+    ```bash
+    git clone https://github.com/<your-username>/civora.git
+    cd civora
+    ```
 
 3. (Optional) Add the upstream repository as a remote:
 
-   ```bash
-   git remote add upstream https://github.com/alrazihi/civora.git
-   ```
+    ```bash
+    git remote add upstream https://github.com/alrazihi/civora.git
+    ```
 
-4. Build and run the project (see [AGENTS.md](AGENTS.md)):
+4. Build and run the project (see [AGENTS.md](AGENTS.md)).
 
 ---
 
@@ -61,39 +61,47 @@ All contributions are welcome, large or small. See
 
 1. Create a branch for your work:
 
-   ```bash
-   git checkout -b feature/my-contribution
-   ```
+    ```bash
+    git checkout -b feature/my-contribution
+    ```
 
-   Use a clear, descriptive branch name. Prefix with `feature/`, `fix/`,
-   `docs/`, `refactor/`, or `test/`.
+    Use a clear, descriptive branch name. Prefix with `feature/`, `fix/`,
+    `docs/`, `refactor/`, or `test/`.
 
 2. Make your changes.
 
 3. Write or update tests as needed.
 
-4. Ensure linting and tests pass (see [AGENTS.md](AGENTS.md)).
+4. Ensure linting and tests pass (see [AGENTS.md](AGENTS.md)):
+
+    ```bash
+    go build ./...
+    gofmt -l .
+    go vet ./...
+    go test -short ./...
+    go test -p 1 -count=1 ./test/integration/...
+    ```
 
 5. Commit your changes with a clear commit message following
-   [Conventional Commits](https://www.conventionalcommits.org/) format:
+    [Conventional Commits](https://www.conventionalcommits.org/) format:
 
-   ```
-   feat: add user profile endpoint
+    ```
+    feat: add user profile endpoint
 
-   Add GET /api/v1/users/me to retrieve the authenticated user's
-   profile information.
+    Add GET /api/v1/users/me to retrieve the authenticated user's
+    profile information.
 
-   Fixes #123
-   ```
+    Fixes #123
+    ```
 
 6. Push to your fork:
 
-   ```bash
-   git push origin feature/my-contribution
-   ```
+    ```bash
+    git push origin feature/my-contribution
+    ```
 
 7. Open a pull request against the `main` branch of the upstream
-   repository.
+    repository.
 
 8. A maintainer will review your PR. Be prepared to iterate on feedback.
 
@@ -112,13 +120,62 @@ All contributions are welcome, large or small. See
 
 ---
 
+## Security-sensitive contributions
+
+Contributions that touch authentication, authorization, session handling,
+tenant isolation, evidence management, audit recording, or input validation
+carry additional responsibilities:
+
+- **Preserve tenant isolation.** Do not introduce code paths that bypass
+  `organization_id` scoping in repositories or services.
+- **Preserve authorization boundaries.** Do not weaken role checks or add
+  unauthenticated routes.
+- **Add regression tests for security fixes.** Every security fix must include
+  a test that demonstrates the vulnerability and verifies the fix.
+- **Test concurrency-sensitive changes.** Changes to workflow transitions,
+  evidence verification, decisions, or session operations must include
+  concurrency tests.
+- **Avoid bypassing domain/service boundaries.** Cross-module calls must go
+  through service interfaces. Do not access another module's database tables
+  directly.
+- **Document security implications.** If a change affects the threat model,
+  update `docs/threat-model.md` and `SECURITY.md`.
+
+### Development philosophy
+
+Build → Test → Attack → Harden → Document → Prove
+
+1. **Build** — implement the feature.
+2. **Test** — write unit, integration, and E2E tests.
+3. **Attack** — attempt to break your own change (cross-tenant access,
+   authorization bypass, concurrency races, input validation bypass).
+4. **Harden** — fix the weaknesses you found.
+5. **Document** — update architecture docs, OpenAPI, and CHANGELOG.
+6. **Prove** — run the full verification suite and report results.
+
+---
+
 ## Testing
 
 - Unit tests must accompany new logic.
 - Integration tests must cover cross-module interactions.
 - End-to-end tests must cover API-level workflows.
 - Test coverage should not drop below 80% for new code.
+- Security-sensitive changes require concurrency and cross-tenant tests.
 - See [AGENTS.md](AGENTS.md) for test commands.
+
+### Test categories
+
+| Category | Command | When to run |
+|----------|---------|-------------|
+| Unit + domain | `go test -short ./...` | Always, before committing |
+| Integration | `go test -p 1 -count=1 ./test/integration/...` | Always, before opening PR |
+| All Go tests | `go test -p 1 -count=1 ./...` | Before merging |
+| Playwright E2E | `cd web/e2e && npm test` | When frontend changes |
+| OpenAPI lint | `npx @redocly/cli lint api/openapi/openapi.yaml` | When API changes |
+| Vet | `go vet ./...` | Always, before committing |
+| Format | `gofmt -l .` | Always, before committing |
+| Build | `go build ./...` | Always, before committing |
 
 ---
 
@@ -126,9 +183,10 @@ All contributions are welcome, large or small. See
 
 - Update relevant documentation when you change behavior.
 - API changes must be reflected in the OpenAPI specification.
-- Architecture decisions must be recorded as ADRs (see
-  [Architecture decisions](#architecture-decisions)).
+- Architecture decisions must be recorded as ADRs (see below).
 - User-facing changes must be noted in the CHANGELOG.
+- Security implications must be documented in `SECURITY.md` and
+  `docs/threat-model.md` if they affect the threat model.
 
 ---
 

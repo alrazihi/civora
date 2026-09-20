@@ -155,20 +155,95 @@ For large tasks, agents should follow this workflow:
 2. **Implement the feature** - Work on the task in the feature branch
 
 3. **Double-check work** - Before merging:
-   - Run all tests: `go test -p 1 -count=1 ./...`
-   - Run linter: `go vet ./...`
-   - Check formatting: `gofmt -l .`
-   - Verify the build: `go build ./...`
+    - Run all tests: `go test -p 1 -count=1 ./...`
+    - Run linter: `go vet ./...`
+    - Check formatting: `gofmt -l .`
+    - Verify the build: `go build ./...`
 
 4. **Merge when confident** - Only merge to main when all checks pass:
-   ```bash
-   git checkout main
-   git merge feature/<descriptive-name>
-   git branch -d feature/<descriptive-name>
-   ```
+    ```bash
+    git checkout main
+    git merge feature/<descriptive-name>
+    git branch -d feature/<descriptive-name>
+    ```
 
 5. **Self-score the task** - After completion, provide a self-assessment score (1-10) based on:
-   - Code quality and adherence to project standards
-   - Test coverage and correctness
-   - Completeness of the implementation
-   - Documentation updates if needed
+    - Code quality and adherence to project standards
+    - Test coverage and correctness
+    - Completeness of the implementation
+    - Documentation updates if needed
+
+## Hard Rules — Do Not Violate
+
+The following rules are mandatory for all agents working on CIVORA.
+Violating any of these rules may introduce security vulnerabilities,
+data-leakage paths, or architectural regressions.
+
+### Tenant Isolation
+
+- Never introduce code paths that bypass `organization_id` scoping in
+  repositories or services.
+- Never weaken cross-tenant access checks. All data-access methods must
+  filter by `organization_id`.
+- Never expose one tenant's data to another tenant, even in error messages
+  or logs.
+
+### Session Architecture (Stage 6)
+
+- `FindByRefreshTokenHash(...)` does not require `organization_id` because
+  it is used in the pre-authentication refresh-token flow. Do not add an
+  `organization_id` parameter to this method.
+- All authenticated session operations must use org-aware methods
+  (`FindByIDForOrganization`, `RevokeForOrganization`, `MarkUsedForOrganization`,
+  etc.). Do not use base methods in authenticated contexts.
+- Do not bypass JTI/session binding. The `AuthRequired` middleware must
+  continue to validate `jti` against `auth_sessions.id` with org scoping.
+
+### Testing
+
+- Do not weaken, skip, or mark-as-expected any existing test without
+  explicit evidence that the test is incorrect.
+- Do not hide test failures. If a test fails, report it with the full
+  error output and the command that was run.
+- Security-sensitive changes require concurrency tests and cross-tenant
+  tests. Do not merge security-related changes without them.
+- When running tests, report actual results — do not fabricate pass/fail
+  counts.
+
+### Security Architecture
+
+- Do not introduce Docker-only assumptions or infrastructure dependencies
+  when the supported environment does not require Docker. CIVORA runs as
+  a single static Go binary against PostgreSQL.
+- Do not invent new infrastructure dependencies (message queues, caches,
+  external services) without an ADR and implementation evidence.
+- Do not change the audit recording path. Audit events must continue to be
+  written in the same transaction as the state change they record.
+- Do not make AI outputs capable of triggering consequential actions
+  (decisions, workflow transitions, status changes). The AI module must
+  remain architecturally isolated from consequential functions.
+
+### Migrations
+
+- Do not modify existing migrations. Add new migrations for schema changes.
+- Do not write destructive migrations (DROP TABLE, DROP COLUMN) without
+  explicit review and a rollback path.
+- Migrations must be reversible. Every `up` migration must have a
+  corresponding `down` migration.
+
+### Evidence and Concurrency
+
+- Do not remove row-level locking (`FOR UPDATE`) from evidence verification
+  updates.
+- Do not make published forms or rule sets mutable. Published versions must
+  remain immutable.
+- Do not expose `storage_reference` or `StorageKey` in API responses.
+
+### Documentation and Verification
+
+- When claiming a test passes, run the test and report the actual output.
+- Do not declare environmental failures (e.g., "Windows OOM") without
+  evidence from the actual command output.
+- Do not modify production code or tests when the task is documentation-only.
+- When in doubt, read the existing code before changing it. Do not assume
+  behavior from documentation alone.

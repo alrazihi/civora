@@ -56,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frontend transition mapping is heuristic for custom workflows (backend still enforces authorization)
 - Windows `go vet` may fail due to platform OOM limits (CI on Ubuntu passes)
 
-[Unreleased]: https://github.com/alrazihi/civora/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/alrazihi/civora/compare/v1.0.0...HEAD
 [v1.0.0]: https://github.com/alrazihi/civora/releases/tag/v1.0.0
 [v0.9.0]: https://github.com/alrazihi/civora/releases/tag/v0.9.0
 

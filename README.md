@@ -4,28 +4,441 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/alrazihi/civora/ci.yml?branch=main&label=CI)](https://github.com/alrazihi/civora/actions)
 [![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](./CODE_OF_CONDUCT.md)
 
-CIVORA is open-source infrastructure for organizations that need to configure,
-operate, evaluate, and audit public-service processes. It combines a
-**configurable workflow engine**, **dynamic forms**, a **deterministic rules
-engine**, and **human-in-the-loop decision making** into a single, auditable
-platform for case management and service delivery.
+CIVORA is an open-source, compliance-oriented workflow platform designed around
+structured cases, configurable workflows, dynamic forms, deterministic rules,
+evidence management, human decisions, auditability, multi-tenancy, authorization,
+and observability.
 
 ## Mission
 
-Governments, NGOs, humanitarian organizations, social organizations, and
-other public-interest institutions should be able to create, operate, audit,
-and improve complex service-delivery processes without proprietary lock-in.
+Governments, NGOs, humanitarian organizations, and other public-interest
+institutions should be able to create, operate, audit, and improve complex
+service-delivery processes without proprietary lock-in.
 
 CIVORA provides the open digital infrastructure to make that possible.
 
-## Status
+## Current Status
 
-CIVORA is **production-ready** (v1.0.0). See the [roadmap](./ROADMAP.md) and
-[governance](./GOVERNANCE.md) for details on how to follow along or
-contribute.
+**CIVORA 1.0.0 — Production-ready baseline.**
 
-Current release: **CIVORA 1.0.0** — configurable workflows, dynamic forms,
-deterministic rules engine, human decisions, and tamper-evident audit.
+The 1.0 release establishes the core platform foundation: a configurable
+workflow engine, dynamic forms, deterministic rules, evidence management,
+human decisions, and a tamper-evident audit trail, all operating within a
+multi-tenant, authorization-enforced architecture.
+
+Production-ready baseline does not mean every enterprise or compliance feature
+is implemented. Known limitations are documented below. The platform is
+suitable for organizations that require auditable, configurable service-delivery
+workflows and are prepared to manage operational responsibilities such as
+backups, TLS, and secrets management.
+
+## What CIVORA Is
+
+CIVORA is an **open-source workflow platform** for public-service and
+humanitarian organizations that need to configure, operate, evaluate, and
+audit multi-step service-delivery processes. It is built as **open
+infrastructure** — not a single-purpose application — so that governments,
+NGOs, and social-service organizations can define their own case-management
+workflows, dynamic forms, and eligibility rules without modifying core code.
+
+CIVORA brings seven capabilities together:
+
+1. **Workflow engine** — a configurable state machine that drives the case
+   lifecycle. Organizations define states, transitions, and authorization
+   requirements as data (versioned, tenant-scoped), then execute transitions
+   through a single, auditable API. Transitions are protected by optimistic
+   concurrency control and terminal states cannot be overridden.
+2. **Dynamic forms** — structured data collection with 13 field types, form
+   versioning, and the ability to assign forms to specific workflow states
+   (required or optional). Published versions are immutable; forms feed the
+   rules engine as facts.
+3. **Rules engine** — a deterministic, auditable eligibility engine that
+   evaluates rule sets against case facts. Rule sets are configured as JSON,
+   versioned, and produce full trace trees explaining every comparison. Rules
+   never make final decisions; they inform them.
+4. **Evidence** — document and metadata management with a verification lifecycle
+   (UNVERIFIED → VERIFIED / REJECTED / NEEDS_REVIEW), metadata validation,
+   storage-reference protection, and concurrent verification safety via
+   row-level locking.
+5. **Human decisions** — rules evaluate, but humans decide. Every consequential
+   decision is recorded by an authorized actor, with rationale, versioned, and
+   immutable once finalized. Supersession preserves the full history.
+6. **Audit** — every action that affects state produces an immutable,
+   hash-chained audit event recorded in a dedicated PostgreSQL schema. The chain
+   is tamper-evident within the application/database boundary.
+7. **Multi-tenancy and authorization** — all data is scoped by `organization_id`.
+   Tenant isolation is enforced at the database, service, and API layers.
+   Role-based authorization controls access within each organization.
+
+## Problem Statement
+
+Public-interest institutions typically deliver complex services using
+proprietary platforms, spreadsheets, email, and shared drives. The result is
+vendor lock-in, fragmented tooling, and no meaningful audit trail for the
+decisions that affect people's lives.
+
+CIVORA addresses this by providing a single, open, modular platform that
+institutions can self-host, audit, and extend:
+
+- **Configurable, not coded** — workflows, forms, and rules are configuration,
+  not source code. New processes are added by creating definitions through the API.
+- **Auditable by design** — every action that affects state produces an
+  immutable, hash-chained audit event.
+- **Human authority is preserved** — rules inform, but humans decide. CIVORA
+  never makes consequential decisions about people autonomously.
+- **Open and portable** — Apache 2.0, single static Go binary, PostgreSQL, and
+  Docker. No cloud-specific dependencies, no mandatory SaaS.
+
+## Architecture at a Glance
+
+CIVORA uses a **modular monolith** architecture with clear module boundaries.
+Each module owns its data and communicates through internal service interfaces.
+
+| Layer | Component |
+|-------|-----------|
+| HTTP API | OpenAPI 3.0.3, versioned at `/api/v1/`, authenticated via Bearer tokens |
+| Application Services | 14 domain modules: identity, organizations, cases, workflow, forms, rules, evidence, decisions, assistance, follow-ups, people, assessments, audit, operations |
+| AI Module | Observation generation, case context, case summary, document intelligence — architecturally isolated from consequential functions |
+| Shared Infrastructure | Configuration, structured logging, metrics (application-level), request ID propagation |
+| Data Layer | PostgreSQL 16 primary database; object storage (S3-compatible) for documents |
+
+The backend is the sole authority for workflow state, transition validation,
+authorization, and audit. The frontend is a lightweight static HTML/CSS/JS SPA
+served from `web/`.
+
+## Security Model
+
+### Authentication
+
+Authentication uses short-lived JWT access tokens (default 20-minute expiry)
+validated against server-side session state on every request. Refresh tokens
+are hashed in PostgreSQL, rotated on each use with a new token family, and
+tracked in the `auth_sessions` table.
+
+### Session Lifecycle
+
+The session architecture uses a two-level repository API:
+
+- **Pre-authentication (refresh-token lookup):** `FindByRefreshTokenHash(...)`
+  does not require `organization_id` because the refresh-token flow legitimately
+  occurs before tenant context is established from the request.
+- **Authenticated context:** `FindByIDForOrganization(...)`,
+  `FindActiveByUserIDForOrganization(...)`, `RevokeForOrganization(...)`,
+  `MarkUsedForOrganization(...)`, and related org-aware methods provide
+  defense-in-depth by enforcing tenant boundaries at the data layer.
+
+This design exists because refresh-token validation happens before the JWT's
+`organization_id` claim can be extracted. Once authenticated, every session
+operation is organization-scoped.
+
+### Refresh-Token Rotation
+
+Each refresh issues a new refresh token and a new token family. The old
+`refresh_token_hash` is overwritten in the database, so reuse of a stolen
+refresh token results in `ErrSessionNotFound` and is rejected with HTTP 401.
+The token family is also rotated, enabling family-level revocation.
+
+### Password-Change and Role-Change Invalidation
+
+`ChangePassword` and role changes call `RevokeAllUserSessions(userID, orgID)`,
+invalidating all active sessions for that user within the organization. This
+forces re-authentication and ensures stale credentials or elevated privileges
+cannot be reused.
+
+### JTI/Session Binding
+
+Each access token carries a JWT ID (`jti`) claim that matches the `auth_sessions.id`
+column. The `AuthRequired` middleware looks up the session via
+`FindByIDForOrganization(jti, orgID)` and validates that the session is not
+revoked, not expired, and that the JWT's `user_id` and `organization_id` claims
+match the session record. The session's `last_used_at` is updated on each request.
+
+### Cross-Tenant Protection
+
+Cross-tenant access is rejected at three layers:
+
+- **API middleware:** `RequireSameTenant` ensures the path `orgId` matches the
+  JWT's `organization_id` claim.
+- **Service layer:** All service methods are organization-scoped.
+- **Repository layer:** All queries filter by `organization_id`.
+
+## Workflow Engine
+
+CIVORA includes a first-class configurable workflow engine. Workflow Definitions
+are versioned, tenant-scoped configurations that describe states, transitions,
+and authorization requirements.
+
+### Key Properties
+
+- **Deterministic state machine:** `ValidateWorkflowDefinition` enforces unique
+  state keys, unique transition keys, valid state references, and no outgoing
+  transitions from terminal states.
+- **Optimistic concurrency:** `ExecuteTransition` uses a `version` column.
+  Conflicting simultaneous transitions return `ErrConcurrentModification`.
+- **Transition history:** Every transition is recorded in
+  `WorkflowTransitionHistory` with actor, reason, timestamp, and optional
+  decision linkage.
+- **Terminal-state protection:** States marked as terminal cannot have outgoing
+  transitions. The engine rejects attempts to transition from a terminal state.
+- **Authorization:** Transitions can declare `allowed_roles`. The workflow
+  service checks the actor's role against this list server-side.
+
+### Versioning
+
+Workflow Definitions are versioned. Existing cases retain the definition/version
+they started with. Only new cases use the latest active version.
+
+## Dynamic Forms
+
+CIVORA's dynamic forms platform supports 13 field types (text, textarea, number,
+decimal, date, datetime, boolean, select, multiselect, radio, checkbox, email,
+phone). Form definitions are versioned and can be assigned to specific workflow
+states (required or optional).
+
+### Key Properties
+
+- **Versioning:** Published versions are immutable. New versions are created by
+  cloning. Existing submissions reference the version they were created against.
+- **Validation:** Required fields, min/max constraints, regex patterns, and type
+  checking are enforced on both client and server.
+- **Concurrency protection:** Concurrent duplicate field-key creation is
+  prevented by unique constraints (≤1 success in concurrent attempts).
+- **Publication behavior:** Only `DRAFT` definitions can be modified. `ACTIVE`
+  and `ARCHIVED` definitions are immutable.
+
+## Rules
+
+The rules engine is designed as a deterministic, pure evaluation engine. Rule
+sets are configured as JSON, versioned, and evaluated against a frozen snapshot
+of case facts.
+
+### Key Properties
+
+- **Deterministic evaluation:** `Evaluate(ruleSet, facts, evaluatedAt, evaluatedBy, trigger)`
+  performs no I/O and produces the same result for the same inputs.
+- **Trace generation:** Every evaluation produces a full trace tree showing
+  what was checked, what values were used, and why each condition passed or
+  failed.
+- **Versioning:** Rule sets follow a DRAFT → PUBLISHED → ARCHIVED lifecycle.
+  Published versions are immutable.
+- **No autonomous decisions:** Rules produce advisory outcomes (ELIGIBLE,
+  INELIGIBLE, REQUIRES_REVIEW, INFORMATION_REQUIRED, FLAG, SCORE, ERROR).
+  Final decisions are always made by authorized humans.
+
+## Evidence
+
+The evidence subsystem manages document references and metadata linked to cases.
+
+### Verification Lifecycle
+
+Evidence items move through a state machine: UNVERIFIED → VERIFIED / REJECTED /
+NEEDS_REVIEW. Transitions are validated server-side and recorded in an
+immutable append-only history.
+
+### Metadata Validation
+
+- Maximum metadata size: 100,000 bytes (JSON-serialized).
+- Maximum description length: 5,000 characters.
+- Storage references must be valid URIs with schemes `s3`, `gs`, `azureblob`,
+  or `civora`. Local paths, credentials, query parameters, and path-traversal
+  sequences are rejected.
+
+### Storage-Reference Protection
+
+The `storage_reference` field is accepted on input but intentionally excluded
+from API responses. The `Document` entity's `StorageKey` field is tagged with
+`json:"-"` and is never serialized. This prevents internal storage keys from
+leaking to clients.
+
+### Concurrent Verification Protection
+
+Verification updates use row-level locking (`SELECT ... FOR UPDATE`) inside a
+database transaction. This prevents concurrent verification races where two
+actors might attempt to verify or reject the same evidence simultaneously.
+
+## Human Decisions
+
+The decisions module records consequential human decisions with full provenance.
+
+### Versioning and Supersession
+
+Each decision has a `Version` integer. `NewSupersedingDecision` creates a new
+decision with `version = supersededVersion + 1` and sets the old decision's
+`SupersededByID`. The unique index on `(organization_id, service_request_id, version)`
+ensures version integrity. `FindByServiceRequest` returns the latest version.
+
+### Provenance
+
+Decisions link to the workflow state, rule evaluation IDs, evidence IDs, form
+submission ID, and review queue entry ID at the time of decision. This preserves
+the complete context for auditors.
+
+### Relationship to Other Subsystems
+
+- **Workflow:** Decisions trigger workflow transitions atomically (decision +
+  transition + audit in a single database transaction).
+- **Rules:** Rule evaluation outcomes inform decisions but never bypass them.
+- **Evidence:** Decisions reference the evidence items that supported them.
+- **Review queue:** Review queue entries track the assignment, review, and
+  decision workflow for human reviewers.
+
+## Audit
+
+Every action that affects state in CIVORA produces an audit event recorded in a
+dedicated PostgreSQL schema (`audit`), isolated from the `public` schema that
+holds business data.
+
+### Hash-Chain Integrity
+
+Each event carries a SHA-256 hash linked to the previous event for the same
+organization. The chain is computed over: organization ID, actor, action,
+resource type, resource ID, outcome, request ID, metadata, timestamp, and
+previous hash. `VerifyChain` validates the entire chain for an organization.
+Background maintenance verifies integrity periodically.
+
+### Transactional Recording
+
+Audit writes occur in the same database transaction as the state change they
+record. If the audit write fails, the state change is rolled back. This ensures
+audit completeness.
+
+### Important Limitation
+
+The hash chain is tamper-evident within the application/database boundary. It
+is not an externally anchored immutable ledger. A compromised application
+process or database administrator with direct database access can write a valid
+chain with false contents. External append-only anchoring is a post-1.0
+enhancement.
+
+## Observability
+
+### Request IDs
+
+Every incoming request is assigned a `X-Request-ID` UUID. If the client
+supplies one, it is validated and preserved; otherwise a new UUID is generated.
+The ID is propagated through the request context and included in all log entries
+and audit events, enabling end-to-end tracing.
+
+### Structured Logging
+
+Logs are emitted as JSON to stdout/stderr with the following fields: `time`
+(RFC3339Nano UTC), `level` (derived from HTTP status), `method`, `path`,
+`status`, `bytes_written`, `latency_microseconds`, `request_id`, `remote_ip`,
+and `user_agent`. Request and response bodies are not logged.
+
+### Health and Readiness Endpoints
+
+- `GET /health` — liveness probe. Returns `{"status":"ok"}`. No authentication
+  required. Suitable for container health checks.
+- `GET /ready` — readiness probe. Pings the database and returns `{"status":"ready"}`
+  or `{"status":"not ready","error":"..."}` with HTTP 503 if the database is
+  unreachable. No authentication required.
+
+### Metrics
+
+Application-level operational metrics are exposed via authenticated REST
+endpoints under `/api/v1/organizations/{orgId}/operations/metrics/*`. Metrics
+include case volume, pending reviews, workflow throughput, state duration, case
+cycle time, aging cases, decision outcomes, assistance outcomes, evidence
+verification status, and dashboard aggregations.
+
+A Prometheus `/metrics` endpoint is not currently implemented.
+
+### Sensitive-Data Logging Restrictions
+
+- Request/response bodies are never logged.
+- Export endpoints apply field-name-based sanitization, replacing values of
+  fields matching patterns like `password`, `secret`, `token`, `api_key`,
+  `credential`, `ssn`, `session_id`, `jti`, `jwt`, `authorization`, `cookie`,
+  `csrf`, and similar with `"[REDACTED]"`.
+- AI document processing applies PII redaction (SSN, credit card numbers, email,
+  phone) before forwarding document content to external LLM providers, gated by
+  `CIVORA_AI_PII_SANITIZATION` (default: `true`).
+
+## Testing
+
+### Verification Commands
+
+```bash
+go build ./...
+gofmt -l .
+go vet ./...
+go test -short ./...
+go test -p 1 -count=1 ./test/integration/...
+npx @redocly/cli lint api/openapi/openapi.yaml
+cd web/e2e && npm test
+```
+
+### 1.0 Verification Results
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| Build | PASS | `go build ./...` compiles cleanly |
+| Formatting | PASS | `gofmt -l .` reports no unformatted files |
+| Vet | PASS on Linux CI | Windows OOM limits prevent `go vet` on that platform (documented in AGENTS.md) |
+| Unit tests | 60 packages, ALL PASS | `go test -short ./...` |
+| Integration tests | 66 packages, all pass | `go test -p 1 -count=1 ./test/integration/...` |
+| Security tests | 22 scenarios, all pass | Cross-tenant, session lifecycle, concurrency, tampering |
+| Playwright E2E | 120 specs, all pass | `web/e2e/` — static mock, runs fully offline |
+| Go E2E | Compiled | `test/e2e/` requires PostgreSQL; skipped with `-short` |
+| OpenAPI lint | Valid | `npx @redocly/cli lint api/openapi/openapi.yaml` |
+| Migrations | 44 files, correct order | Reversible; no data-loss migrations |
+
+### Security Test Evidence
+
+| Scenario | Result |
+|----------|--------|
+| Login returns access and refresh tokens | PASS |
+| Refresh token rotation | PASS |
+| Refresh token reuse detection | PASS |
+| Stolen refresh token revocation | PASS |
+| Concurrent refresh (exactly 1 success) | PASS |
+| Revoked session access denied | PASS |
+| Wrong-tenant session denied | PASS |
+| Role change takes effect on next login | PASS |
+| Signing key rotation validates tokens | PASS |
+| Tenant isolation at API layer | PASS |
+| Unauthorized cross-tenant decision blocked | PASS |
+| Cross-tenant evidence read denied | PASS |
+| Cross-case evidence read denied | PASS |
+| Evidence storage reference not leaked | PASS |
+| Audit trail recorded for service requests | PASS |
+| Concurrent case transitions (exactly 1 success) | PASS |
+| Concurrent workflow transitions (exactly 1 success) | PASS |
+| Concurrent duplicate assistance (all succeed, idempotent) | PASS |
+| Concurrent duplicate decision (exactly 1 success) | PASS |
+| Concurrent form archiving (≥1 success) | PASS |
+| Concurrent version publishing (≥1 success) | PASS |
+| Concurrent duplicate field keys (≤1 success) | PASS |
+
+> **Note:** The Go race detector (`-race`) may fail on Windows due to memory
+> limits. CI runs on Ubuntu and includes race testing where applicable.
+
+## Known Limitations
+
+### P2 (Documented, Desirable for Future Release)
+
+- Windows `go vet` may fail due to platform OOM limits; CI on Ubuntu passes.
+- Audit chain is tamper-evident, not tamper-proof against a privileged insider
+  or database administrator with direct database access. External append-only
+  anchoring is a post-1.0 enhancement.
+- Frontend custom-workflow transition mapping is heuristic for workflows not
+  explicitly mapped; the backend still enforces authorization server-side.
+
+### P3 (Explicitly Deferred to Post-1.0)
+
+- Encryption at rest by default (operator responsibility to configure
+  PostgreSQL-level or disk-level encryption).
+- Built-in backup and disaster recovery (operator responsibility to configure
+  PostgreSQL backups and test restores).
+- GDPR data export/deletion APIs.
+- SOC 2 / HIPAA technical safeguards (operator responsibility to implement
+  through deployment configuration, policies, and controls).
+- Prometheus `/metrics` endpoint.
+- Real-time updates via WebSocket.
+- Offline support / service worker.
+- Bulk operations.
+- Frontend unit test framework (Jest/Vitest).
 
 ## Quick Start
 
@@ -40,602 +453,45 @@ go run ./cmd/civora
 go run ./cmd/seed
 ```
 
-Open http://localhost:8080 and sign in with the demo credentials printed by the seed command.
-
-## What Is CIVORA?
-
-CIVORA is an **open-source workflow platform** for public-service and
-humanitarian organizations that need to configure, operate, evaluate, and
-audit multi-step service-delivery processes. It is built as **open
-infrastructure** — not a single-purpose application — so that governments,
-NGOs, and social-service organizations can define their own **case
-management** workflows, **dynamic forms**, and **eligibility rules** without
-modifying core code.
-
-CIVORA brings four capabilities together:
-
-1. **Workflow engine** — a configurable state machine that drives the case
-   lifecycle. Organizations define states, transitions, and authorization
-   requirements as data (versioned, tenant-scoped), then execute transitions
-   through a single, auditable API.
-2. **Dynamic forms** — structured data collection with 13 field types, form
-   versioning, and the ability to assign forms to specific workflow states
-   (required or optional). Forms feed the rules engine as facts.
-3. **Rules engine** — a deterministic, auditable **eligibility engine** that
-   evaluates rule sets against case facts. Rule sets are configured as JSON,
-   versioned, and produce full trace trees explaining every comparison. Rules
-   never make decisions; they inform them.
-4. **Human-in-the-loop decisions** — rules evaluate, but humans decide. Every
-   consequential decision is recorded by an authorized actor, with rationale,
-   and is immutable once finalized.
-
-All of this is backed by a **tamper-evident, hash-chained audit trail** that
-records every state transition, form submission, rule evaluation, evidence
-addition, and human decision.
-
-### Who CIVORA serves
-
-| Audience | Need |
-|----------|------|
-| **Governments** | Deliver social services, emergency response, permits, and benefits at scale while maintaining auditability and citizen trust. |
-| **NGOs / Humanitarian** | Coordinate aid delivery, track beneficiaries, and maintain evidence chains in resource-constrained or crisis environments. |
-| **Social service organizations** | Manage case workflows, collect documentation, and coordinate among multiple staff roles. |
-| **Developers & integrators** | Extend CIVORA, write custom workflows, and integrate with existing institutional systems through a REST/OpenAPI interface. |
-| **Auditors & researchers** | Inspect system behavior, verify compliance, and study service-delivery outcomes. |
-
-CIVORA is **API-first**, **multi-tenant**, and runs on **Go** with a
-**PostgreSQL** database. It is self-hosted, Docker-packaged, and released under
-the Apache License 2.0.
-
-## Why CIVORA exists
-
-Public-interest institutions typically deliver complex services using
-proprietary platforms, spreadsheets, email, and shared drives. The result is
-vendor lock-in, fragmented tooling, and no meaningful audit trail for the
-decisions that affect people's lives.
-
-CIVORA addresses this by providing a single, open, modular platform that
-institutions can self-host, audit, and extend:
-
-- **Configurable, not coded** — workflows, forms, and rules are configuration,
-  not source code. New processes (education assistance, health services,
-  housing programs) are added by creating definitions through the API.
-- **Auditable by design** — every action that affects state produces an
-  immutable, hash-chained audit event.
-- **Human authority is preserved** — rules inform, but humans decide. CIVORA
-  never makes consequential decisions about people autonomously.
-- **Open and portable** — Apache 2.0, single static Go binary, PostgreSQL, and
-  Docker. No cloud-specific dependencies, no mandatory SaaS.
-
-## Demo Scenario: Emergency Food and Shelter Assistance
-
-The following scenario demonstrates the complete CIVORA workflow from request through closure.
-
-### Organization Setup
-
-An NGO called **"Emergency Response Org"** registers on CIVORA with slug `emergency-demo`. The first registered user becomes the organization administrator. Additional staff members are invited and assigned the `staff` role.
-
-### Step 1: Create a Person
-
-A field worker registers **Amina Hassan**, a 34-year-old mother of four who was displaced by flooding. Her preferred language is set to English, and her contact details are recorded.
-
-### Step 2: Create an Assistance Request
-
-The field worker creates a new **Emergency Food and Shelter Assistance** case:
-
-- **Service type:** Emergency
-- **Priority:** Urgent
-- **Linked person:** Amina Hassan
-- **Description:** "Family of 4 displaced by flooding, needs immediate food and shelter support"
-
-The case is assigned case number `CAS-20260909-DEMO001` and enters status `NEW`.
-
-### Step 3: Open and Review
-
-The case worker opens the case (`NEW → OPEN`) and moves it into review (`OPEN → IN_REVIEW`). During review, the worker:
-
-- **Adds eligibility assessment:** records criteria (displacement verified, income below threshold) and explanation.
-- **Attaches evidence:** uploads identity document and proof-of-residence with storage references.
-
-### Step 4: Assessment
-
-The case moves to `ASSESSMENT`. A case manager records a needs assessment:
-
-- **Findings:** Household of 4 displaced by flood. Verified identity and residence documents. Income below threshold.
-- **Needs identified:** Emergency food, temporary shelter, clothing
-- **Recommendation:** Approve emergency shelter placement and food package
-
-### Step 5: Human Decision
-
-The case enters `DECISION_PENDING`. A human reviewer (not an automated system) records the final decision:
-
-- **Decision:** APPROVED
-- **Reason:** "Meets all eligibility criteria. Assessment supports immediate shelter and food assistance."
-
-**CIVORA enforces that AI cannot automatically approve, reject, or distribute assistance.** Every decision must be explicitly recorded by an authorized human actor and is immutable once finalized. AI-generated observations and summaries are available as optional aids (Milestone 0.8+) but always require human review before any downstream use.
-
-### Step 6: Assistance
-
-After approval, the case moves to `IN_PROGRESS`. The organization creates an assistance record:
-
-- **Type:** Shelter
-- **Description:** Emergency shelter placement at City Shelter Center for 30 days
-- **Responsible staff:** Assigned case manager
-- **Status:** Planned → In Progress → Completed
-
-Assistance records what was provided, who was responsible, and when it was delivered.
-
-### Step 7: Follow-up
-
-A follow-up is scheduled for 2026-10-15. After the visit, the case worker records the outcome:
-
-- **Outcome:** Family stably housed and receiving ongoing support
-- **Notes:** Weekly check-ins scheduled with case manager
-
-### Step 8: Closure
-
-Once the follow-up is complete and all obligations are satisfied, the case is moved to `FOLLOW_UP` and then closed (`CLOSED`). Closed cases cannot be reopened or transitioned to any other status.
-
-### Audit Trail
-
-Every state transition, evidence addition, assessment, decision, assistance action, and follow-up is recorded in a
-tamper-evident, hash-chained audit log. The audit trail can be verified at any
-time to confirm no event has been altered, and reviewed to verify who did what,
-when, and why.
-
-## Configurable Workflow Engine
-
-CIVORA includes a **configurable workflow engine** that allows organizations to define service-delivery workflows without modifying core code. It is a first-class component of the platform, not an afterthought: every case is bound to a workflow instance, and every state transition is executed through the engine.
-
-### Workflow Definitions
-
-A **Workflow Definition** describes how a service-delivery process operates. It is a versioned, tenant-scoped configuration that includes:
-
-- **States** — the stages a case can be in (e.g., `NEW`, `OPEN`, `IN_REVIEW`, `APPROVED`, `CLOSED`)
-- **Transitions** — explicit, validated moves between states (e.g., `OPEN` → `IN_REVIEW`)
-- **Branching** — support for decision points like `DECISION_PENDING` → `APPROVED` or `REJECTED`
-- **Terminal states** — states that cannot transition further (e.g., `CLOSED`)
-- **Authorization metadata** — optional role requirements per transition
-
-### Workflow Instances
-
-A **Workflow Instance** is the execution of a Workflow Definition for a specific Case. The instance retains the definition/version it started with, so existing cases are never affected by definition changes.
-
-### Emergency Assistance as a Workflow
-
-The existing Emergency Assistance workflow is now represented as a real Workflow Definition:
-
-```
-NEW → OPEN → IN_REVIEW → ASSESSMENT → DECISION_PENDING
-                                     ├── APPROVED → IN_PROGRESS → FOLLOW_UP → CLOSED
-                                     └── REJECTED → CLOSED
-```
-
-This means:
-
-- The Emergency Assistance flow is **configuration, not code**.
-- New workflows (e.g., Education Assistance, Health Services) can be added by creating new Workflow Definitions.
-- The core case engine remains unchanged.
-
-### API
-
-The workflow engine exposes REST endpoints for:
-
-- `GET /api/v1/organizations/{orgId}/workflows` — list definitions
-- `POST /api/v1/organizations/{orgId}/workflows` — create definition
-- `GET /api/v1/organizations/{orgId}/workflows/{id}` — get definition
-- `PUT /api/v1/organizations/{orgId}/workflows/{id}` — update a draft definition
-- `DELETE /api/v1/organizations/{orgId}/workflows/{id}` — delete a draft definition
-- `POST /api/v1/organizations/{orgId}/workflows/{id}/activate` — activate definition
-- `POST /api/v1/organizations/{orgId}/workflows/{id}/archive` — archive definition
-- `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow` — get case workflow instance
-- `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow/transitions` — list valid transitions
-- `POST /api/v1/organizations/{orgId}/cases/{caseId}/workflow/transitions/{key}` — execute transition
-- `GET /api/v1/organizations/{orgId}/cases/{caseId}/workflow/history` — get transition history
-
-### Frontend
-
-The frontend consumes the generic workflow API to:
-
-- Display the current workflow state
-- Show only valid available transitions
-- Execute transitions through the backend
-- Refresh workflow state after transitions
-- Display transition history
-
-The backend remains the sole authority for workflow state and transition validation.
-
-### Versioning
-
-Workflow Definitions are versioned. When a new version is created, existing cases continue using the version they started with. Only new cases use the latest active version.
-
-### Security
-
-- All workflow operations require authentication.
-- Transitions can optionally require specific roles (`AllowedRoles`).
-- Tenant isolation is enforced at the data and service layers.
-- Invalid transitions are rejected server-side with appropriate error codes.
-
-## Rules & Eligibility Engine
-
-CIVORA includes a **deterministic rules engine** for evaluating eligibility and
-decision logic as data, not code. Rule sets are authored via API as JSON,
-evaluated against case facts, and produce explainable outcomes with full
-trace trees.
-
-### What rules do
-
-A **Rule Set** is a versioned, tenant-scoped collection of rules. Each rule has:
-
-- **Conditions** — logical expressions (AND/OR/NOT) comparing facts using
-  typed operators (equality, numeric comparison, membership, existence, string
-  matching)
-- **Outcome** — one of: `ELIGIBLE`, `INELIGIBLE`, `REQUIRES_REVIEW`,
-  `INFORMATION_REQUIRED`, `FLAG`, `SCORE`, or `ERROR`
-- **Priority** — evaluation order (0 = first); **first match wins** with
-  short-circuit
-
-An **Evaluation** runs a published Rule Set against a frozen snapshot of facts
-(form submissions, case attributes, person data) and produces:
-
-- A human-readable outcome
-- A full trace tree (what was checked, what values were used, why each
-  condition passed/failed)
-- An immutable audit record
-
-### What rules are NOT
-
-| Not a... | Explanation |
-|----------|-------------|
-| **Workflow engine** | Rules don't own case state or transitions. The Workflow Engine remains authoritative. |
-| **Form builder** | Rules reference form fields as facts; they don't define forms. |
-| **AI/ML system** | No prediction, scoring models, or natural-language processing. Pure deterministic logic. |
-| **Code execution** | No arbitrary code, scripts, or expressions. Only whitelisted operators on typed data. |
-| **Human decision replacement** | Outcomes are advisory. Final decisions are made by humans via the `decisions` module. |
-
-### Versioning and lifecycle
-
-Rule Set versions follow a DRAFT → PUBLISHED → ARCHIVED lifecycle. Published
-versions are immutable; new versions are created by cloning. Every evaluation
-stores both the rule set ID and version, so past evaluations are forever
-reproducible from their stored facts snapshot and trace tree.
-
-### Integration with workflow
-
-Rule Sets can declare `triggers` (e.g., `form_submitted`). When a form is
-submitted, the Workflow Engine's observer calls the Rules Engine to evaluate
-the case. Evaluation outcomes are advisory — they inform human reviewers and
-can gate workflow transitions, but never bypass them.
-
-## Dynamic Forms
-
-CIVORA's **dynamic forms** platform lets organizations collect structured
-data without writing code. Form definitions specify fields, types, validation,
-and options; forms are versioned and can be assigned to specific workflow
-states (required or optional).
-
-### Capabilities
-
-- **13 field types**: text, textarea, number, decimal, date, datetime,
-  boolean, select, multiselect, radio, checkbox, email, phone
-- **Form versioning**: publish new versions without breaking existing
-  submissions
-- **State assignment**: pin a form version to a specific workflow state;
-  required forms must be completed before transitioning out of that state
-- **Validation**: required fields, min/max, regex, type checking — enforced
-  on both client and server
-- **Fact source**: submitted forms become structured facts that the rules
-  engine evaluates (e.g., `form.income.amount`, `person.age`)
-
-### Configuration independence
-
-Organizations can define any combination of fields and forms, version them
-independently, and assign them to workflow states — all through the API, with
-no source code changes required.
-
-## Auditability & Evidence
-
-Every action that affects state in CIVORA produces an **audit event** recorded
-in a dedicated PostgreSQL schema (`audit`), isolated from the `public` schema
-that holds business data. Audit events are tamper-evident:
-
-- **Hash chain**: each event carries a SHA-256 hash linked to the previous
-  event for the same organization
-- **Transactional consistency**: audit writes occur in the same database
-  transaction as the state change they record — if the audit write fails, the
-  state change is rolled back
-- **Integrity verification**: every event returned by the audit API includes an
-  `integrity_valid` flag; the system verifies all chains on startup and on
-  background ticks
-
-### What CIVORA records
-
-| Action | Audit event type |
-|--------|-----------------|
-| Case created | `case.created` |
-| Case status changed | `case.status_changed` |
-| Workflow transition | `workflow.transitioned` |
-| Rule set published | `ruleset.published` |
-| Rule evaluation | `evaluation.created` |
-| Evidence/document added | `evidence.created` |
-| Decision recorded | `decision.created` |
-| User authenticated | `auth.success` |
-| Organization created | `organization.created` |
-
-## Human-in-the-Loop Decisions
-
-**Rules evaluate. Humans decide.** This is a core architectural principle of
-CIVORA.
-
-The workflow is: a case enters a decision state → the **rules engine**
-evaluates eligibility and produces an advisory outcome with a full trace → a
-**human reviewer** records the final decision with rationale → the workflow
-proceeds only on authorized transitions.
-
-- Rules never approve, reject, or allocate assistance
-- Every consequential decision is recorded with `decision_maker`, `reason`,
-  and `decided_at`
-- Decisions are immutable once finalized
-- CIVORA does not use AI for consequential decisions (AI assistance is
-  planned for a future milestone behind human review gates)
-
-## Multi-Tenant Architecture
-
-CIVORA is a **multi-tenant platform**. All data is scoped by `organization_id`.
-Tenant isolation is enforced at every layer:
-
-- **Database level**: all queries are filtered by organization at the
-  data-access layer; foreign keys enforce ownership
-- **API level**: middleware validates that the `orgId` path parameter matches
-  the JWT's `organization_id` claim
-- **Service level**: all service methods are organization-scoped
-- **Authorization**: role-based — each organization has admins and staff with
-  appropriate permissions
-
-## Use Cases
-
-CIVORA is a configurable platform, not a single-domain application. It can
-support service-delivery processes across many domains:
-
-- **Humanitarian assistance** — coordinate emergency food, shelter, and medical
-  aid; track beneficiaries; maintain evidence chains
-- **NGO service delivery** — manage case workflows, collect documentation, and
-  coordinate among staff roles
-- **Social services** — process benefits eligibility, manage case loads, and
-  coordinate care
-- **Public benefit programs** — administer eligibility rules, assistance
-  provisioning, and follow-up
-- **Education assistance** — evaluate grant eligibility and manage student
-  support cases
-- **Healthcare support** — coordinate patient referrals, assessments, and
-  follow-up care
-- **Emergency assistance** — triage and track emergency requests through
-  assessment, decision, and response
-- **Community services** — handle permits, licenses, and community support
-  workflows
-- **Government service workflows** — automate and audit multi-step public
-  service processes
-
-The Emergency Assistance workflow is included as a demo scenario and starter
-template. All workflows are configuration — new processes are created through
-the API.
-
-## Technical Overview
-
-CIVORA is built as a **modular monolith** with clear module boundaries:
-
-- **Backend**: Go 1.23+, compiled to a single static binary
-- **Database**: PostgreSQL 16
-- **API**: HTTP REST with JSON, OpenAPI 3.0 specification as the source of
-  truth
-- **Authentication**: Bearer tokens (JWT or opaque session tokens)
-- **Deployment**: Docker container image; Docker Compose for local development
-- **Frontend**: Lightweight static HTML/CSS/JS SPA served from `web/`
-- **License**: Apache 2.0
-
-The API exposes endpoints for all functionality. See `api/openapi/openapi.yaml`
-for the full specification.
-
-## Operational Considerations
-
-### Transport Security (TLS)
-
-CIVORA supports two deployment models for transport security:
-
-**Model A — Reverse-proxy TLS termination (recommended for production)**
-
-A reverse proxy such as Caddy or nginx terminates TLS and forwards plain HTTP
-to CIVORA. This is the recommended production architecture because it keeps
-certificate management, HTTP/2, and redirect logic outside the application.
-
-```text
-Internet
-  → HTTPS (TLS terminated by reverse proxy)
-  → HTTP (forwarded to CIVORA)
-  → CIVORA
-```
-
-When using this model:
-1. Set `CIVORA_SERVER_TRUSTED_PROXIES` to the proxy's IP address or CIDR
-   (e.g., `10.0.0.2` or `10.0.0.0/24`).
-2. Set `CIVORA_SERVER_FORCE_HTTPS=true` so CIVORA emits `Strict-Transport-Security`
-   and trusts the `X-Forwarded-Proto: https` header from the proxy.
-3. Ensure the proxy sets `X-Forwarded-Proto: https` and `X-Forwarded-For` on
-   every request.
-
-Do **not** expose the CIVORA HTTP port directly to the Internet. The reverse
-proxy is the only publicly reachable component.
-
-**Model B — Direct TLS termination**
-
-CIVORA can terminate TLS itself using the Go standard library:
-
-```bash
-CIVORA_SERVER_TLS_CERT=/path/to/cert.pem \
-CIVORA_SERVER_TLS_KEY=/path/to/key.pem \
-go run ./cmd/civora
-```
-
-When `CIVORA_SERVER_TLS_CERT` and `CIVORA_SERVER_TLS_KEY` are both set, CIVORA
-listens on HTTPS and automatically emits `Strict-Transport-Security`.
-
-Direct TLS is appropriate for single-instance deployments or environments where
-a reverse proxy is not available. For multi-instance or cloud deployments,
-prefer Model A.
-
-### Trusted Proxy Configuration
-
-Forwarded headers (`X-Forwarded-For`, `X-Real-IP`, `X-Forwarded-Proto`) are
-only trusted when the immediate peer IP is listed in
-`CIVORA_SERVER_TRUSTED_PROXIES`. If the list is empty, all forwarded headers
-are ignored and client IP is taken directly from the TCP connection.
-
-In production, always configure `CIVORA_SERVER_TRUSTED_PROXIES` to match your
-reverse proxy's IP address or CIDR. Leaving it empty while behind a proxy will
-cause rate limiting and logging to use the proxy's IP instead of the client's
-IP.
-
-### HSTS Behavior
-
-`Strict-Transport-Security` is emitted only when the deployment is actually
-HTTPS:
-
-- **Direct TLS** (`CIVORA_SERVER_TLS_CERT` / `CIVORA_SERVER_TLS_KEY` set):
-  HSTS is always emitted with `max-age=31536000; includeSubDomains`.
-- **Reverse proxy + `CIVORA_SERVER_FORCE_HTTPS=true`**: HSTS is emitted when
-  the request arrived from a trusted proxy with `X-Forwarded-Proto: https`.
-- **Development (plain HTTP, no proxy)**: HSTS is **not** emitted.
-
-Do not enable `CIVORA_SERVER_FORCE_HTTPS` unless you have a trusted reverse
-proxy in front of CIVORA; otherwise clients will be told to use HTTPS but
-cannot reach it.
-
-### Backup and Disaster Recovery
-
-CIVORA does not include built-in backup or disaster recovery functionality.
-Operators are responsible for:
-
-- Configuring PostgreSQL backups (e.g., `pg_dump`, continuous archiving, or
-  managed database snapshots)
-- Testing restore procedures
-- Defining recovery time objectives (RTO) and recovery point objectives
-  (RPO)
-- Storing backups in a secure, offsite location
-
-CIVORA's data is stored in a PostgreSQL database. All case data, audit events,
-and configuration are in the database. Regular database backups are essential
-for production deployments.
-
-### Encryption
-
-- **TLS in transit**: CIVORA supports both reverse-proxy TLS termination and
-  direct TLS termination. See the Transport Security section above.
-- **Encryption at rest**: Not currently implemented. Data in PostgreSQL is
-  stored unencrypted by default. Operators should rely on PostgreSQL-level
-  encryption (e.g., tablespace encryption) or filesystem/disk-level encryption
-  if required.
-- **Key management**: No KMS integration is provided. Key management is the
-  operator's responsibility.
-
-## FAQ
-
-### What is CIVORA?
-
-CIVORA is open-source infrastructure for configurable, auditable public-service
-workflows, case management, forms, rules, and human decisions. It provides the
-digital platform that governments, NGOs, and public-interest institutions need
-to configure, operate, and audit service-delivery processes.
-
-### Is CIVORA open source?
-
-Yes. CIVORA is released under the Apache License 2.0. All development happens
-in the open, and no functionality is reserved for paid tiers or private forks.
-
-### What is CIVORA used for?
-
-CIVORA is used to build, operate, and audit service-delivery processes.
-Common use cases include humanitarian assistance coordination, NGO service
-delivery, social services case management, public benefit program
-administration, and government service workflow automation.
-
-### Is CIVORA a workflow engine?
-
-Yes. CIVORA includes a configurable workflow engine that models
-service-delivery processes as versioned state machines with states,
-transitions, terminal states, and role-based authorization. Workflow
-definitions are configuration, not code.
-
-### Does CIVORA support dynamic forms?
-
-Yes. CIVORA's dynamic forms system supports 13 field types. Form definitions
-are versioned and assignable to workflow states. Submissions become facts
-for the rules engine.
-
-### Does CIVORA have a rules engine?
-
-Yes. CIVORA includes a deterministic, auditable rules engine for evaluating
-eligibility and decision logic. Rule sets are configured as JSON via the API,
-evaluated against case facts, and produce full trace trees. Rules never make
-final decisions — they inform human decision-makers.
-
-### Can organizations configure their own workflows?
-
-Yes. All workflow, form, and rule configuration is stored in the database and
-managed through the API. Organizations can create new workflows, define
-forms, and write rules without modifying CIVORA source code.
-
-### Can CIVORA support NGO or humanitarian workflows?
-
-Yes. CIVORA is a configurable platform. The Emergency Assistance workflow is
-provided as a demo, but organizations can configure any workflow they need —
-including humanitarian coordination, NGO service delivery, and emergency
-response processes.
-
-### Does CIVORA support multi-tenancy?
-
-Yes. CIVORA is a multi-tenant platform. All data is scoped by organization,
-queries are filtered at the data-access layer, and role-based authorization
-controls access within each organization.
-
-### How are rules audited?
-
-Every rule evaluation produces an immutable audit record with the rule set
-version, facts snapshot, full trace tree, and outcome. Past evaluations are
-forever reproducible. The audit trail is hash-chained and tamper-evident.
-
-### Does CIVORA use AI?
-
-AI observation assistance is available in 0.8, optional and off by default via
-`CIVORA_AI_ENABLED` (default off). It supports Noop, Local, and OpenAI providers
-and generates observations that always require human review. CIVORA's foundation
-remains deterministic infrastructure: workflow, forms, rules, auditability, and
-human decisions. AI is an observation aid, never an autonomous actor. CIVORA is
-not an AI platform.
-
-### Is CIVORA production-ready?
-
-CIVORA 1.0.0 is production-ready for organizations that require auditable,
-configurable service-delivery workflows. Known operational responsibilities
-remain with the operator (encryption at rest, backups, secrets management).
-See the [roadmap](./ROADMAP.md) and [SECURITY.md](./SECURITY.md) for details.
+Open http://localhost:8080 and sign in with the demo credentials printed by the
+seed command.
+
+### Configuration
+
+CIVORA is configured via environment variables. Key variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `CIVORA_DB_DSN` | PostgreSQL connection string |
+| `CIVORA_JWT_SECRET` | Secret for signing access tokens |
+| `CIVORA_SERVER_PORT` | HTTP listen port (default: 8080) |
+| `CIVORA_AI_ENABLED` | Enable AI features (default: `false`) |
+| `CIVORA_SERVER_TRUSTED_PROXIES` | IP/CIDR of trusted reverse proxies |
+| `CIVORA_SERVER_FORCE_HTTPS` | Emit HSTS when behind trusted proxy |
+| `CIVORA_SERVER_TLS_CERT` | Direct TLS certificate path |
+| `CIVORA_SERVER_TLS_KEY` | Direct TLS key path |
+
+See `docs/architecture/configuration.md` for the full list.
 
 ## Documentation
 
 | Topic | Location |
 |-------|----------|
-| Vision and mission | [README](./), [docs/vision.md](./docs/vision.md) |
-| Project principles | [docs/principles.md](./docs/principles.md) |
-| Architecture overview | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| Architecture decision records | [docs/decisions](./docs/decisions) |
-| Rules engine | [docs/architecture/rules-engine.md](./docs/architecture/rules-engine.md), [docs/product/rules.md](./docs/product/rules.md) |
-| Threat model | [docs/threat-model.md](./docs/threat-model.md) |
-| Hostile review | [docs/hostile-review.md](./docs/hostile-review.md) |
-| Development roadmap | [ROADMAP.md](./ROADMAP.md) |
-| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Contribution guide | [CONTRIBUTING.md](./CONTRIBUTING.md) |
-| Governance model | [GOVERNANCE.md](./GOVERNANCE.md) |
-| Security policy | [SECURITY.md](./SECURITY.md) |
-| Code of conduct | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) |
+| Vision and mission | [docs/vision.md](docs/vision.md) |
+| Project principles | [docs/principles.md](docs/principles.md) |
+| Architecture overview | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Architecture decision records | [docs/decisions](docs/decisions) |
+| Security reference | [SECURITY.md](SECURITY.md) |
+| Threat model | [docs/threat-model.md](docs/threat-model.md) |
+| Rules engine | [docs/architecture/rules-engine.md](docs/architecture/rules-engine.md) |
+| Hostile review | [docs/hostile-review.md](docs/hostile-review.md) |
+| Development workflow | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Agent instructions | [AGENTS.md](AGENTS.md) |
+| 1.0 Verification record | [docs/releases/CIVORA-1.0.0-VERIFICATION.md](docs/releases/CIVORA-1.0.0-VERIFICATION.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| Governance model | [GOVERNANCE.md](GOVERNANCE.md) |
+| Code of conduct | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| Roadmap | [ROADMAP.md](ROADMAP.md) |
 
 ## License
 
