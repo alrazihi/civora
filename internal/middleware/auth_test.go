@@ -14,7 +14,7 @@ import (
 )
 
 func TestJWTService_GenerateAndVerifyToken(t *testing.T) {
-	svc := NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
+	svc := NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
 
 	userID := uuid.New().String()
 	orgID := uuid.New().String()
@@ -23,27 +23,28 @@ func TestJWTService_GenerateAndVerifyToken(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
-	uid, oid, role, exp, err := svc.VerifyToken(token)
+	uid, oid, role, jti, exp, err := svc.VerifyAccessToken(token)
 	require.NoError(t, err)
 	assert.Equal(t, userID, uid)
 	assert.Equal(t, orgID, oid)
 	assert.Equal(t, "admin", role)
+	assert.NotEmpty(t, jti)
 	assert.True(t, exp.After(time.Now()))
 }
 
 func TestJWTService_GenerateToken_InvalidSecret(t *testing.T) {
-	svc := NewJWTService("secret-a", time.Hour, "civora")
-	svc2 := NewJWTService("secret-b", time.Hour, "civora")
+	svc := NewJWTService("secret-a", time.Hour, 24*time.Hour, "civora")
+	svc2 := NewJWTService("secret-b", time.Hour, 24*time.Hour, "civora")
 
 	token, err := svc.GenerateToken(uuid.New().String(), uuid.New().String(), "admin")
 	require.NoError(t, err)
 
-	_, _, _, _, err = svc2.VerifyToken(token)
+	_, _, _, _, _, err = svc2.VerifyAccessToken(token)
 	assert.Error(t, err, "token signed with different secret should fail verification")
 }
 
 func TestJWTService_VerifyToken_InvalidSignature(t *testing.T) {
-	svc := NewJWTService("secret-a", time.Hour, "civora")
+	svc := NewJWTService("secret-a", time.Hour, 24*time.Hour, "civora")
 
 	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":             "user",
@@ -54,12 +55,12 @@ func TestJWTService_VerifyToken_InvalidSignature(t *testing.T) {
 	token, err := h.SignedString([]byte("secret-b"))
 	require.NoError(t, err)
 
-	_, _, _, _, err = svc.VerifyToken(token)
+	_, _, _, _, _, err = svc.VerifyAccessToken(token)
 	assert.Error(t, err)
 }
 
 func TestJWTService_VerifyToken_Expired(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, 24*time.Hour, "civora")
 
 	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":             "user",
@@ -70,12 +71,12 @@ func TestJWTService_VerifyToken_Expired(t *testing.T) {
 	token, err := h.SignedString([]byte("secret"))
 	require.NoError(t, err)
 
-	_, _, _, _, err = svc.VerifyToken(token)
+	_, _, _, _, _, err = svc.VerifyAccessToken(token)
 	assert.Error(t, err)
 }
 
 func TestJWTService_VerifyToken_IssuerMismatch(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, 24*time.Hour, "civora")
 
 	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":             "user",
@@ -84,17 +85,55 @@ func TestJWTService_VerifyToken_IssuerMismatch(t *testing.T) {
 		"iss":             "attacker-service",
 		"exp":             time.Now().Add(time.Hour).Unix(),
 	})
+	h.Header["kid"] = "primary"
 	token, err := h.SignedString([]byte("secret"))
 	require.NoError(t, err)
 
-	_, _, _, _, err = svc.VerifyToken(token)
+	_, _, _, _, _, err = svc.VerifyAccessToken(token)
 	assert.Error(t, err, "token with wrong issuer should be rejected")
 	assert.Contains(t, err.Error(), "issuer")
 }
 
+func TestJWTService_VerifyToken_MissingKid(t *testing.T) {
+	svc := NewJWTService("secret", time.Hour, 24*time.Hour, "civora")
+
+	h := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":             "user",
+		"organization_id": "org",
+		"role":            "admin",
+		"exp":             time.Now().Add(time.Hour).Unix(),
+	})
+	token, err := h.SignedString([]byte("secret"))
+	require.NoError(t, err)
+
+	_, _, _, _, _, err = svc.VerifyAccessToken(token)
+	assert.Error(t, err, "token without kid should be rejected")
+	assert.Contains(t, err.Error(), "kid")
+}
+
+func TestJWTService_KeyRotation(t *testing.T) {
+	svc := NewJWTService("initial-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+
+	token, err := svc.GenerateToken("user", "org", "admin")
+	require.NoError(t, err)
+
+	_, _, _, _, _, err = svc.VerifyAccessToken(token)
+	require.NoError(t, err)
+
+	svc.KeySet().RotateActive("v2", []byte("new-secret-key-for-testing-1234567890"))
+
+	_, _, _, _, _, err = svc.VerifyAccessToken(token)
+	require.NoError(t, err, "old token should still verify with previous key during rotation")
+
+	newToken, err := svc.GenerateToken("user", "org", "admin")
+	require.NoError(t, err)
+	_, _, _, _, _, err = svc.VerifyAccessToken(newToken)
+	require.NoError(t, err)
+}
+
 func TestAuthRequired_MissingToken(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
-	mw := AuthRequired(svc)
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
+	mw := AuthRequired(svc, nil)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach handler")
@@ -108,8 +147,8 @@ func TestAuthRequired_MissingToken(t *testing.T) {
 }
 
 func TestAuthRequired_InvalidToken(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
-	mw := AuthRequired(svc)
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
+	mw := AuthRequired(svc, nil)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach handler")
@@ -124,10 +163,10 @@ func TestAuthRequired_InvalidToken(t *testing.T) {
 }
 
 func TestRequireSameTenant_AllowsMatchingOrg(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
 	orgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc, nil)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
@@ -144,11 +183,11 @@ func TestRequireSameTenant_AllowsMatchingOrg(t *testing.T) {
 }
 
 func TestRequireSameTenant_BlocksMismatchedOrg(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
 	jwtOrgID := uuid.New().String()
 	pathOrgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc, nil)(RequireSameTenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach handler")
 	})))
 
@@ -165,10 +204,10 @@ func TestRequireSameTenant_BlocksMismatchedOrg(t *testing.T) {
 }
 
 func TestRequireAnyRole_SingleRole_AllowsAuthorized(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
 	orgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireAnyRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc, nil)(RequireAnyRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
@@ -185,10 +224,10 @@ func TestRequireAnyRole_SingleRole_AllowsAuthorized(t *testing.T) {
 }
 
 func TestRequireAnyRole_SingleRole_BlocksUnauthorized(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
 	orgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireAnyRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc, nil)(RequireAnyRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not reach handler")
 	})))
 
@@ -205,10 +244,10 @@ func TestRequireAnyRole_SingleRole_BlocksUnauthorized(t *testing.T) {
 }
 
 func TestRequireAnyRole_AllowsAnyListed(t *testing.T) {
-	svc := NewJWTService("secret", time.Hour, "civora")
+	svc := NewJWTService("secret", time.Hour, time.Hour, "civora")
 	orgID := uuid.New().String()
 
-	handler := AuthRequired(svc)(RequireAnyRole("admin", "staff")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthRequired(svc, nil)(RequireAnyRole("admin", "staff")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
@@ -273,7 +312,7 @@ func TestGetUserRole_NotAuthenticated(t *testing.T) {
 
 func generateTestToken(t *testing.T, secret, userID, orgID, role string) string {
 	t.Helper()
-	svc := NewJWTService(secret, time.Hour, "civora")
+	svc := NewJWTService(secret, time.Hour, 24*time.Hour, "civora")
 	token, err := svc.GenerateToken(userID, orgID, role)
 	require.NoError(t, err)
 	return token

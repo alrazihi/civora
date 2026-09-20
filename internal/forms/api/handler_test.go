@@ -113,11 +113,11 @@ func (m *mockFormService) GetActiveVersion(ctx context.Context, params applicati
 }
 
 func setupFormRouter(svc *mockFormService) http.Handler {
-	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, "test-issuer")
+	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, 24*time.Hour, "test-issuer")
 	h := NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/api/v1/organizations/{orgId}/forms", func(r chi.Router) {
-		r.Use(middleware.AuthRequired(jwtSvc))
+		r.Use(middleware.AuthRequired(jwtSvc, nil))
 		r.Use(middleware.RequireSameTenant)
 
 		r.Group(func(r chi.Router) {
@@ -154,6 +154,7 @@ func generateFormTestJWT(t *testing.T, secret, userID, orgID, role string) strin
 		"exp":             time.Now().Add(time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = "primary"
 	tokenStr, err := token.SignedString([]byte(secret))
 	require.NoError(t, err)
 	return tokenStr

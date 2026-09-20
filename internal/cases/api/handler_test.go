@@ -170,11 +170,11 @@ func (m *mockCaseService) AssembleCaseFacts(ctx context.Context, orgID, caseID u
 }
 
 func setupCaseRouter(svc CaseService) http.Handler {
-	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, "test-issuer")
+	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, 24*time.Hour, "test-issuer")
 	h := NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/api/v1/organizations/{orgId}/cases", func(r chi.Router) {
-		r.Use(middleware.AuthRequired(jwtSvc))
+		r.Use(middleware.AuthRequired(jwtSvc, nil))
 		r.Use(middleware.RequireSameTenant)
 		r.Post("/", h.CreateCase)
 		r.Get("/", h.ListCases)
@@ -211,6 +211,7 @@ func generateTestJWT(t *testing.T, secret, userID, orgID, role string) string {
 		"exp":             time.Now().Add(time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = "primary"
 	tokenStr, err := token.SignedString([]byte(secret))
 	require.NoError(t, err)
 	return tokenStr

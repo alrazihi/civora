@@ -194,16 +194,17 @@ func generateTestJWT(secret, userID, orgID, role string) string {
 		"exp":             jwt.NewNumericDate(time.Now().Add(time.Hour)).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = "primary"
 	signed, _ := token.SignedString([]byte(secret))
 	return signed
 }
 
 func setupWorkflowRouter(svc WorkflowService) http.Handler {
-	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, "test-issuer")
+	jwtSvc := middleware.NewJWTService("test-secret", time.Hour, 24*time.Hour, "test-issuer")
 	h := NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/api/v1/organizations/{orgId}/workflows", func(r chi.Router) {
-		r.Use(middleware.AuthRequired(jwtSvc))
+		r.Use(middleware.AuthRequired(jwtSvc, nil))
 		r.Use(middleware.RequireSameTenant)
 		r.Get("/", h.ListWorkflowDefinitions)
 		r.Get("/{workflowId}", h.GetWorkflowDefinition)
@@ -217,7 +218,7 @@ func setupWorkflowRouter(svc WorkflowService) http.Handler {
 		})
 	})
 	r.Route("/api/v1/organizations/{orgId}/cases/{caseId}/workflow", func(r chi.Router) {
-		r.Use(middleware.AuthRequired(jwtSvc))
+		r.Use(middleware.AuthRequired(jwtSvc, nil))
 		r.Use(middleware.RequireSameTenant)
 		r.Get("/", h.GetCaseWorkflow)
 		r.Get("/transitions", h.GetValidTransitions)

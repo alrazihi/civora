@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -29,4 +30,8 @@ type RoleRepository interface {
 
 type TokenService interface {
 	GenerateToken(userID, organizationID, role string) (string, error)
+	GenerateAccessToken(userID, organizationID, role, jti string) (string, error)
+	GenerateTokenPair(userID, organizationID, role, sessionID string) (accessToken, refreshToken string, err error)
+	AccessExpiry() time.Duration
+	RefreshExpiry() time.Duration
 }

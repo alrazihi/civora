@@ -34,7 +34,7 @@ var _ domain.ExportService = (*mockExportService)(nil)
 
 func generateTestToken(t *testing.T, userID, orgID, role string) string {
 	t.Helper()
-	svc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
+	svc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
 	token, err := svc.GenerateToken(userID, orgID, role)
 	require.NoError(t, err)
 	return token
@@ -44,8 +44,8 @@ func newExportTestRouter(svc domain.ExportService) *chi.Mux {
 	r := chi.NewRouter()
 	handler := NewExportHandler(svc)
 
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 
 	handler.RegisterRoutes(r, authMiddleware)
 	return r

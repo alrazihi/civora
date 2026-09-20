@@ -210,7 +210,7 @@ func (m *mockImpactRepo) GetImpactIntelligenceReport(ctx context.Context, orgID 
 
 func generateSecurityToken(t *testing.T, userID, orgID, role string) string {
 	t.Helper()
-	svc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
+	svc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
 	token, err := svc.GenerateToken(userID, orgID, role)
 	require.NoError(t, err)
 	return token
@@ -220,8 +220,8 @@ func newSecurityTestRouter(svc domain.MetricsService) *chi.Mux {
 	r := chi.NewRouter()
 	handler := NewHandler(svc)
 
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 
 	handler.RegisterRoutes(r, authMiddleware)
 	return r
@@ -398,8 +398,8 @@ func TestAnalysisSecurity_RoleGateBlocksViewer(t *testing.T) {
 	r := chi.NewRouter()
 	handler := NewAnalysisHandler(analysisSvc)
 
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 	handler.RegisterRoutes(r, authMiddleware)
 
 	orgID := uuid.New().String()
@@ -422,8 +422,8 @@ func TestImpactSecurity_RoleGateBlocksViewer(t *testing.T) {
 	r := chi.NewRouter()
 	handler := NewImpactHandler(impactSvc)
 
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 	handler.RegisterRoutes(r, authMiddleware)
 
 	orgID := uuid.New().String()
@@ -447,8 +447,8 @@ func TestImpactSecurity_BucketValidation(t *testing.T) {
 	r := chi.NewRouter()
 	handler := NewImpactHandler(impactSvc)
 
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 	handler.RegisterRoutes(r, authMiddleware)
 
 	orgID := uuid.New().String()
@@ -468,8 +468,8 @@ func TestIntelligenceSecurity_RoleGateBlocksViewer(t *testing.T) {
 	handler := NewOperationsIntelligenceHandler(appSvc)
 
 	r := chi.NewRouter()
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 	handler.RegisterRoutes(r, authMiddleware)
 
 	orgID := uuid.New().String()
@@ -496,8 +496,8 @@ func TestIntelligenceSecurity_BucketValidation(t *testing.T) {
 	handler := NewOperationsIntelligenceHandler(appSvc)
 
 	r := chi.NewRouter()
-	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, "civora")
-	authMiddleware := middleware.AuthRequired(jwtSvc)
+	jwtSvc := middleware.NewJWTService("test-secret-key-for-testing-1234567890", time.Hour, 24*time.Hour, "civora")
+	authMiddleware := middleware.AuthRequired(jwtSvc, nil)
 	handler.RegisterRoutes(r, authMiddleware)
 
 	orgID := uuid.New().String()

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	auditdomain "github.com/alrazihi/civora/internal/audit/domain"
 	"github.com/alrazihi/civora/internal/database"
@@ -22,6 +23,10 @@ var (
 	ErrInvalidEmail       = errors.New("invalid email format")
 	ErrInvalidInput       = errors.New("invalid input")
 	ErrWeakPassword       = errors.New("password must be at least 12 characters and contain at least one letter and one number")
+	ErrSessionNotFound    = domain.ErrSessionNotFound
+	ErrSessionRevoked     = errors.New("session revoked")
+	ErrInvalidRefresh     = errors.New("invalid refresh token")
+	ErrRefreshReuse       = errors.New("refresh token reuse detected")
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -29,26 +34,29 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 const minPasswordLength = 12
 
 type IdentityService struct {
-	userRepo domain.UserRepository
-	roleRepo domain.RoleRepository
-	hasher   domain.PasswordHasher
-	tokenSvc domain.TokenService
-	auditor  auditdomain.EventRecorder
+	userRepo    domain.UserRepository
+	roleRepo    domain.RoleRepository
+	sessionRepo domain.SessionRepository
+	hasher      domain.PasswordHasher
+	tokenSvc    domain.TokenService
+	auditor     auditdomain.EventRecorder
 }
 
 func NewIdentityService(
 	userRepo domain.UserRepository,
 	roleRepo domain.RoleRepository,
+	sessionRepo domain.SessionRepository,
 	hasher domain.PasswordHasher,
 	tokenSvc domain.TokenService,
 	auditor auditdomain.EventRecorder,
 ) *IdentityService {
 	return &IdentityService{
-		userRepo: userRepo,
-		roleRepo: roleRepo,
-		hasher:   hasher,
-		tokenSvc: tokenSvc,
-		auditor:  auditor,
+		userRepo:    userRepo,
+		roleRepo:    roleRepo,
+		sessionRepo: sessionRepo,
+		hasher:      hasher,
+		tokenSvc:    tokenSvc,
+		auditor:     auditor,
 	}
 }
 
@@ -61,6 +69,14 @@ type CreateUserParams struct {
 
 type txEventRecorder interface {
 	RecordEventInTx(ctx context.Context, tx *sql.Tx, params auditdomain.RecordEventParams) error
+}
+
+type AuthenticateResult struct {
+	User         *domain.User
+	AccessToken  string
+	RefreshToken string
+	SessionID    string
+	ExpiresIn    int64
 }
 
 func (s *IdentityService) CreateUser(ctx context.Context, params CreateUserParams) (*domain.User, error) {
@@ -159,11 +175,6 @@ type AuthenticateParams struct {
 	Password       string
 }
 
-type AuthenticateResult struct {
-	User  *domain.User
-	Token string
-}
-
 func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateParams) (*AuthenticateResult, error) {
 	if err := validateEmail(params.Email); err != nil {
 		return nil, err
@@ -201,10 +212,37 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 		}
 	}
 
-	token, err := s.tokenSvc.GenerateToken(user.ID.String(), params.OrganizationID.String(), role)
+	now := time.Now().UTC()
+	sessionID := uuid.New()
+	refreshToken, err := intmid.GenerateRefreshToken()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
+	refreshTokenHash := intmid.HashRefreshToken(refreshToken)
+
+	session := &domain.Session{
+		ID:               sessionID,
+		UserID:           user.ID,
+		OrganizationID:   params.OrganizationID,
+		RefreshTokenHash: refreshTokenHash,
+		TokenFamily:      uuid.New(),
+		UserModifiedAt:   user.UpdatedAt,
+		IssuedAt:         now,
+		ExpiresAt:        now.Add(s.tokenSvc.RefreshExpiry()),
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if err := s.sessionRepo.Create(ctx, session); err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	accessToken, err := s.tokenSvc.GenerateAccessToken(user.ID.String(), params.OrganizationID.String(), role, session.ID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	_ = sessionID
 
 	if s.auditor != nil {
 		if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
@@ -221,25 +259,157 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 	}
 
 	return &AuthenticateResult{
-		User:  user,
-		Token: token,
+		User:         user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		SessionID:    sessionID.String(),
+		ExpiresIn:    int64(s.tokenSvc.AccessExpiry().Seconds()),
 	}, nil
 }
 
-func validateEmail(email string) error {
-	if !emailRegex.MatchString(email) {
-		return ErrInvalidEmail
+type RefreshTokenParams struct {
+	RefreshToken string
+}
+
+type RefreshTokenResult struct {
+	AccessToken  string
+	RefreshToken string
+	SessionID    string
+	ExpiresIn    int64
+}
+
+func (s *IdentityService) RefreshToken(ctx context.Context, params RefreshTokenParams) (*RefreshTokenResult, error) {
+	if params.RefreshToken == "" {
+		return nil, ErrInvalidRefresh
 	}
+
+	hash := intmid.HashRefreshToken(params.RefreshToken)
+	session, err := s.sessionRepo.FindByRefreshTokenHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, domain.ErrSessionNotFound) {
+			return nil, ErrInvalidRefresh
+		}
+		return nil, fmt.Errorf("failed to lookup session: %w", err)
+	}
+
+	if session.IsRevoked() {
+		return nil, ErrSessionRevoked
+	}
+	if session.IsExpired() {
+		return nil, ErrInvalidRefresh
+	}
+
+	user, err := s.userRepo.FindByID(ctx, session.OrganizationID, session.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+
+	role := "user"
+	if user.RoleID != nil {
+		r, err := s.roleRepo.FindByID(ctx, session.OrganizationID, *user.RoleID)
+		if err == nil {
+			role = r.Name
+		}
+	}
+
+	now := time.Now().UTC()
+	newAccessToken, newRefreshToken, err := s.tokenSvc.GenerateTokenPair(
+		user.ID.String(),
+		session.OrganizationID.String(),
+		role,
+		session.ID.String(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token pair: %w", err)
+	}
+
+	newHash := intmid.HashRefreshToken(newRefreshToken)
+	session.RefreshTokenHash = newHash
+	session.TokenFamily = uuid.New()
+	session.ExpiresAt = now.Add(s.tokenSvc.RefreshExpiry())
+	session.UpdatedAt = now
+
+	if err := s.sessionRepo.Update(ctx, session); err != nil {
+		return nil, fmt.Errorf("failed to update session: %w", err)
+	}
+
+	if s.auditor != nil {
+		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			OrganizationID: session.OrganizationID,
+			ActorID:        &user.ID,
+			Action:         "auth.refresh",
+			Resource:       "session",
+			ResourceID:     strPtr(session.ID.String()),
+			Outcome:        "success",
+			RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+		})
+	}
+
+	return &RefreshTokenResult{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+		SessionID:    session.ID.String(),
+		ExpiresIn:    int64(s.tokenSvc.AccessExpiry().Seconds()),
+	}, nil
+}
+
+type LogoutParams struct {
+	SessionID string
+}
+
+func (s *IdentityService) Logout(ctx context.Context, params LogoutParams) error {
+	if params.SessionID == "" {
+		return ErrInvalidInput
+	}
+
+	session, err := s.sessionRepo.FindByID(ctx, params.SessionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrSessionNotFound) {
+			return nil
+		}
+		return fmt.Errorf("failed to lookup session: %w", err)
+	}
+
+	if err := s.sessionRepo.Revoke(ctx, session.ID.String()); err != nil {
+		return fmt.Errorf("failed to revoke session: %w", err)
+	}
+
+	if s.auditor != nil {
+		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			OrganizationID: session.OrganizationID,
+			ActorID:        &session.UserID,
+			Action:         "auth.logout",
+			Resource:       "session",
+			ResourceID:     strPtr(session.ID.String()),
+			Outcome:        "success",
+			RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+		})
+	}
+
 	return nil
 }
 
-func validatePassword(password string) error {
-	if len(password) < minPasswordLength {
+func (s *IdentityService) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	if s.sessionRepo == nil {
+		return nil
+	}
+	return s.sessionRepo.RevokeAllByUserID(ctx, userID)
+}
+
+type ChangePasswordParams struct {
+	UserID      uuid.UUID
+	OrgID       uuid.UUID
+	OldPassword string
+	NewPassword string
+}
+
+func (s *IdentityService) ChangePassword(ctx context.Context, params ChangePasswordParams) error {
+	if len(params.NewPassword) < minPasswordLength {
 		return ErrWeakPassword
 	}
 	hasLetter := false
 	hasNumber := false
-	for _, c := range password {
+	for _, c := range params.NewPassword {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
 			hasLetter = true
 		}
@@ -250,6 +420,50 @@ func validatePassword(password string) error {
 	if !hasLetter || !hasNumber {
 		return ErrWeakPassword
 	}
+
+	user, err := s.userRepo.FindByID(ctx, params.OrgID, params.UserID)
+	if err != nil {
+		return ErrUserNotFound
+	}
+	if user.PasswordHash == nil {
+		return ErrInvalidCredentials
+	}
+
+	valid, err := s.hasher.Verify(params.OldPassword, *user.PasswordHash)
+	if err != nil || !valid {
+		return ErrInvalidCredentials
+	}
+
+	newHash, err := s.hasher.Hash(params.NewPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	now := time.Now().UTC()
+	_, err = s.userRepo.DB().ExecContext(ctx,
+		"UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3",
+		newHash, now, user.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	if err := s.RevokeAllUserSessions(ctx, user.ID); err != nil {
+		return fmt.Errorf("failed to revoke sessions: %w", err)
+	}
+
+	if s.auditor != nil {
+		_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+			OrganizationID: user.OrganizationID,
+			ActorID:        &user.ID,
+			Action:         "auth.password_changed",
+			Resource:       "user",
+			ResourceID:     strPtr(user.ID.String()),
+			Outcome:        "success",
+			RequestID:      strPtr(intmid.RequestIDFromContext(ctx)),
+		})
+	}
+
 	return nil
 }
 
@@ -283,6 +497,33 @@ func (s *IdentityService) ListUsers(ctx context.Context, orgID uuid.UUID, limit,
 	}
 
 	return users, total, nil
+}
+
+func validateEmail(email string) error {
+	if !emailRegex.MatchString(email) {
+		return ErrInvalidEmail
+	}
+	return nil
+}
+
+func validatePassword(password string) error {
+	if len(password) < minPasswordLength {
+		return ErrWeakPassword
+	}
+	hasLetter := false
+	hasNumber := false
+	for _, c := range password {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			hasLetter = true
+		}
+		if c >= '0' && c <= '9' {
+			hasNumber = true
+		}
+	}
+	if !hasLetter || !hasNumber {
+		return ErrWeakPassword
+	}
+	return nil
 }
 
 func strPtr(s string) *string {

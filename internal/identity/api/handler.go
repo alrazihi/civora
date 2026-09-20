@@ -28,6 +28,8 @@ type IdentityService interface {
 	CreateUser(ctx context.Context, params application.CreateUserParams) (*domain.User, error)
 	ListUsers(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
 	Authenticate(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
+	RefreshToken(ctx context.Context, params application.RefreshTokenParams) (*application.RefreshTokenResult, error)
+	Logout(ctx context.Context, params application.LogoutParams) error
 	GetUser(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error)
 }
 
@@ -47,6 +49,8 @@ func (h *Handler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handler)
 	r.Route("/api/v1/organizations/{orgId}/auth", func(r chi.Router) {
 		r.Post("/login", h.Login)
 		r.Post("/register", h.Register)
+		r.Post("/refresh", h.Refresh)
+		r.Post("/logout", h.Logout)
 	})
 	r.Route("/api/v1/organizations/{orgId}/users", func(r chi.Router) {
 		r.Use(authMiddleware)
@@ -172,7 +176,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{
-		"token": result.Token,
+		"access_token":  result.AccessToken,
+		"refresh_token": result.RefreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    result.ExpiresIn,
+		"session_id":    result.SessionID,
 		"user": map[string]interface{}{
 			"id":              result.User.ID,
 			"organization_id": result.User.OrganizationID,
@@ -180,6 +188,50 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			"name":            result.User.Name,
 		},
 	}, nil)
+}
+
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid request body")
+		return
+	}
+
+	result, err := h.svc.RefreshToken(r.Context(), application.RefreshTokenParams{
+		RefreshToken: req.RefreshToken,
+	})
+	if err != nil {
+		writeRefreshError(w, err)
+		return
+	}
+
+	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{
+		"access_token":  result.AccessToken,
+		"refresh_token": result.RefreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    result.ExpiresIn,
+		"session_id":    result.SessionID,
+	}, nil)
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	sessionID := middleware.GetSessionID(r)
+	if sessionID == "" {
+		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "session_id is required")
+		return
+	}
+
+	err := h.svc.Logout(r.Context(), application.LogoutParams{
+		SessionID: sessionID,
+	})
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -221,6 +273,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 			"organization_id": u.OrganizationID,
 			"email":           u.Email,
 			"name":            u.Name,
+			"role_id":         u.RoleID,
 			"created_at":      u.CreatedAt,
 		}
 	}
@@ -279,6 +332,27 @@ func writeDomainError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "password must be at least 12 characters and contain at least one letter and one number")
 	case application.ErrInvalidInput:
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "invalid input")
+	case application.ErrSessionRevoked:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "session revoked")
+	case application.ErrInvalidRefresh:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "invalid refresh token")
+	case application.ErrRefreshReuse:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "refresh token reuse detected")
+	default:
+		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
+	}
+}
+
+func writeRefreshError(w http.ResponseWriter, err error) {
+	switch err {
+	case application.ErrInvalidRefresh:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "invalid refresh token")
+	case application.ErrSessionRevoked:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "session revoked")
+	case application.ErrRefreshReuse:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "refresh token reuse detected")
+	case application.ErrUserNotFound:
+		shared.WriteError(w, http.StatusUnauthorized, shared.CodeUnauthorized, "user not found")
 	default:
 		shared.WriteError(w, http.StatusInternalServerError, shared.CodeInternalError, "internal server error")
 	}

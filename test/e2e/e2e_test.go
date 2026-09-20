@@ -164,8 +164,9 @@ func SetupTestServer(t *testing.T) *TestServer {
 	auditService := auditapp.NewAuditService(auditRepo, cfg.Audit)
 
 	hasher := domain.NewBCryptHasher(cfg.Auth.BCryptCost)
-	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
-	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
+	sessionRepo := identitypostgres.NewPostgresSessionRepository(db.DB)
+	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.AccessTokenExpiry, cfg.Auth.RefreshTokenExpiry, "civora")
+	identityService := identityapp.NewIdentityService(userRepo, roleRepo, sessionRepo, hasher, jwtSvc, auditService)
 	roleCreator := domain.NewDefaultRoleCreator(roleRepo)
 	orgService := orgapp.NewOrganizationService(orgRepo, roleCreator, auditService)
 
@@ -194,7 +195,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	assistanceService := assistancapp.NewAssistanceService(assistanceRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 	followUpService := followupapp.NewFollowUpService(followUpRepo, caseRepo, domain.NewOrganizationUserChecker(userRepo), auditService)
 
-	authMiddleware := intmid.AuthRequired(jwtSvc)
+	authMiddleware := intmid.AuthRequired(jwtSvc, sessionRepo)
 
 	orgHandler := orgapi.NewHandler(orgService)
 	identityHandler := identityapi.NewHandler(identityService)

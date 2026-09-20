@@ -41,9 +41,11 @@ type DatabaseConfig struct {
 }
 
 type AuthConfig struct {
-	JWTSecret  string
-	JWTExpiry  time.Duration
-	BCryptCost int
+	JWTSecret           string
+	JWTExpiry           time.Duration
+	AccessTokenExpiry   time.Duration
+	RefreshTokenExpiry  time.Duration
+	BCryptCost          int
 }
 
 type AuditConfig struct {
@@ -97,9 +99,11 @@ func Load() (*Config, error) {
 			SSLMode:  getEnv("CIVORA_DB_SSLMODE", "disable"),
 		},
 		Auth: AuthConfig{
-			JWTSecret:  getEnv("CIVORA_AUTH_JWT_SECRET", ""),
-			JWTExpiry:  getEnvDuration("CIVORA_AUTH_JWT_EXPIRY", 24*time.Hour),
-			BCryptCost: getEnvInt("CIVORA_AUTH_BCRYPT_COST", 12),
+			JWTSecret:          getEnv("CIVORA_AUTH_JWT_SECRET", ""),
+			JWTExpiry:          getEnvDuration("CIVORA_AUTH_JWT_EXPIRY", 20*time.Minute),
+			AccessTokenExpiry:  getEnvDuration("CIVORA_AUTH_ACCESS_TOKEN_EXPIRY", 20*time.Minute),
+			RefreshTokenExpiry: getEnvDuration("CIVORA_AUTH_REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
+			BCryptCost:         getEnvInt("CIVORA_AUTH_BCRYPT_COST", 12),
 		},
 		Audit: AuditConfig{
 			Enabled:          getEnvBool("CIVORA_AUDIT_ENABLED", true),

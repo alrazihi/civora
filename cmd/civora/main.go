@@ -122,6 +122,7 @@ func main() {
 
 	userRepo := identitypostgres.NewPostgresUserRepository(db.DB)
 	roleRepo := identitypostgres.NewPostgresRoleRepository(db.DB)
+	sessionRepo := identitypostgres.NewPostgresSessionRepository(db.DB)
 	hasher := domain.NewBCryptHasher(cfg.Auth.BCryptCost)
 
 	storageProvider, err := evidencestorage.NewLocalStorageProvider(cfg.Storage.LocalPath)
@@ -210,10 +211,10 @@ func main() {
 		log.Printf("AUDIT INTEGRITY FAILURE: %d of %d events failed verification", failed, verified+failed)
 	}
 
-	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.JWTExpiry, "civora")
-	authMiddleware := intmid.AuthRequired(jwtSvc)
+	jwtSvc := intmid.NewJWTService(cfg.Auth.JWTSecret, cfg.Auth.AccessTokenExpiry, cfg.Auth.RefreshTokenExpiry, "civora")
+	authMiddleware := intmid.AuthRequired(jwtSvc, sessionRepo)
 
-	identityService := identityapp.NewIdentityService(userRepo, roleRepo, hasher, jwtSvc, auditService)
+	identityService := identityapp.NewIdentityService(userRepo, roleRepo, sessionRepo, hasher, jwtSvc, auditService)
 
 	userRateLimiter := intmid.NewUserRateLimiter(20, 5*time.Minute, 5*time.Minute)
 	identityHandler := identityapi.NewHandlerWithOrgLookup(identityService, userRateLimiter, func(ctx context.Context, slug string) (*orgdomain.Organization, error) {

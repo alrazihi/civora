@@ -19,9 +19,11 @@ import (
 )
 
 type mockIdentityService struct {
-	createUserFn   func(ctx context.Context, params application.CreateUserParams) (*domain.User, error)
-	listUsersFn    func(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
-	authenticateFn func(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
+	createUserFn    func(ctx context.Context, params application.CreateUserParams) (*domain.User, error)
+	listUsersFn     func(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
+	authenticateFn  func(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
+	refreshTokenFn  func(ctx context.Context, params application.RefreshTokenParams) (*application.RefreshTokenResult, error)
+	logoutFn        func(ctx context.Context, params application.LogoutParams) error
 }
 
 func (m *mockIdentityService) CreateUser(ctx context.Context, params application.CreateUserParams) (*domain.User, error) {
@@ -47,6 +49,20 @@ func (m *mockIdentityService) ListUsers(ctx context.Context, orgID uuid.UUID, li
 
 func (m *mockIdentityService) GetUser(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error) {
 	return nil, nil
+}
+
+func (m *mockIdentityService) RefreshToken(ctx context.Context, params application.RefreshTokenParams) (*application.RefreshTokenResult, error) {
+	if m.refreshTokenFn != nil {
+		return m.refreshTokenFn(ctx, params)
+	}
+	return nil, nil
+}
+
+func (m *mockIdentityService) Logout(ctx context.Context, params application.LogoutParams) error {
+	if m.logoutFn != nil {
+		return m.logoutFn(ctx, params)
+	}
+	return nil
 }
 
 func setupRegisterRouter(h *Handler) http.Handler {
@@ -78,7 +94,7 @@ func TestLogin_WithUUIDOrg(t *testing.T) {
 					Email:          "user@example.com",
 					Name:           "Test User",
 				},
-				Token: "test-token",
+				AccessToken: "test-token",
 			}, nil
 		},
 	}
@@ -96,7 +112,7 @@ func TestLogin_WithUUIDOrg(t *testing.T) {
 	assert.True(t, resp.Success)
 	data, ok := resp.Data.(map[string]interface{})
 	require.True(t, ok, "response data should be a map")
-	assert.Equal(t, "test-token", data["token"])
+	assert.Equal(t, "test-token", data["access_token"])
 }
 
 func TestLogin_WithSlugOrg(t *testing.T) {
@@ -111,7 +127,7 @@ func TestLogin_WithSlugOrg(t *testing.T) {
 					Email:          "user@example.com",
 					Name:           "Test User",
 				},
-				Token: "test-token",
+				AccessToken: "test-token",
 			}, nil
 		},
 	}
@@ -133,7 +149,7 @@ func TestLogin_WithSlugOrg(t *testing.T) {
 	assert.True(t, resp.Success)
 	data, ok := resp.Data.(map[string]interface{})
 	require.True(t, ok, "response data should be a map")
-	assert.Equal(t, "test-token", data["token"])
+	assert.Equal(t, "test-token", data["access_token"])
 }
 
 func TestLogin_InvalidOrg(t *testing.T) {
