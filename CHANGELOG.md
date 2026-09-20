@@ -5,7 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2026-09-16
+## [1.0.0] - 2026-09-20
+
+### Added
+
+- Configurable workflow engine with state machines, transitions, and optimistic concurrency control
+- Dynamic forms with 13 field types, versioning, and workflow state assignments
+- Deterministic rules engine with JSON-configured rule sets, trace generation, and temporal operators
+- Human-in-the-loop decision making with review queue, provenance links, and immutable history
+- Evidence domain with document storage, verification lifecycle, and audit integration
+- AI observation assistance with architectural isolation from consequential functions
+- Case summaries and document intelligence integration
+- Operations metrics, workflow analysis, and impact intelligence dashboards
+- Two-level session repository API with tenant-aware validation
+- Refresh token rotation, reuse detection, and stolen token revocation
+- Cross-tenant access rejection at middleware, service, and repository layers
+- Tamper-evident SHA-256 hash-chained audit trail in dedicated `audit` schema
+- Platform configurability validation with zero source-code changes for distinct processes
+- Comprehensive security test suite covering 30+ attack vectors
+- Playwright frontend E2E suite with 120 passing specs
+- OpenAPI 3.0.3 specification with full API coverage
+
+### Security
+
+- Authentication and authorization on every request
+- Tenant isolation at database, service, and API layers
+- Timing-safe authentication paths and generic rate-limit responses
+- Evidence state-machine enforcement and decision supersession integrity
+- Concurrent workflow transitions: exactly one success per race
+- Concurrent duplicate assistance creation: all succeed (idempotent)
+- Concurrent form field creation: ≤1 success (unique constraint)
+- Stolen refresh token detection and automatic revocation
+- Password change and role change invalidate all active sessions
+- JTI validation and signing-key rotation support
+- Cross-tenant session and resource access rejection
+- Audit hash-chain integrity verification with background maintenance
+
+### Changed
+
+- OpenAPI spec version bumped to 1.0.0
+- Project status updated to production-ready 1.0.0
+
+### Known Limitations
+
+- No encryption at rest by default (operator responsibility)
+- No built-in backup/DR (operator responsibility)
+- No GDPR data export/deletion APIs (post-1.0)
+- No SOC 2 / HIPAA technical safeguards (operator responsibility)
+- Audit chain is tamper-evident, not tamper-proof against privileged insider/DBA
+- Frontend transition mapping is heuristic for custom workflows (backend still enforces authorization)
+- Windows `go vet` may fail due to platform OOM limits (CI on Ubuntu passes)
+
+[Unreleased]: https://github.com/alrazihi/civora/compare/v0.9.0...HEAD
+[v1.0.0]: https://github.com/alrazihi/civora/releases/tag/v1.0.0
+[v0.9.0]: https://github.com/alrazihi/civora/releases/tag/v0.9.0
+
+## [0.9.0] - 2026-09-19
 
 ### Evidence Domain
 

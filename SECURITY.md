@@ -90,8 +90,6 @@ responsible for them:
 
 ## Limitations
 
-- **Not production-ready**: CIVORA is in early development
-  (Milestones 0.x). It is not yet production-ready.
 - **No encryption at rest**: PostgreSQL data is stored unencrypted by
   default. Operators should use tablespace encryption or disk-level
   encryption if required.

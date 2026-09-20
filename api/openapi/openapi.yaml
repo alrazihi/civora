@@ -4,7 +4,7 @@ info:
   description: >-
     CIVORA API - open-source infrastructure for configurable, auditable public-service workflows, case management,
     forms, rules, and human decisions.
-  version: 0.9.0
+  version: 1.0.0
   contact:
     name: CIVORA
     url: https://github.com/alrazihi/civora

@@ -20,13 +20,12 @@ CIVORA provides the open digital infrastructure to make that possible.
 
 ## Status
 
-CIVORA is in **early development** (Milestones 0.x). The project is not yet
-production-ready. See the [roadmap](./ROADMAP.md) and
+CIVORA is **production-ready** (v1.0.0). See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.9.5** — Security Hardening & Truthful Documentation (in progress).
-(operational metrics, workflow analysis, impact intelligence, AI operations intelligence).
+Current release: **CIVORA 1.0.0** — configurable workflows, dynamic forms,
+deterministic rules engine, human decisions, and tamper-evident audit.
 
 ## Quick Start
 
@@ -615,8 +614,10 @@ not an AI platform.
 
 ### Is CIVORA production-ready?
 
-CIVORA is in early development (Milestones 0.x). It is not yet production-ready.
-See the [roadmap](./ROADMAP.md) for details.
+CIVORA 1.0.0 is production-ready for organizations that require auditable,
+configurable service-delivery workflows. Known operational responsibilities
+remain with the operator (encryption at rest, backups, secrets management).
+See the [roadmap](./ROADMAP.md) and [SECURITY.md](./SECURITY.md) for details.
 
 ## Documentation
 
