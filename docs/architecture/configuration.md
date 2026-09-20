@@ -32,7 +32,7 @@ automatically from the project root).
 | Variable | Default | Description |
 |---|---|---|
 | `CIVORA_AUTH_JWT_SECRET` | `dev-secret-change-me` | JWT signing secret (min 32 chars in production) |
-| `CIVORA_AUTH_JWT_EXPIRY` | `24h` | JWT token expiry |
+| `CIVORA_AUTH_JWT_EXPIRY` | `20m` | JWT token expiry |
 | `CIVORA_AUTH_BCRYPT_COST` | `12` | BCrypt hashing cost |
 
 ### Audit

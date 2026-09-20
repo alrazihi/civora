@@ -20,7 +20,7 @@ require a Bearer JWT token:
 Authorization: Bearer <jwt-token>
 ```
 
-Tokens are valid for 24 hours by default.
+Tokens are valid for 20 minutes by default.
 
 ### Security
 

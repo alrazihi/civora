@@ -107,9 +107,10 @@ responsible for them:
   offline tampering, but a compromised application process or database
   administrator can write a valid chain with false contents. There is
   no external anchor or append-only storage.
-- **JWT non-revocable**: Tokens are short-lived (24h) but cannot be
-  revoked before expiry; a logout/revocation endpoint is planned for
-  a future milestone.
+- **Server-side session revocation**: Access tokens are short-lived
+  (default 20 minutes) and validated against `auth_sessions` on every
+  request. Logout and password changes revoke sessions. Refresh tokens
+  are hashed and rotated.
 
 ---
 

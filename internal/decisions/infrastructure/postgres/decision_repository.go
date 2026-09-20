@@ -47,7 +47,7 @@ func (r *PostgresDecisionRepository) SaveTx(ctx context.Context, tx *sql.Tx, d *
 }
 
 func (r *PostgresDecisionRepository) UpdateTx(ctx context.Context, tx *sql.Tx, d *domain.Decision) error {
-	return r.updateDecision(ctx, tx, d)
+	return r.updateDecision(ctx, tx, d.OrganizationID, d)
 }
 
 func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExecer, d *domain.Decision) error {
@@ -83,15 +83,15 @@ func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExe
 	return nil
 }
 
-func (r *PostgresDecisionRepository) updateDecision(ctx context.Context, ex sqlExecer, d *domain.Decision) error {
+func (r *PostgresDecisionRepository) updateDecision(ctx context.Context, ex sqlExecer, orgID uuid.UUID, d *domain.Decision) error {
 	query := `
-		UPDATE decisions SET superseded_by_id = $1 WHERE id = $2
+		UPDATE decisions SET superseded_by_id = $1 WHERE id = $2 AND organization_id = $3
 	`
 	var supersededByIDArg interface{}
 	if d.SupersededByID != nil && *d.SupersededByID != uuid.Nil {
 		supersededByIDArg = *d.SupersededByID
 	}
-	_, err := ex.ExecContext(ctx, query, supersededByIDArg, d.ID)
+	_, err := ex.ExecContext(ctx, query, supersededByIDArg, d.ID, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to update decision: %w", err)
 	}
