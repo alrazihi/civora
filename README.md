@@ -439,6 +439,78 @@ for the full specification.
 
 ## Operational Considerations
 
+### Transport Security (TLS)
+
+CIVORA supports two deployment models for transport security:
+
+**Model A — Reverse-proxy TLS termination (recommended for production)**
+
+A reverse proxy such as Caddy or nginx terminates TLS and forwards plain HTTP
+to CIVORA. This is the recommended production architecture because it keeps
+certificate management, HTTP/2, and redirect logic outside the application.
+
+```text
+Internet
+  → HTTPS (TLS terminated by reverse proxy)
+  → HTTP (forwarded to CIVORA)
+  → CIVORA
+```
+
+When using this model:
+1. Set `CIVORA_SERVER_TRUSTED_PROXIES` to the proxy's IP address or CIDR
+   (e.g., `10.0.0.2` or `10.0.0.0/24`).
+2. Set `CIVORA_SERVER_FORCE_HTTPS=true` so CIVORA emits `Strict-Transport-Security`
+   and trusts the `X-Forwarded-Proto: https` header from the proxy.
+3. Ensure the proxy sets `X-Forwarded-Proto: https` and `X-Forwarded-For` on
+   every request.
+
+Do **not** expose the CIVORA HTTP port directly to the Internet. The reverse
+proxy is the only publicly reachable component.
+
+**Model B — Direct TLS termination**
+
+CIVORA can terminate TLS itself using the Go standard library:
+
+```bash
+CIVORA_SERVER_TLS_CERT=/path/to/cert.pem \
+CIVORA_SERVER_TLS_KEY=/path/to/key.pem \
+go run ./cmd/civora
+```
+
+When `CIVORA_SERVER_TLS_CERT` and `CIVORA_SERVER_TLS_KEY` are both set, CIVORA
+listens on HTTPS and automatically emits `Strict-Transport-Security`.
+
+Direct TLS is appropriate for single-instance deployments or environments where
+a reverse proxy is not available. For multi-instance or cloud deployments,
+prefer Model A.
+
+### Trusted Proxy Configuration
+
+Forwarded headers (`X-Forwarded-For`, `X-Real-IP`, `X-Forwarded-Proto`) are
+only trusted when the immediate peer IP is listed in
+`CIVORA_SERVER_TRUSTED_PROXIES`. If the list is empty, all forwarded headers
+are ignored and client IP is taken directly from the TCP connection.
+
+In production, always configure `CIVORA_SERVER_TRUSTED_PROXIES` to match your
+reverse proxy's IP address or CIDR. Leaving it empty while behind a proxy will
+cause rate limiting and logging to use the proxy's IP instead of the client's
+IP.
+
+### HSTS Behavior
+
+`Strict-Transport-Security` is emitted only when the deployment is actually
+HTTPS:
+
+- **Direct TLS** (`CIVORA_SERVER_TLS_CERT` / `CIVORA_SERVER_TLS_KEY` set):
+  HSTS is always emitted with `max-age=31536000; includeSubDomains`.
+- **Reverse proxy + `CIVORA_SERVER_FORCE_HTTPS=true`**: HSTS is emitted when
+  the request arrived from a trusted proxy with `X-Forwarded-Proto: https`.
+- **Development (plain HTTP, no proxy)**: HSTS is **not** emitted.
+
+Do not enable `CIVORA_SERVER_FORCE_HTTPS` unless you have a trusted reverse
+proxy in front of CIVORA; otherwise clients will be told to use HTTPS but
+cannot reach it.
+
 ### Backup and Disaster Recovery
 
 CIVORA does not include built-in backup or disaster recovery functionality.
@@ -457,9 +529,8 @@ for production deployments.
 
 ### Encryption
 
-- **TLS in transit**: CIVORA does not terminate TLS. Operators should place
-  CIVORA behind a reverse proxy or ingress controller that provides TLS 1.2+
-  termination.
+- **TLS in transit**: CIVORA supports both reverse-proxy TLS termination and
+  direct TLS termination. See the Transport Security section above.
 - **Encryption at rest**: Not currently implemented. Data in PostgreSQL is
   stored unencrypted by default. Operators should rely on PostgreSQL-level
   encryption (e.g., tablespace encryption) or filesystem/disk-level encryption

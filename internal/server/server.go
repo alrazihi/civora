@@ -33,7 +33,10 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	rl.SetTrustedProxies(cfg.Server.TrustedProxies)
 	idemStore := middleware.NewIdempotencyStore(24 * time.Hour)
 
-	r.Use(middleware.SecureHeaders)
+	r.Use(middleware.ProxyHeaders(cfg.Server.TrustedProxies))
+	r.Use(middleware.SecureHeaders(func(r *http.Request) bool {
+		return r.TLS != nil || (cfg.Server.ForceHTTPS && isFromTrustedProxy(r, cfg.Server.TrustedProxies) && r.Header.Get("X-Forwarded-Proto") == "https")
+	}))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logging(cfg.Server.TrustedProxies))
 	r.Use(middleware.Recover)
@@ -60,6 +63,10 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 			ReadHeaderTimeout: 10 * time.Second,
 		},
 	}
+}
+
+func isFromTrustedProxy(r *http.Request, trustedProxies []string) bool {
+	return middleware.IsTrustedProxy(middleware.RemoteHost(r.RemoteAddr), trustedProxies)
 }
 
 func (s *Server) Router() *chi.Mux {
@@ -102,6 +109,9 @@ func (s *Server) Start(ctx context.Context) error {
 	s.httpServer.Addr = listener.Addr().String()
 	log.Printf("CIVORA starting on port %d", actualPort)
 
+	if s.cfg.Server.TLSKeyFile != "" && s.cfg.Server.TLSCertFile != "" {
+		return s.httpServer.ServeTLS(listener, s.cfg.Server.TLSCertFile, s.cfg.Server.TLSKeyFile)
+	}
 	return s.httpServer.Serve(listener)
 }
 

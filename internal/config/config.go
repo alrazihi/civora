@@ -28,6 +28,9 @@ type ServerConfig struct {
 	TrustedProxies []string
 	RateLimit      int
 	RateLimitBurst int
+	TLSCertFile    string
+	TLSKeyFile     string
+	ForceHTTPS     bool
 }
 
 type DatabaseConfig struct {
@@ -41,11 +44,11 @@ type DatabaseConfig struct {
 }
 
 type AuthConfig struct {
-	JWTSecret           string
-	JWTExpiry           time.Duration
-	AccessTokenExpiry   time.Duration
-	RefreshTokenExpiry  time.Duration
-	BCryptCost          int
+	JWTSecret          string
+	JWTExpiry          time.Duration
+	AccessTokenExpiry  time.Duration
+	RefreshTokenExpiry time.Duration
+	BCryptCost         int
 }
 
 type AuditConfig struct {
@@ -88,6 +91,9 @@ func Load() (*Config, error) {
 			TrustedProxies: getEnvList("CIVORA_SERVER_TRUSTED_PROXIES"),
 			RateLimit:      getEnvInt("CIVORA_SERVER_RATE_LIMIT", 1000),
 			RateLimitBurst: getEnvInt("CIVORA_SERVER_RATE_LIMIT_BURST", 200),
+			TLSCertFile:    getEnv("CIVORA_SERVER_TLS_CERT", ""),
+			TLSKeyFile:     getEnv("CIVORA_SERVER_TLS_KEY", ""),
+			ForceHTTPS:     getEnvBool("CIVORA_SERVER_FORCE_HTTPS", false),
 		},
 		Database: DatabaseConfig{
 			Driver:   getEnv("CIVORA_DB_DRIVER", "pgx"),
@@ -135,6 +141,14 @@ func Load() (*Config, error) {
 
 	if cfg.Auth.BCryptCost < 10 {
 		return nil, fmt.Errorf("CIVORA_AUTH_BCRYPT_COST must be at least 10, got %d", cfg.Auth.BCryptCost)
+	}
+
+	if (cfg.Server.TLSCertFile != "") != (cfg.Server.TLSKeyFile != "") {
+		return nil, fmt.Errorf("CIVORA_SERVER_TLS_CERT and CIVORA_SERVER_TLS_KEY must both be set or both be empty")
+	}
+
+	if cfg.Server.ForceHTTPS && len(cfg.Server.TrustedProxies) == 0 {
+		return nil, fmt.Errorf("CIVORA_SERVER_FORCE_HTTPS requires CIVORA_SERVER_TRUSTED_PROXIES to be configured")
 	}
 
 	return cfg, nil

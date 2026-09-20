@@ -30,12 +30,12 @@ const DefaultMaxRateLimiterEntries = 10000
 
 func NewRateLimiter(requestsPerSecond, burst int) *RateLimiter {
 	rl := &RateLimiter{
-		visitors:       make(map[string]*visitor),
-		limit:          requestsPerSecond,
-		burst:          burst,
-		ttl:            5 * time.Minute,
-		stopCh:         make(chan struct{}),
-		maxEntries:     DefaultMaxRateLimiterEntries,
+		visitors:   make(map[string]*visitor),
+		limit:      requestsPerSecond,
+		burst:      burst,
+		ttl:        5 * time.Minute,
+		stopCh:     make(chan struct{}),
+		maxEntries: DefaultMaxRateLimiterEntries,
 	}
 	go rl.runCleanup()
 	return rl
@@ -130,7 +130,7 @@ func (rl *RateLimiter) cleanup() {
 func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := realIP(r, rl.trustedProxies)
+			ip := RealIP(r, rl.trustedProxies)
 			allowed, _ := rl.checkRate(ip)
 			if !allowed {
 				body := []byte(`{"success":false,"error":{"code":"RATE_LIMITED","message":"Too many requests"}}`)

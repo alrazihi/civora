@@ -1,0 +1,22 @@
+# Caddy production reverse-proxy configuration for CIVORA
+# Place this file at ./Caddyfile (or use `caddy adapt` to convert)
+
+{
+	# Optional: set your email for Let's Encrypt notifications
+	# email ops@example.com
+}
+
+# Replace with your actual domain
+civora.example.com {
+	reverse_proxy app:8080 {
+		# Forward the real client IP and protocol
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Enable automatic HTTPS via Let's Encrypt
+	# Caddy will obtain and renew certificates automatically.
+	# For internal/private deployments, use the internal CA or
+	# provide your own certificates.
+}

@@ -13,16 +13,17 @@
 A **trust boundary** is a point where data crosses from one trust domain
 to another. CIVORA's primary trust boundaries are:
 
-- **Internet → Application**: external clients (browsers, mobile apps,
-  API consumers) connecting to the CIVORA HTTP API.
-- **Application → Database**: CIVORA writing to and reading from its
-  database(s).
-- **Application → Object storage**: CIVORA writing uploaded documents,
+- **Internet → Reverse Proxy**: external clients connecting to the TLS
+  termination point.
+- **Reverse Proxy → CIVORA**: the proxy forwarding HTTP to the application.
+  This boundary is trusted only when the proxy IP is explicitly listed in
+  `CIVORA_SERVER_TRUSTED_PROXIES`.
+- **CIVORA → Database**: CIVORA writing to and reading from its database(s).
+- **CIVORA → Object storage**: CIVORA writing uploaded documents,
   evidence, and export archives to object storage.
-- **Application → External services**: CIVORA calling identity providers,
+- **CIVORA → External services**: CIVORA calling identity providers,
   document verification services, payment gateways, etc.
-- **Application → File system**: CIVORA writing local log files and
-  cache.
+- **CIVORA → File system**: CIVORA writing local log files and cache.
 
 ### 1.2 Trust levels
 
@@ -161,6 +162,26 @@ insecure logging, error messages, or exports.
 - Data classification labels guide handling.
 **Severity**: High
 
+### T-13a: TLS misconfiguration or absence
+
+**Description**: CIVORA is deployed without TLS, exposing all traffic
+(including JWTs and sensitive case data) to passive interception or
+man-in-the-middle attacks. Alternatively, a misconfigured reverse proxy
+leaks `X-Forwarded-*` headers from untrusted clients, allowing IP spoofing
+or HSTS bypass.
+**Affected assets**: All in-transit data.
+**Mitigation strategies**:
+- CIVORA supports direct TLS termination via `CIVORA_SERVER_TLS_CERT` /
+  `CIVORA_SERVER_TLS_KEY`.
+- Reverse-proxy deployments must set `CIVORA_SERVER_TRUSTED_PROXIES` to
+  the proxy's IP/CIDR.
+- `CIVORA_SERVER_FORCE_HTTPS` enables HSTS emission when behind a trusted
+  proxy.
+- Forwarded headers (`X-Forwarded-For`, `X-Real-IP`, `X-Forwarded-Proto`)
+  are only trusted from explicitly configured proxy IPs.
+- Plain HTTP must not be exposed directly to the Internet.
+**Severity**: High
+
 ### T-09: Audit tampering
 
 **Description**: An attacker modifies or deletes audit records to hide
@@ -229,7 +250,10 @@ debug mode enabled, default credentials, TLS disabled).
 - Secure-by-default configuration.
 - Startup checks fail if critical security settings are missing.
 - No default credentials; first-run setup enforces admin password.
-- TLS enforced in production; clear warnings in development.
+- TLS is supported via direct cert/key files or reverse-proxy headers; HSTS
+  is emitted only when the deployment is actually HTTPS.
+- `CIVORA_SERVER_FORCE_HTTPS` requires `CIVORA_SERVER_TRUSTED_PROXIES` to
+  be configured, preventing accidental HSTS on plain HTTP.
 **Severity**: High
 
 ---

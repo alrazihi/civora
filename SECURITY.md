@@ -53,6 +53,23 @@ CIVORA's security practices are documented in:
   decisions.
 - [docs/principles.md](docs/principles.md) — security and privacy
   principles.
+- [docs/0.9.5-stage-02-secure-transport.md](docs/0.9.5-stage-02-secure-transport.md)
+  — transport security and deployment hardening.
+
+### Transport security
+
+CIVORA must not be exposed directly to the Internet over plain HTTP. Operators
+must choose one of the following deployment models:
+
+1. **Reverse-proxy TLS termination** — Place CIVORA behind Caddy, nginx, or
+   another reverse proxy that terminates TLS. Configure
+   `CIVORA_SERVER_TRUSTED_PROXIES` to the proxy's IP/CIDR and set
+   `CIVORA_SERVER_FORCE_HTTPS=true` so HSTS is emitted.
+2. **Direct TLS termination** — Provide certificate and key files via
+   `CIVORA_SERVER_TLS_CERT` and `CIVORA_SERVER_TLS_KEY`. CIVORA will listen on
+   HTTPS and emit HSTS automatically.
+
+Exposing CIVORA on plain HTTP to the Internet is a security vulnerability.
 
 ## Disclosure policy
 

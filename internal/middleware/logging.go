@@ -92,7 +92,7 @@ func Logging(trustedProxies []string) func(http.Handler) http.Handler {
 				BytesWritten:  rw.bytesWritten,
 				LatencyMicros: latency.Microseconds(),
 				RequestID:     requestID,
-				RemoteIP:      realIP(r, trustedProxies),
+				RemoteIP:      RealIP(r, trustedProxies),
 				UserAgent:     r.UserAgent(),
 			}
 
@@ -124,9 +124,9 @@ func logLevel(statusCode int) string {
 	return "info"
 }
 
-func realIP(r *http.Request, trustedProxies []string) string {
-	remoteIP := remoteHost(r.RemoteAddr)
-	if !isTrustedProxy(remoteIP, trustedProxies) {
+func RealIP(r *http.Request, trustedProxies []string) string {
+	remoteIP := RemoteHost(r.RemoteAddr)
+	if !IsTrustedProxy(remoteIP, trustedProxies) {
 		return remoteIP
 	}
 
@@ -139,7 +139,7 @@ func realIP(r *http.Request, trustedProxies []string) string {
 	return remoteIP
 }
 
-func remoteHost(address string) string {
+func RemoteHost(address string) string {
 	address = strings.TrimSpace(address)
 	host, _, err := net.SplitHostPort(address)
 	if err == nil {
@@ -151,7 +151,7 @@ func remoteHost(address string) string {
 	return address
 }
 
-func isTrustedProxy(ip string, trustedProxies []string) bool {
+func IsTrustedProxy(ip string, trustedProxies []string) bool {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false
