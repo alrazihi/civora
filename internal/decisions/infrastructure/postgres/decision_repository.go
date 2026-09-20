@@ -46,6 +46,10 @@ func (r *PostgresDecisionRepository) SaveTx(ctx context.Context, tx *sql.Tx, d *
 	return r.saveDecision(ctx, tx, d)
 }
 
+func (r *PostgresDecisionRepository) UpdateTx(ctx context.Context, tx *sql.Tx, d *domain.Decision) error {
+	return r.updateDecision(ctx, tx, d)
+}
+
 func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExecer, d *domain.Decision) error {
 	ruleEvalIDsJSON, err := json.Marshal(d.RuleEvaluationIDs)
 	if err != nil {
@@ -75,6 +79,21 @@ func (r *PostgresDecisionRepository) saveDecision(ctx context.Context, ex sqlExe
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert decision: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresDecisionRepository) updateDecision(ctx context.Context, ex sqlExecer, d *domain.Decision) error {
+	query := `
+		UPDATE decisions SET superseded_by_id = $1 WHERE id = $2
+	`
+	var supersededByIDArg interface{}
+	if d.SupersededByID != nil && *d.SupersededByID != uuid.Nil {
+		supersededByIDArg = *d.SupersededByID
+	}
+	_, err := ex.ExecContext(ctx, query, supersededByIDArg, d.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update decision: %w", err)
 	}
 	return nil
 }

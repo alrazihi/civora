@@ -1,4 +1,4 @@
-﻿package application
+package application
 
 import (
 	"bytes"
@@ -1050,6 +1050,102 @@ func TestDeleteDocument_NilDeleter(t *testing.T) {
 		OrganizationID: orgID,
 		DocumentID:     uuid.New(),
 		DeletedBy:      uuid.Nil,
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEvidenceInput)
+}
+
+func TestVerifyEvidence_ReplayAfterVerifiedIsRejected(t *testing.T) {
+	svc, repo, caseFinder, userChecker, _ := setupTestService(t)
+
+	orgID := uuid.New()
+	uploadedBy := uuid.New()
+	verifierID := uuid.New()
+	userChecker.addUser(orgID, uploadedBy)
+	userChecker.addUser(orgID, verifierID)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
+	caseFinder.addCase(c)
+	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
+
+	_, _, err := svc.VerifyEvidence(context.Background(), VerifyEvidenceParams{
+		OrganizationID: orgID,
+		EvidenceID:     e.ID,
+		VerifierID:     verifierID,
+		Reason:         "Document looks authentic",
+		Method:         "manual",
+	})
+	require.NoError(t, err)
+
+	_, _, err = svc.VerifyEvidence(context.Background(), VerifyEvidenceParams{
+		OrganizationID: orgID,
+		EvidenceID:     e.ID,
+		VerifierID:     verifierID,
+		Reason:         "Verify again",
+		Method:         "manual",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEvidenceInput)
+}
+
+func TestRejectEvidence_ReplayAfterRejectedIsRejected(t *testing.T) {
+	svc, repo, caseFinder, userChecker, _ := setupTestService(t)
+
+	orgID := uuid.New()
+	uploadedBy := uuid.New()
+	reviewerID := uuid.New()
+	userChecker.addUser(orgID, uploadedBy)
+	userChecker.addUser(orgID, reviewerID)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
+	caseFinder.addCase(c)
+	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
+
+	_, _, err := svc.RejectEvidence(context.Background(), VerifyEvidenceParams{
+		OrganizationID: orgID,
+		EvidenceID:     e.ID,
+		VerifierID:     reviewerID,
+		Reason:         "Document is altered",
+		Method:         "manual",
+	})
+	require.NoError(t, err)
+
+	_, _, err = svc.RejectEvidence(context.Background(), VerifyEvidenceParams{
+		OrganizationID: orgID,
+		EvidenceID:     e.ID,
+		VerifierID:     reviewerID,
+		Reason:         "Reject again",
+		Method:         "manual",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEvidenceInput)
+}
+
+func TestMarkEvidenceForReview_ReplayAfterNeedsReviewIsRejected(t *testing.T) {
+	svc, repo, caseFinder, userChecker, _ := setupTestService(t)
+
+	orgID := uuid.New()
+	uploadedBy := uuid.New()
+	reviewerID := uuid.New()
+	userChecker.addUser(orgID, uploadedBy)
+	userChecker.addUser(orgID, reviewerID)
+	c, _ := domain.NewCase(orgID, uploadedBy, "Test", "Desc", "General", "Normal", nil)
+	caseFinder.addCase(c)
+	e := createTestEvidence(t, repo, orgID, c.ID, uploadedBy)
+
+	_, _, err := svc.MarkEvidenceForReview(context.Background(), VerifyEvidenceParams{
+		OrganizationID: orgID,
+		EvidenceID:     e.ID,
+		VerifierID:     reviewerID,
+		Reason:         "Need more documents",
+		Method:         "manual",
+	})
+	require.NoError(t, err)
+
+	_, _, err = svc.MarkEvidenceForReview(context.Background(), VerifyEvidenceParams{
+		OrganizationID: orgID,
+		EvidenceID:     e.ID,
+		VerifierID:     reviewerID,
+		Reason:         "Review again",
+		Method:         "manual",
 	})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrEvidenceInput)

@@ -1,10 +1,11 @@
-﻿package application
+package application
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/alrazihi/civora/internal/cases/domain"
@@ -18,6 +19,7 @@ import (
 )
 
 type mockDecisionRepo struct {
+	mu    sync.Mutex
 	items map[uuid.UUID]*decisionsdomain.Decision
 }
 
@@ -27,11 +29,21 @@ func newMockDecisionRepo() *mockDecisionRepo {
 
 func (m *mockDecisionRepo) DB() *sql.DB { return testdb.NewDB() }
 func (m *mockDecisionRepo) Save(ctx context.Context, d *decisionsdomain.Decision) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.items[d.ID] = d
 	return nil
 }
 func (m *mockDecisionRepo) SaveTx(ctx context.Context, tx *sql.Tx, d *decisionsdomain.Decision) error {
 	return m.Save(ctx, d)
+}
+func (m *mockDecisionRepo) UpdateTx(ctx context.Context, tx *sql.Tx, d *decisionsdomain.Decision) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if existing, ok := m.items[d.ID]; ok {
+		existing.SupersededByID = d.SupersededByID
+	}
+	return nil
 }
 func (m *mockDecisionRepo) FindByID(ctx context.Context, orgID, id uuid.UUID) (*decisionsdomain.Decision, error) {
 	d, ok := m.items[id]
@@ -363,7 +375,7 @@ func TestSupersedeDecision_CreatesNewVersion(t *testing.T) {
 	}
 	repo.items[prevDecisionID] = prev
 
-	_, err := svc.SupersedeDecision(context.Background(), SupersedeDecisionParams{
+	newDecision, err := svc.SupersedeDecision(context.Background(), SupersedeDecisionParams{
 		OrganizationID:   orgID,
 		ServiceRequestID: c.ID,
 		Decision:         decisionsdomain.DecisionTypeRejected,
@@ -373,14 +385,13 @@ func TestSupersedeDecision_CreatesNewVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Len(t, repo.items, 2)
-	for _, d := range repo.items {
-		if d.ID != prevDecisionID {
-			assert.Equal(t, 2, d.Version)
-			assert.Equal(t, decisionsdomain.DecisionTypeRejected, d.Decision)
-			assert.NotNil(t, d.SupersededByID)
-			assert.Equal(t, d.ID, *d.SupersededByID)
-		}
-	}
+	assert.Equal(t, 2, newDecision.Version)
+	assert.Equal(t, decisionsdomain.DecisionTypeRejected, newDecision.Decision)
+	assert.Nil(t, newDecision.SupersededByID)
+
+	updatedPrev := repo.items[prevDecisionID]
+	assert.NotNil(t, updatedPrev.SupersededByID)
+	assert.Equal(t, newDecision.ID, *updatedPrev.SupersededByID)
 }
 
 func TestSupersedeDecision_NoExistingDecision(t *testing.T) {

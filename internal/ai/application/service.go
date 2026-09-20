@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/alrazihi/civora/internal/ai/domain"
@@ -70,11 +71,11 @@ type ChatMessage struct {
 }
 
 type ChatResponse struct {
-	Content      string
-	Model        domain.ModelInfo
-	InputHash    string
-	OutputHash   string
-	PromptTokens int
+	Content          string
+	Model            domain.ModelInfo
+	InputHash        string
+	OutputHash       string
+	PromptTokens     int
 	CompletionTokens int
 }
 
@@ -572,7 +573,7 @@ func (s *AIService) recordAudit(ctx context.Context, orgID uuid.UUID, actorID *u
 	if s.auditor == nil {
 		return
 	}
-	_ = s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
+	if err := s.auditor.RecordEvent(ctx, auditdomain.RecordEventParams{
 		OrganizationID: orgID,
 		ActorID:        actorID,
 		Action:         action,
@@ -580,7 +581,9 @@ func (s *AIService) recordAudit(ctx context.Context, orgID uuid.UUID, actorID *u
 		ResourceID:     resourceID,
 		Outcome:        outcome,
 		Metadata:       metadata,
-	})
+	}); err != nil {
+		log.Printf("failed to record audit event %s for %s %s: %v", action, resource, *resourceID, err)
+	}
 }
 
 type ListObservationsParams struct {

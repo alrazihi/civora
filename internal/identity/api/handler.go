@@ -85,7 +85,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 				"success": false,
 				"error": map[string]string{
 					"code":    "RATE_LIMITED",
-					"message": fmt.Sprintf("Too many registration attempts for this email. Try again in %d seconds.", retrySeconds),
+					"message": fmt.Sprintf("Too many attempts. Try again in %d seconds.", retrySeconds),
 				},
 			})
 			if err != nil {
@@ -136,8 +136,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			body, err := json.Marshal(map[string]interface{}{
 				"success": false,
 				"error": map[string]string{
-					"code":    "ACCOUNT_LOCKED",
-					"message": fmt.Sprintf("Account temporarily locked due to too many failed login attempts. Try again in %d seconds.", retrySeconds),
+					"code":    "RATE_LIMITED",
+					"message": fmt.Sprintf("Too many attempts. Try again in %d seconds.", retrySeconds),
 				},
 			})
 			if err != nil {

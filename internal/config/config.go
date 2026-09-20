@@ -99,10 +99,10 @@ func Load() (*Config, error) {
 			Driver:   getEnv("CIVORA_DB_DRIVER", "pgx"),
 			Host:     getEnv("CIVORA_DB_HOST", "localhost"),
 			Port:     getEnv("CIVORA_DB_PORT", "5432"),
-			User:     getEnv("CIVORA_DB_USER", "civora"),
-			Password: getEnv("CIVORA_DB_PASSWORD", "civora"),
-			DBName:   getEnv("CIVORA_DB_NAME", "civora"),
-			SSLMode:  getEnv("CIVORA_DB_SSLMODE", "disable"),
+			User:     getEnv("CIVORA_DB_USER", getDefaultDBUser()),
+			Password: getEnv("CIVORA_DB_PASSWORD", getDefaultDBPassword()),
+			DBName:   getEnv("CIVORA_DB_NAME", getDefaultDBName()),
+			SSLMode:  getEnv("CIVORA_DB_SSLMODE", getDefaultDBSSLMode()),
 		},
 		Auth: AuthConfig{
 			JWTSecret:          getEnv("CIVORA_AUTH_JWT_SECRET", ""),
@@ -151,6 +151,21 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("CIVORA_SERVER_FORCE_HTTPS requires CIVORA_SERVER_TRUSTED_PROXIES to be configured")
 	}
 
+	if os.Getenv("CIVORA_ENV") == "production" {
+		if cfg.Database.User == "" {
+			return nil, fmt.Errorf("CIVORA_DB_USER must be set in production")
+		}
+		if cfg.Database.Password == "" {
+			return nil, fmt.Errorf("CIVORA_DB_PASSWORD must be set in production")
+		}
+		if cfg.Database.DBName == "" {
+			return nil, fmt.Errorf("CIVORA_DB_NAME must be set in production")
+		}
+		if cfg.Auth.JWTSecret == "dev-secret-change-me-32-chars-minimum" {
+			return nil, fmt.Errorf("CIVORA_AUTH_JWT_SECRET must be changed in production")
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -159,6 +174,34 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getDefaultDBUser() string {
+	if os.Getenv("CIVORA_ENV") == "production" {
+		return ""
+	}
+	return "civora"
+}
+
+func getDefaultDBPassword() string {
+	if os.Getenv("CIVORA_ENV") == "production" {
+		return ""
+	}
+	return "civora"
+}
+
+func getDefaultDBName() string {
+	if os.Getenv("CIVORA_ENV") == "production" {
+		return ""
+	}
+	return "civora"
+}
+
+func getDefaultDBSSLMode() string {
+	if os.Getenv("CIVORA_ENV") == "production" {
+		return "require"
+	}
+	return "disable"
 }
 
 func getEnvInt(key string, fallback int) int {

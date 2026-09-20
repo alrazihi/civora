@@ -1,4 +1,4 @@
-﻿package application
+package application
 
 import (
 	"bytes"
@@ -255,6 +255,54 @@ func TestAIService_GenerateObservations_ProviderError(t *testing.T) {
 	formRepo := &mockFormRepo{}
 
 	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, nil, provider)
+
+	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
+		OrganizationID: orgID,
+		EvidenceID:     evidenceID,
+		ActorID:        actorID,
+	})
+
+	if err == nil {
+		t.Fatal("expected error from provider failure")
+	}
+
+	if !errors.Is(err, ErrAIProviderUnavailable) {
+		t.Errorf("expected ErrAIProviderUnavailable, got: %v", err)
+	}
+
+	if len(obsRepo.saved) != 0 {
+		t.Errorf("expected 0 saved observations on provider failure, got %d", len(obsRepo.saved))
+	}
+}
+
+func TestAIService_GenerateObservations_ProviderErrorWithAuditFailure(t *testing.T) {
+	orgID := uuid.New()
+	evidenceID := uuid.New()
+	actorID := uuid.New()
+
+	evidence := &evidencedomain.Evidence{
+		ID:                 evidenceID,
+		OrganizationID:     orgID,
+		ServiceRequestID:   evidenceID,
+		Type:               evidencedomain.EvidenceTypeOther,
+		Description:        "test",
+		StorageReference:   "civora://test/doc",
+		UploadedBy:         actorID,
+		Source:             evidencedomain.EvidenceSourceManual,
+		VerificationStatus: evidencedomain.VerificationStatusUnverified,
+	}
+
+	provider := &mockAIProvider{
+		info: domain.ModelInfo{Name: "test-model", Version: "1.0", Provider: "test"},
+		err:  errors.New("provider unavailable"),
+	}
+
+	evRepo := &mockEvidenceRepo{evidence: evidence, documents: []*evidencedomain.Document{}, serviceRequest: []*evidencedomain.Evidence{evidence}}
+	obsRepo := &mockObservationRepo{}
+	formRepo := &mockFormRepo{}
+	auditor := &mockFailingAuditor{}
+
+	svc := NewAIService(obsRepo, evRepo, formRepo, &mockUserChecker{valid: true}, auditor, provider)
 
 	_, err := svc.GenerateObservations(context.Background(), GenerateObservationsParams{
 		OrganizationID: orgID,
@@ -745,6 +793,12 @@ type mockAuditor struct {
 func (m *mockAuditor) RecordEvent(ctx context.Context, params auditdomain.RecordEventParams) error {
 	m.events = append(m.events, params)
 	return nil
+}
+
+type mockFailingAuditor struct{}
+
+func (m *mockFailingAuditor) RecordEvent(ctx context.Context, params auditdomain.RecordEventParams) error {
+	return errors.New("audit recording failed")
 }
 
 func floatPtr(f float64) *float64 {

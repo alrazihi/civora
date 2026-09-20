@@ -419,6 +419,51 @@ model. Key security properties:
 - JWT tokens are short-lived (24h) and non-revocable (known limitation;
   token revocation/logout endpoint planned for a future milestone).
 
+### What CIVORA provides
+
+- Multi-tenant isolation enforced at database, service, and API layers.
+- Timing-safe authentication paths and generic rate-limit responses.
+- Evidence state-machine enforcement and decision supersession
+  integrity.
+- AI observation assistance architecturally isolated from consequential
+  system functions; outputs require explicit human review.
+
+### Operator responsibilities
+
+Operators must provide:
+
+- TLS termination (reverse proxy or direct cert/key files).
+- Database backups, restore testing, and disaster-recovery planning.
+- Secrets management and rotation for database credentials, JWT
+  signing keys, and AI provider keys.
+- Network-level DDoS protection, firewall rules, and host hardening.
+- Log aggregation, monitoring, and alerting.
+- Compliance procedures required by the operator's regulatory
+  environment (e.g., GDPR, HIPAA, SOC 2).
+
+### Limitations
+
+- **Not production-ready**: CIVORA is in early development
+  (Milestones 0.x). It is not yet production-ready.
+- **No encryption at rest**: PostgreSQL data is stored unencrypted by
+  default. Operators should use tablespace encryption or disk-level
+  encryption if required.
+- **No built-in backup/DR**: Operators must configure PostgreSQL
+  backups and test restores.
+- **No GDPR data export/deletion APIs**: Bulk data-export and
+  per-user deletion endpoints are not implemented.
+- **No SOC 2 / HIPAA controls**: CIVORA does not implement SOC 2
+  Trust Services Criteria or HIPAA technical safeguards. Compliance
+  with these frameworks depends on the operator's deployment
+  configuration, policies, and controls.
+- **Audit trail limitations**: The hash chain detects accidental or
+  offline tampering, but a compromised application process or database
+  administrator can write a valid chain with false contents. There is
+  no external anchor or append-only storage.
+- **JWT non-revocable**: Tokens are short-lived (24h) but cannot be
+  revoked before expiry; a logout/revocation endpoint is planned for
+  a future milestone.
+
 ---
 
 ## Deployment

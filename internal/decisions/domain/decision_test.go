@@ -1,4 +1,4 @@
-﻿package domain
+package domain
 
 import (
 	"strings"
@@ -109,8 +109,7 @@ func TestNewSupersedingDecision(t *testing.T) {
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 2, d.Version)
-		assert.NotNil(t, d.SupersededByID)
-		assert.Equal(t, d.ID, *d.SupersededByID)
+		assert.Nil(t, d.SupersededByID)
 	})
 
 	t.Run("no previous decision defaults version to 1", func(t *testing.T) {
@@ -120,7 +119,6 @@ func TestNewSupersedingDecision(t *testing.T) {
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 1, d.Version)
-		assert.NotNil(t, d.SupersededByID)
-		assert.Equal(t, d.ID, *d.SupersededByID)
+		assert.Nil(t, d.SupersededByID)
 	})
 }

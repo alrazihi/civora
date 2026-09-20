@@ -284,6 +284,11 @@ func (s *DecisionService) SupersedeDecision(ctx context.Context, params Supersed
 
 	var result *decisionsdomain.Decision
 	err = database.InTransaction(ctx, s.repo.DB(), func(tx *sql.Tx) error {
+		existing.SupersededByID = &d.ID
+		if err := s.repo.UpdateTx(ctx, tx, existing); err != nil {
+			return fmt.Errorf("failed to update superseded decision: %w", err)
+		}
+
 		if err := s.repo.SaveTx(ctx, tx, d); err != nil {
 			return fmt.Errorf("failed to save superseding decision: %w", err)
 		}

@@ -251,6 +251,9 @@ func (e *Evidence) applyVerification(actorID uuid.UUID, status VerificationStatu
 	if !isValidVerificationStatus(status) {
 		return nil, fmt.Errorf("%w: invalid status %q", ErrVerificationInvalid, status)
 	}
+	if !isValidVerificationTransition(e.VerificationStatus, status) {
+		return nil, fmt.Errorf("%w: cannot transition from %s to %s", ErrVerificationInvalid, e.VerificationStatus, status)
+	}
 	now := time.Now().UTC()
 	rec := &VerificationRecord{
 		ID:             uuid.New(),
@@ -271,6 +274,21 @@ func (e *Evidence) applyVerification(actorID uuid.UUID, status VerificationStatu
 	e.VerificationReason = reason
 	e.VerificationMethod = method
 	return rec, nil
+}
+
+func isValidVerificationTransition(from, to VerificationStatus) bool {
+	switch from {
+	case VerificationStatusUnverified:
+		return to == VerificationStatusVerified || to == VerificationStatusRejected || to == VerificationStatusNeedsReview
+	case VerificationStatusNeedsReview:
+		return to == VerificationStatusVerified || to == VerificationStatusRejected
+	case VerificationStatusVerified:
+		return to == VerificationStatusRejected || to == VerificationStatusNeedsReview
+	case VerificationStatusRejected:
+		return to == VerificationStatusVerified || to == VerificationStatusNeedsReview
+	default:
+		return false
+	}
 }
 
 func isValidVerificationStatus(s VerificationStatus) bool {

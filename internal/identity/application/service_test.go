@@ -1,4 +1,4 @@
-﻿package application
+package application
 
 import (
 	"context"
@@ -176,7 +176,12 @@ func (m *mockUserRepo) SaveTx(ctx context.Context, tx *sql.Tx, u *domain.User) e
 }
 
 func (m *mockUserRepo) FindByEmail(ctx context.Context, orgID uuid.UUID, email string) (*domain.User, error) {
-	return nil, nil
+	for _, u := range m.users {
+		if u.OrganizationID == orgID && u.Email == email {
+			return u, nil
+		}
+	}
+	return nil, domain.ErrUserNotFound
 }
 
 func (m *mockUserRepo) FindByID(ctx context.Context, orgID, userID uuid.UUID) (*domain.User, error) {
@@ -195,13 +200,15 @@ func (m *mockUserRepo) CountByOrganizationTx(ctx context.Context, tx *sql.Tx, or
 	return len(m.users), nil
 }
 
-type mockHasher struct{}
+type mockHasher struct {
+	verifyResult bool
+}
 
 func (m *mockHasher) Hash(password string) (string, error) {
 	return "hashed", nil
 }
 func (m *mockHasher) Verify(password, hash string) (bool, error) {
-	return true, nil
+	return m.verifyResult, nil
 }
 
 func TestCreateUser_AutoAssignsAdminRoleForFirstUser(t *testing.T) {
@@ -329,6 +336,43 @@ func TestCreateUser_AdminRoleLookupErrorIsPropagated(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to find admin role")
+}
+
+func TestAuthenticate_NonExistentUserReturnsInvalidCredentials(t *testing.T) {
+	svc := &IdentityService{
+		userRepo: &mockUserRepo{},
+		hasher:   &mockHasher{},
+	}
+
+	_, err := svc.Authenticate(context.Background(), AuthenticateParams{
+		OrganizationID: uuid.New(),
+		Email:          "nonexistent@example.com",
+		Password:       "password1234",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidCredentials)
+}
+
+func TestAuthenticate_InvalidPasswordReturnsInvalidCredentials(t *testing.T) {
+	orgID := uuid.New()
+	userID := uuid.New()
+	hash := "hashed"
+	svc := &IdentityService{
+		userRepo: &mockUserRepo{
+			users: []*domain.User{
+				{ID: userID, OrganizationID: orgID, Email: "user@example.com", PasswordHash: &hash},
+			},
+		},
+		hasher: &mockHasher{verifyResult: false},
+	}
+
+	_, err := svc.Authenticate(context.Background(), AuthenticateParams{
+		OrganizationID: orgID,
+		Email:          "user@example.com",
+		Password:       "wrongpassword",
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
 
 type failingRoleRepo struct {

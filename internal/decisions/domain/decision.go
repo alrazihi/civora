@@ -107,7 +107,5 @@ func NewSupersedingDecision(orgID, serviceRequestID, decisionMaker uuid.UUID, de
 	if err != nil {
 		return nil, err
 	}
-	supersededByID := d.ID
-	d.SupersededByID = &supersededByID
 	return d, nil
 }

@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alrazihi/civora/internal/identity/application"
 	"github.com/alrazihi/civora/internal/identity/domain"
+	"github.com/alrazihi/civora/internal/middleware"
 	orgdomain "github.com/alrazihi/civora/internal/organizations/domain"
 	"github.com/alrazihi/civora/internal/shared"
 	"github.com/go-chi/chi/v5"
@@ -19,11 +21,11 @@ import (
 )
 
 type mockIdentityService struct {
-	createUserFn    func(ctx context.Context, params application.CreateUserParams) (*domain.User, error)
-	listUsersFn     func(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
-	authenticateFn  func(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
-	refreshTokenFn  func(ctx context.Context, params application.RefreshTokenParams) (*application.RefreshTokenResult, error)
-	logoutFn        func(ctx context.Context, params application.LogoutParams) error
+	createUserFn   func(ctx context.Context, params application.CreateUserParams) (*domain.User, error)
+	listUsersFn    func(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.User, int, error)
+	authenticateFn func(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error)
+	refreshTokenFn func(ctx context.Context, params application.RefreshTokenParams) (*application.RefreshTokenResult, error)
+	logoutFn       func(ctx context.Context, params application.LogoutParams) error
 }
 
 func (m *mockIdentityService) CreateUser(ctx context.Context, params application.CreateUserParams) (*domain.User, error) {
@@ -200,6 +202,57 @@ func TestLogin_MissingEmail(t *testing.T) {
 	r.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestLogin_NonExistentUserReturnsSameErrorAsInvalidCredentials(t *testing.T) {
+	orgID := uuid.New()
+	svc := &mockIdentityService{
+		authenticateFn: func(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error) {
+			return nil, application.ErrInvalidCredentials
+		},
+	}
+	h := NewHandlerWithOrgLookup(svc, nil, nil)
+	r := setupLoginRouter(h)
+
+	body := `{"email":"nonexistent@example.com","password":"password1234"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/auth/login", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	var resp shared.APIResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "invalid credentials", resp.Error.Message)
+}
+
+func TestLogin_RateLimitMessageDoesNotLeakAccountExistence(t *testing.T) {
+	orgID := uuid.New()
+	rateLimiter := middleware.NewUserRateLimiter(3, 5*time.Minute, 5*time.Minute)
+	svc := &mockIdentityService{
+		authenticateFn: func(ctx context.Context, params application.AuthenticateParams) (*application.AuthenticateResult, error) {
+			return nil, application.ErrInvalidCredentials
+		},
+	}
+	h := NewHandlerWithRateLimiter(svc, rateLimiter)
+	r := setupLoginRouter(h)
+
+	var rec *httptest.ResponseRecorder
+	for i := 0; i < 4; i++ {
+		body := `{"email":"test@example.com","password":"password1234"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/"+orgID.String()+"/auth/login", strings.NewReader(body))
+		rec = httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+	}
+
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+	var resp shared.APIResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "RATE_LIMITED", resp.Error.Code)
+	assert.NotContains(t, resp.Error.Message, "account")
+	assert.NotContains(t, resp.Error.Message, "locked")
+	assert.NotContains(t, resp.Error.Message, "email")
 }
 
 func TestRegister_ValidRequest(t *testing.T) {

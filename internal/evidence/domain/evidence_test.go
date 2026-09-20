@@ -1,4 +1,4 @@
-﻿package domain
+package domain
 
 import (
 	"strings"
@@ -265,6 +265,60 @@ func TestEvidence_VerificationStateTransitions(t *testing.T) {
 		_, err = e.Verify(uuid.New(), "got more", "manual")
 		require.NoError(t, err)
 		assert.Equal(t, VerificationStatusVerified, e.VerificationStatus)
+	})
+
+	t.Run("verify then verify is rejected", func(t *testing.T) {
+		params := baseParams()
+		e, err := NewEvidence(params)
+		require.NoError(t, err)
+
+		_, err = e.Verify(uuid.New(), "all good", "manual")
+		require.NoError(t, err)
+
+		_, err = e.Verify(uuid.New(), "verify again", "manual")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrVerificationInvalid)
+	})
+
+	t.Run("reject then reject is rejected", func(t *testing.T) {
+		params := baseParams()
+		e, err := NewEvidence(params)
+		require.NoError(t, err)
+
+		_, err = e.Reject(uuid.New(), "bad", "manual")
+		require.NoError(t, err)
+
+		_, err = e.Reject(uuid.New(), "reject again", "manual")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrVerificationInvalid)
+	})
+
+	t.Run("verified to needs_review is allowed", func(t *testing.T) {
+		params := baseParams()
+		e, err := NewEvidence(params)
+		require.NoError(t, err)
+
+		_, err = e.Verify(uuid.New(), "all good", "manual")
+		require.NoError(t, err)
+		assert.Equal(t, VerificationStatusVerified, e.VerificationStatus)
+
+		_, err = e.MarkForReview(uuid.New(), "needs additional review", "manual")
+		require.NoError(t, err)
+		assert.Equal(t, VerificationStatusNeedsReview, e.VerificationStatus)
+	})
+
+	t.Run("rejected to needs_review is allowed", func(t *testing.T) {
+		params := baseParams()
+		e, err := NewEvidence(params)
+		require.NoError(t, err)
+
+		_, err = e.Reject(uuid.New(), "bad", "manual")
+		require.NoError(t, err)
+		assert.Equal(t, VerificationStatusRejected, e.VerificationStatus)
+
+		_, err = e.MarkForReview(uuid.New(), "needs additional review", "manual")
+		require.NoError(t, err)
+		assert.Equal(t, VerificationStatusNeedsReview, e.VerificationStatus)
 	})
 }
 

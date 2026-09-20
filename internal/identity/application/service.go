@@ -29,6 +29,8 @@ var (
 	ErrRefreshReuse       = errors.New("refresh token reuse detected")
 )
 
+const timingSafeDummyHash = "$2a$10$dummy.hash.for.timing.safety.only.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 const minPasswordLength = 12
@@ -182,9 +184,11 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 
 	user, err := s.userRepo.FindByEmail(ctx, params.OrganizationID, params.Email)
 	if err != nil {
+		s.hasher.Verify(params.Password, timingSafeDummyHash)
 		return nil, ErrInvalidCredentials
 	}
 	if user.PasswordHash == nil || *user.PasswordHash == "" {
+		s.hasher.Verify(params.Password, timingSafeDummyHash)
 		return nil, ErrInvalidCredentials
 	}
 

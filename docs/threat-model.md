@@ -1,6 +1,6 @@
 # CIVORA Threat Model
 
-> **Status**: Draft — covers the foundation phase (milestone 0.1–0.3).
+> **Status**: Draft — covers the foundation phase through Milestone 0.9.5.
 > This is a living document. New threats must be added as the system
 > evolves.
 

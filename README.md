@@ -25,7 +25,7 @@ production-ready. See the [roadmap](./ROADMAP.md) and
 [governance](./GOVERNANCE.md) for details on how to follow along or
 contribute.
 
-Current focus: **Milestone 0.9** — Operations & Impact Intelligence (complete).
+Current focus: **Milestone 0.9.5** — Security Hardening & Truthful Documentation (in progress).
 (operational metrics, workflow analysis, impact intelligence, AI operations intelligence).
 
 ## Quick Start
@@ -153,7 +153,7 @@ The case enters `DECISION_PENDING`. A human reviewer (not an automated system) r
 - **Decision:** APPROVED
 - **Reason:** "Meets all eligibility criteria. Assessment supports immediate shelter and food assistance."
 
-**CIVORA enforces that AI cannot automatically approve, reject, or distribute assistance.** Every decision must be explicitly recorded by an authorized human actor and is immutable once finalized.
+**CIVORA enforces that AI cannot automatically approve, reject, or distribute assistance.** Every decision must be explicitly recorded by an authorized human actor and is immutable once finalized. AI-generated observations and summaries are available as optional aids (Milestone 0.8+) but always require human review before any downstream use.
 
 ### Step 6: Assistance
 
