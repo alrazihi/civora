@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-09-21
+
+### Fixed
+
+- golangci-lint v2 config: moved exclusion rules to `linters.exclusions.rules`
+- Removed UTF-8 BOM from 79 test files to satisfy `gofmt -l .` on Linux CI
+- Added missing `version` column to migration `0006_decision_uniqueness`
+- Included `casecontext_adapters.go` in build
+
 ## [1.0.0] - 2026-09-20
 
 ### Added
@@ -56,7 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frontend transition mapping is heuristic for custom workflows (backend still enforces authorization)
 - Windows `go vet` may fail due to platform OOM limits (CI on Ubuntu passes)
 
-[Unreleased]: https://github.com/alrazihi/civora/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/alrazihi/civora/compare/v1.0.1...HEAD
+[v1.0.1]: https://github.com/alrazihi/civora/releases/tag/v1.0.1
 [v1.0.0]: https://github.com/alrazihi/civora/releases/tag/v1.0.0
 [v0.9.0]: https://github.com/alrazihi/civora/releases/tag/v0.9.0
 
