@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 1,
+  retries: 0,
   // Cap parallel workers: launching many Chromium instances on a developer
   // machine (especially Windows) is unstable. CI overrides via CI env.
   workers: process.env.CI ? 1 : 2,

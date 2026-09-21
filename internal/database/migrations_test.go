@@ -1,10 +1,18 @@
-﻿package database
+package database
 
 import (
 	"testing"
 
+	"github.com/alrazihi/civora/migrations"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestLoadMigrations(t *testing.T) {
+	mgr := NewMigrator(nil, migrations.FS)
+	require.NoError(t, mgr.LoadMigrations())
+	require.NotEmpty(t, mgr.migrations, "migrations package should load at least one migration")
+}
 
 func TestSplitSQL(t *testing.T) {
 	tests := []struct {

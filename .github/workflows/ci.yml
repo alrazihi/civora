@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   CIVORA_TEST_DB_USER: civora_test
   CIVORA_TEST_DB_PASSWORD: civora_test
@@ -51,6 +54,33 @@ jobs:
         with:
           version: v2.12.2
           args: --enable=gosec --timeout=5m ./...
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  migrations:
+    name: Migration Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+
+      - name: Verify migrations load
+        run: CGO_ENABLED=1 go test -run TestLoadMigrations ./internal/database/...
 
   test:
     name: Test
@@ -109,6 +139,26 @@ jobs:
 
       - name: Build
         run: CGO_ENABLED=0 go build ./...
+
+  playwright:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: cd web/e2e && npm ci
+
+      - name: Install Playwright browsers
+        run: cd web/e2e && npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: cd web/e2e && npm test
 
   openapi:
     name: OpenAPI Validation

@@ -34,6 +34,10 @@ Thumbs.db
 # Terraform
 .terraform/
 .kilo/kilo.jsonc
+
+# Test artifacts
+test-results/
+web/e2e/test-results/*
 web/e2e/node_modules/*
 api/openapi/node_modules/*
 
