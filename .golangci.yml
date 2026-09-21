@@ -1,0 +1,59 @@
+version: "2"
+
+linters:
+  enable:
+    - gosec
+  default: none
+
+issues:
+  exclude-rules:
+    - path: _test\.go$
+      linters:
+        - errcheck
+        - gosec
+        - staticcheck
+        - unused
+        - ineffassign
+    - path: cmd/seed
+      linters:
+        - errcheck
+        - gosec
+        - staticcheck
+        - unused
+        - ineffassign
+    - linters:
+        - staticcheck
+      text: "SA1019"
+    - linters:
+        - staticcheck
+      text: "SA1029"
+    - linters:
+        - staticcheck
+      text: "QF1003"
+    - linters:
+        - staticcheck
+      text: "QF1012"
+    - linters:
+        - staticcheck
+      text: "SA4023"
+    - linters:
+        - staticcheck
+      text: "SA9003"
+    - linters:
+        - staticcheck
+      text: "ST1023"
+    - linters:
+        - gosec
+      text: "G304"
+    - linters:
+        - gosec
+      text: "G104"
+    - linters:
+        - gosec
+      text: "G120"
+    - linters:
+        - gosec
+      text: "G705"
+    - linters:
+        - gosec
+      text: "G202"

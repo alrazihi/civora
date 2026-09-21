@@ -16,10 +16,10 @@ import (
 )
 
 type OperationsIntelligenceService struct {
-	aiProvider         application.AIProvider
-	operationsService  *OperationsService
-	analysisService    domain.AnalysisService
-	impactService      domain.ImpactService
+	aiProvider        application.AIProvider
+	operationsService *OperationsService
+	analysisService   domain.AnalysisService
+	impactService     domain.ImpactService
 }
 
 func NewOperationsIntelligenceService(

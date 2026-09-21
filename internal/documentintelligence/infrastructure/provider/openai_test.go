@@ -39,7 +39,7 @@ func TestOpenAIProvider_GenerateDocumentAnalyses_Success(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 
@@ -100,7 +100,7 @@ func TestOpenAIProvider_GenerateDocumentAnalyses_NoAuth(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 
@@ -139,7 +139,7 @@ func TestOpenAIProvider_GenerateDocumentAnalyses_NoAuth(t *testing.T) {
 func TestOpenAIProvider_GenerateDocumentAnalyses_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid API key"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid API key"}) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 
@@ -176,7 +176,7 @@ func TestOpenAIProvider_GenerateDocumentAnalyses_APIError(t *testing.T) {
 
 func TestOpenAIProvider_GenerateDocumentAnalyses_InvalidResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]interface{}{"invalid": "response"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"invalid": "response"}) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 

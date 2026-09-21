@@ -16,7 +16,7 @@ func setupVerifiedFactRepo(t *testing.T) *PostgresVerifiedFactRepository {
 	if err != nil {
 		t.Skipf("skipping integration test: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() }) //nolint:gosec // test cleanup
 
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS ai_verified_facts (
 		id UUID PRIMARY KEY,

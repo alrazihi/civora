@@ -509,8 +509,8 @@ func createEducationWorkflow(ctx context.Context, db *sql.DB, orgID, adminID, st
 
 	// Assign forms to states
 	var studentVerID, incomeVerID uuid.UUID
-	db.QueryRowContext(ctx, `SELECT id FROM form_versions WHERE form_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1`, studentFormID).Scan(&studentVerID)
-	db.QueryRowContext(ctx, `SELECT id FROM form_versions WHERE form_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1`, incomeFormID).Scan(&incomeVerID)
+	db.QueryRowContext(ctx, `SELECT id FROM form_versions WHERE form_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1`, studentFormID).Scan(&studentVerID) //nolint:gosec // seed tool, not production
+	db.QueryRowContext(ctx, `SELECT id FROM form_versions WHERE form_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1`, incomeFormID).Scan(&incomeVerID)   //nolint:gosec // seed tool, not production
 
 	assignmentInsert := `INSERT INTO workflow_form_assignments (id, tenant_id, workflow_definition_id, workflow_state_key, form_id, form_version_id, required, display_order, active, created_by, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())`
 	assignments := []struct {

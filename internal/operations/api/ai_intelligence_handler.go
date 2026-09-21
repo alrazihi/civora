@@ -121,6 +121,6 @@ func (h *OperationsIntelligenceHandler) GetSuggestedQuestions(w http.ResponseWri
 
 	shared.WriteSuccess(w, http.StatusOK, map[string]interface{}{
 		"suggested_questions": result.SuggestedQuestions,
-		"generated_at":       result.GeneratedAt,
+		"generated_at":        result.GeneratedAt,
 	}, nil)
 }

@@ -122,5 +122,5 @@ func (h *ExportHandler) GetExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Export-Scope", string(result.Metadata.OrganizationScope))
 	w.Header().Set("X-Export-Metric-Version", result.Metadata.MetricVersion)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	_, _ = w.Write(body) //nolint:gosec // body is internally generated, not user input
 }

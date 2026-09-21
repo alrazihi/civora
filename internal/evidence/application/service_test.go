@@ -964,7 +964,7 @@ func TestGetDocumentStream_DownloadAudit(t *testing.T) {
 
 	dlResult, err := svc.GetDocumentStream(context.Background(), orgID, e.ID, result.Document.ID, uploadedBy)
 	require.NoError(t, err)
-	dlResult.Content.Close()
+	_ = dlResult.Content.Close() //nolint:gosec // test cleanup
 
 	uploadEvents := auditor.eventsForAction("evidence.document_uploaded")
 	assert.Len(t, uploadEvents, 1)

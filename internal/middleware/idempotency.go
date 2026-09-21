@@ -12,11 +12,11 @@ import (
 )
 
 type IdempotencyStore struct {
-	mu       sync.RWMutex
-	data     map[string]*IdempotencyRecord
-	ttl      time.Duration
-	stopCh   chan struct{}
-	stopOnce sync.Once
+	mu         sync.RWMutex
+	data       map[string]*IdempotencyRecord
+	ttl        time.Duration
+	stopCh     chan struct{}
+	stopOnce   sync.Once
 	maxEntries int
 }
 
@@ -31,9 +31,9 @@ type IdempotencyRecord struct {
 
 func NewIdempotencyStore(ttl time.Duration) *IdempotencyStore {
 	s := &IdempotencyStore{
-		data:     make(map[string]*IdempotencyRecord),
-		ttl:      ttl,
-		stopCh:   make(chan struct{}),
+		data:       make(map[string]*IdempotencyRecord),
+		ttl:        ttl,
+		stopCh:     make(chan struct{}),
 		maxEntries: DefaultMaxIdempotencyEntries,
 	}
 	go s.runCleanup()

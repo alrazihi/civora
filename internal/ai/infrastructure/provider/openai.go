@@ -300,12 +300,12 @@ func (p *OpenAIProvider) GenerateChatCompletion(ctx context.Context, req applica
 	}
 
 	return &application.ChatResponse{
-		Content:           string(validatedContent),
-		Model:             p.ProviderInfo(),
-		InputHash:         inputHash,
-		OutputHash:        outputHash,
-		PromptTokens:      apiResp.Usage.PromptTokens,
-		CompletionTokens:  apiResp.Usage.CompletionTokens,
+		Content:          string(validatedContent),
+		Model:            p.ProviderInfo(),
+		InputHash:        inputHash,
+		OutputHash:       outputHash,
+		PromptTokens:     apiResp.Usage.PromptTokens,
+		CompletionTokens: apiResp.Usage.CompletionTokens,
 	}, nil
 }
 

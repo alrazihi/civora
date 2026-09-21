@@ -11,13 +11,13 @@ import (
 type IntelligenceRequestType string
 
 const (
-	IntelligenceRequestTypeSummarizeTrends      IntelligenceRequestType = "summarize_trends"
-	IntelligenceRequestTypeExplainBottlenecks   IntelligenceRequestType = "explain_bottlenecks"
-	IntelligenceRequestTypeSummarizeWorkload    IntelligenceRequestType = "summarize_workload"
-	IntelligenceRequestTypeIdentifyAnomalies    IntelligenceRequestType = "identify_anomalies"
-	IntelligenceRequestTypeAnswerQuestion       IntelligenceRequestType = "answer_question"
-	IntelligenceRequestTypeSuggestQuestions     IntelligenceRequestType = "suggest_questions"
-	IntelligenceRequestTypeExplainChanges       IntelligenceRequestType = "explain_changes"
+	IntelligenceRequestTypeSummarizeTrends    IntelligenceRequestType = "summarize_trends"
+	IntelligenceRequestTypeExplainBottlenecks IntelligenceRequestType = "explain_bottlenecks"
+	IntelligenceRequestTypeSummarizeWorkload  IntelligenceRequestType = "summarize_workload"
+	IntelligenceRequestTypeIdentifyAnomalies  IntelligenceRequestType = "identify_anomalies"
+	IntelligenceRequestTypeAnswerQuestion     IntelligenceRequestType = "answer_question"
+	IntelligenceRequestTypeSuggestQuestions   IntelligenceRequestType = "suggest_questions"
+	IntelligenceRequestTypeExplainChanges     IntelligenceRequestType = "explain_changes"
 )
 
 type IntelligenceRequest struct {
@@ -65,10 +65,10 @@ type ChatMessage struct {
 }
 
 type ChatResponse struct {
-	Content           string
-	Model             domain.ModelInfo
-	InputHash         string
-	OutputHash        string
-	PromptTokens      int
-	CompletionTokens  int
+	Content          string
+	Model            domain.ModelInfo
+	InputHash        string
+	OutputHash       string
+	PromptTokens     int
+	CompletionTokens int
 }

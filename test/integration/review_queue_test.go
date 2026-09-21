@@ -892,7 +892,7 @@ func seedWorkflowInstanceWithTransitions(t *testing.T, db *sql.DB, orgID, caseID
 		if i > 0 {
 			stateQuery += ","
 		}
-		stateQuery += fmt.Sprintf(" ($%d, $%d, $%d, $%d, $%d, '', 'initial', %t, %d, '', NOW())", len(stateArgs)+1, len(stateArgs)+2, len(stateArgs)+3, len(stateArgs)+4, len(stateArgs)+5, s.terminal, i)
+		stateQuery += fmt.Sprintf(" ($%d, $%d, $%d, $%d, $%d, '', 'initial', %t, %d, '', NOW())", len(stateArgs)+1, len(stateArgs)+2, len(stateArgs)+3, len(stateArgs)+4, len(stateArgs)+5, s.terminal, i) //nolint:gosec // test fixture uses parameterized SQL builder
 		stateArgs = append(stateArgs, stateIDs[i], wfDefID, orgID, s.key, s.name)
 	}
 	_, err = db.ExecContext(ctx, stateQuery, stateArgs...)
@@ -911,7 +911,7 @@ func seedWorkflowInstanceWithTransitions(t *testing.T, db *sql.DB, orgID, caseID
 		if i > 0 {
 			transQuery += ","
 		}
-		transQuery += fmt.Sprintf(" ($%d, $%d, $%d, $%d, $%d, $%d, $%d, '', '[]', '[]', true, $%d, NOW())", len(transArgs)+1, len(transArgs)+2, len(transArgs)+3, len(transArgs)+4, len(transArgs)+5, len(transArgs)+6, len(transArgs)+7, len(transArgs)+8)
+		transQuery += fmt.Sprintf(" ($%d, $%d, $%d, $%d, $%d, $%d, $%d, '', '[]', '[]', true, $%d, NOW())", len(transArgs)+1, len(transArgs)+2, len(transArgs)+3, len(transArgs)+4, len(transArgs)+5, len(transArgs)+6, len(transArgs)+7, len(transArgs)+8) //nolint:gosec // test fixture uses parameterized SQL builder
 		transArgs = append(transArgs, transitionIDs[i], wfDefID, orgID, tr.key, tr.key, tr.from, tr.to, tr.decisionType)
 	}
 	_, err = db.ExecContext(ctx, transQuery, transArgs...)

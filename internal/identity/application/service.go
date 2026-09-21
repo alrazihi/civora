@@ -184,11 +184,11 @@ func (s *IdentityService) Authenticate(ctx context.Context, params AuthenticateP
 
 	user, err := s.userRepo.FindByEmail(ctx, params.OrganizationID, params.Email)
 	if err != nil {
-		s.hasher.Verify(params.Password, timingSafeDummyHash)
+		_, _ = s.hasher.Verify(params.Password, timingSafeDummyHash) //nolint:gosec // timing-safe dummy check; error intentionally ignored
 		return nil, ErrInvalidCredentials
 	}
 	if user.PasswordHash == nil || *user.PasswordHash == "" {
-		s.hasher.Verify(params.Password, timingSafeDummyHash)
+		_, _ = s.hasher.Verify(params.Password, timingSafeDummyHash) //nolint:gosec // timing-safe dummy check; error intentionally ignored
 		return nil, ErrInvalidCredentials
 	}
 

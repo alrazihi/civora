@@ -65,7 +65,10 @@ func SanitizeFileName(name string) (string, error) {
 		return "", fmt.Errorf("%w: filename is empty or dangerous", ErrInvalidFilename)
 	}
 
-	cleaned := filepath.Base(name)
+	cleaned := name
+	if separator := strings.LastIndexAny(cleaned, `/\`); separator >= 0 {
+		cleaned = cleaned[separator+1:]
+	}
 	cleaned = strings.ReplaceAll(cleaned, "..", "")
 	cleaned = strings.Map(func(r rune) rune {
 		if r < 32 || r == 127 {

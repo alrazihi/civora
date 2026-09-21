@@ -35,7 +35,7 @@ func (p *LocalStorageProvider) Store(ctx context.Context, key string, reader io.
 		return StorageMetadata{}, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640) //nolint:gosec // destPath is validated by key sanitizer
 	if err != nil {
 		return StorageMetadata{}, fmt.Errorf("failed to create file: %w", err)
 	}

@@ -63,7 +63,7 @@ func TestLocalProvider_GenerateObservations_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 
@@ -147,7 +147,7 @@ func TestLocalProvider_GenerateObservations_APIErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.body))
+				_, _ = w.Write([]byte(tt.body)) //nolint:gosec // test mock response
 			}))
 			defer server.Close()
 
@@ -198,7 +198,7 @@ func TestLocalProvider_GenerateObservations_EmptyObservations(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 
@@ -251,7 +251,7 @@ func TestOpenAIProvider_GenerateObservations_SkipAuth(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp) //nolint:gosec // test mock response
 	}))
 	defer server.Close()
 

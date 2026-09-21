@@ -81,7 +81,7 @@ func (r *PostgresEvidenceRepository) UpdateVerification(ctx context.Context, e *
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback() //nolint:gosec // rollback error ignored in error path
 		} else {
 			err = tx.Commit()
 		}

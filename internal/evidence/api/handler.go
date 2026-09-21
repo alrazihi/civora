@@ -443,7 +443,7 @@ func (h *Handler) UploadDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(32 << 20); err != nil { //nolint:gosec // form parsing with 32MB limit is intentional
 		shared.WriteError(w, http.StatusBadRequest, shared.CodeInvalidInput, "request too large or invalid multipart form")
 		return
 	}
