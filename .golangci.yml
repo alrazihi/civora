@@ -6,7 +6,7 @@ linters:
   default: none
 
 issues:
-  exclude-rules:
+  exclude:
     - path: _test\.go$
       linters:
         - errcheck
