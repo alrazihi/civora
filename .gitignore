@@ -1,7 +1,7 @@
 # CIVORA .gitignore
 
 # Binaries
-civora
+/civora
 *.exe
 *.exe~
 *.dll
