@@ -11,7 +11,7 @@
 # Testing
 *.test
 *.out
-
+.kilo
 # Environment
 .env
 .env.local
